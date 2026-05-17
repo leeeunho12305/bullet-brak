@@ -29,18 +29,16 @@ const platforms = [
 ];
 
 const avatarPalette = {
-    coral: '#ff6b6b',
-    teal: '#38d9a9',
-    sky: '#4dabf7',
-    mint: '#2ed573',
-    lemon: '#ffd43b',
-    lilac: '#845ef7',
-    aqua: '#22b8cf',
-    rose: '#f06595',
-    orange: '#ffa94d',
-    lime: '#94d82d',
-    violet: '#5f3dc4',
-    ocean: '#3bc9db',
+    astral: '#7f5af0',
+    bloom: '#ff6b6b',
+    comet: '#4dabf7',
+    drift: '#3bc9db',
+    ember: '#ffa94d',
+    fable: '#f06595',
+    glow: '#ffd43b',
+    moss: '#51cf66',
+    prism: '#5f3dc4',
+    surge: '#38d9a9',
     bot: '#adb5bd',
 };
 
@@ -79,7 +77,7 @@ function randomSpawn() {
 }
 
 function assignAvatar(player, avatarId) {
-    const safeId = avatarPalette[avatarId] ? avatarId : 'coral';
+    const safeId = avatarPalette[avatarId] ? avatarId : 'astral';
     player.avatarId = safeId;
     player.color = avatarPalette[safeId];
 }
@@ -94,8 +92,8 @@ function createPlayer(id, avatarId) {
         height: 30,
         vx: 0,
         vy: 0,
-        color: avatarPalette.coral,
-        avatarId: 'coral',
+        color: avatarPalette.astral,
+        avatarId: 'astral',
         hp: 100,
         speed: 5,
         jumpPower: -12,

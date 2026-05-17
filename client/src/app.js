@@ -21,18 +21,16 @@ const inputs = { left: false, right: false, jump: false };
 const mousePos = { x: 0, y: 0 };
 
 const avatars = [
-    { id: 'coral', name: 'Coral', primary: '#ff6b6b', secondary: '#ffa8a8' },
-    { id: 'teal', name: 'Teal', primary: '#38d9a9', secondary: '#63e6be' },
-    { id: 'sky', name: 'Sky', primary: '#4dabf7', secondary: '#74c0fc' },
-    { id: 'mint', name: 'Mint', primary: '#2ed573', secondary: '#8ce99a' },
-    { id: 'lemon', name: 'Lemon', primary: '#ffd43b', secondary: '#ffe066' },
-    { id: 'lilac', name: 'Lilac', primary: '#845ef7', secondary: '#b197fc' },
-    { id: 'aqua', name: 'Aqua', primary: '#22b8cf', secondary: '#66d9e8' },
-    { id: 'rose', name: 'Rose', primary: '#f06595', secondary: '#faa2c1' },
-    { id: 'orange', name: 'Orange', primary: '#ffa94d', secondary: '#ffd8a8' },
-    { id: 'lime', name: 'Lime', primary: '#94d82d', secondary: '#c0eb75' },
-    { id: 'violet', name: 'Violet', primary: '#5f3dc4', secondary: '#b197fc' },
-    { id: 'ocean', name: 'Ocean', primary: '#3bc9db', secondary: '#99e9f2' },
+    { id: 'astral', name: 'Astral', primary: '#7f5af0', secondary: '#b197fc', col: 0, row: 0 },
+    { id: 'bloom', name: 'Bloom', primary: '#ff6b6b', secondary: '#ffa8a8', col: 1, row: 0 },
+    { id: 'comet', name: 'Comet', primary: '#4dabf7', secondary: '#74c0fc', col: 2, row: 0 },
+    { id: 'drift', name: 'Drift', primary: '#3bc9db', secondary: '#99e9f2', col: 3, row: 0 },
+    { id: 'ember', name: 'Ember', primary: '#ffa94d', secondary: '#ffd8a8', col: 4, row: 0 },
+    { id: 'fable', name: 'Fable', primary: '#f06595', secondary: '#faa2c1', col: 0, row: 1 },
+    { id: 'glow', name: 'Glow', primary: '#ffd43b', secondary: '#ffe066', col: 1, row: 1 },
+    { id: 'moss', name: 'Moss', primary: '#51cf66', secondary: '#8ce99a', col: 2, row: 1 },
+    { id: 'prism', name: 'Prism', primary: '#5f3dc4', secondary: '#b197fc', col: 3, row: 1 },
+    { id: 'surge', name: 'Surge', primary: '#38d9a9', secondary: '#63e6be', col: 4, row: 1 },
 ];
 
 const avatarMap = new Map(avatars.map((avatar) => [avatar.id, avatar]));
@@ -60,25 +58,31 @@ function showGame() {
 function renderAvatarGrid() {
     avatarGrid.innerHTML = '';
     avatars.forEach((avatar) => {
-        const swatch = document.createElement('button');
-        swatch.type = 'button';
-        swatch.className = 'avatar-swatch';
-        swatch.dataset.avatarId = avatar.id;
-        swatch.title = avatar.name;
-        swatch.style.background = `linear-gradient(145deg, ${avatar.primary}, ${avatar.secondary})`;
-        swatch.addEventListener('click', () => selectAvatar(avatar.id));
-        avatarGrid.appendChild(swatch);
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'avatar-card';
+        card.dataset.avatarId = avatar.id;
+        card.title = avatar.name;
+
+        const thumb = document.createElement('div');
+        thumb.className = 'avatar-thumb';
+        thumb.style.setProperty('--col', avatar.col);
+        thumb.style.setProperty('--row', avatar.row);
+
+        card.appendChild(thumb);
+        card.addEventListener('click', () => selectAvatar(avatar.id));
+        avatarGrid.appendChild(card);
     });
 }
 
 function updateAvatarCards(taken = []) {
-    const swatches = avatarGrid.querySelectorAll('.avatar-swatch');
-    swatches.forEach((swatch) => {
-        const id = swatch.dataset.avatarId;
+    const cards = avatarGrid.querySelectorAll('.avatar-card');
+    cards.forEach((card) => {
+        const id = card.dataset.avatarId;
         const isTaken = taken.includes(id) && id !== selectedAvatarId;
-        swatch.classList.toggle('selected', id === selectedAvatarId);
-        swatch.classList.toggle('taken', isTaken);
-        swatch.disabled = isTaken;
+        card.classList.toggle('selected', id === selectedAvatarId);
+        card.classList.toggle('taken', isTaken);
+        card.disabled = isTaken;
     });
 }
 
