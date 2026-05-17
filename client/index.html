@@ -107,16 +107,13 @@
         cursor: not-allowed;
       }
 
-      .avatar-thumb {
+      .avatar-img {
         width: 100%;
         aspect-ratio: 1 / 1;
         border-radius: 10px;
-        background-image: url('/assets/avatars/characters.png?v=1');
-        background-size: 500% 200%;
-        background-position: calc(var(--col) * -100%) calc(var(--row) * -100%);
-        background-repeat: no-repeat;
-        background-color: #101522;
+        object-fit: cover;
         display: block;
+        background: #101522;
       }
 
       .actions {
@@ -213,7 +210,7 @@
         <div class="lobby-title">🎮 협동 게임</div>
         <div class="lobby-card">
           <input id="nicknameInput" class="nickname-input" placeholder="닉네임 입력" maxlength="12" />
-          <div class="label">캐릭터 색상 선택:</div>
+          <div class="label">캐릭터 선택:</div>
           <div id="avatarGrid" class="avatar-grid"></div>
           <div class="actions">
             <button id="createRoomBtn" class="btn teal">방 만들기</button>

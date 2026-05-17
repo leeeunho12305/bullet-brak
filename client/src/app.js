@@ -21,16 +21,10 @@ const inputs = { left: false, right: false, jump: false };
 const mousePos = { x: 0, y: 0 };
 
 const avatars = [
-    { id: 'astral', name: 'Astral', primary: '#7f5af0', secondary: '#b197fc', col: 0, row: 0 },
-    { id: 'bloom', name: 'Bloom', primary: '#ff6b6b', secondary: '#ffa8a8', col: 1, row: 0 },
-    { id: 'comet', name: 'Comet', primary: '#4dabf7', secondary: '#74c0fc', col: 2, row: 0 },
-    { id: 'drift', name: 'Drift', primary: '#3bc9db', secondary: '#99e9f2', col: 3, row: 0 },
-    { id: 'ember', name: 'Ember', primary: '#ffa94d', secondary: '#ffd8a8', col: 4, row: 0 },
-    { id: 'fable', name: 'Fable', primary: '#f06595', secondary: '#faa2c1', col: 0, row: 1 },
-    { id: 'glow', name: 'Glow', primary: '#ffd43b', secondary: '#ffe066', col: 1, row: 1 },
-    { id: 'moss', name: 'Moss', primary: '#51cf66', secondary: '#8ce99a', col: 2, row: 1 },
-    { id: 'prism', name: 'Prism', primary: '#5f3dc4', secondary: '#b197fc', col: 3, row: 1 },
-    { id: 'surge', name: 'Surge', primary: '#38d9a9', secondary: '#63e6be', col: 4, row: 1 },
+    { id: 'blue', name: 'Blue', primary: '#4dabf7', secondary: '#74c0fc', image: '/assets/avatars/blue.png' },
+    { id: 'green', name: 'Green', primary: '#51cf66', secondary: '#8ce99a', image: '/assets/avatars/green.png' },
+    { id: 'purple', name: 'Purple', primary: '#845ef7', secondary: '#b197fc', image: '/assets/avatars/purple.png' },
+    { id: 'orange', name: 'Orange', primary: '#ffa94d', secondary: '#ffd8a8', image: '/assets/avatars/orange.png' },
 ];
 
 const avatarMap = new Map(avatars.map((avatar) => [avatar.id, avatar]));
@@ -64,12 +58,12 @@ function renderAvatarGrid() {
         card.dataset.avatarId = avatar.id;
         card.title = avatar.name;
 
-        const thumb = document.createElement('div');
-        thumb.className = 'avatar-thumb';
-        thumb.style.setProperty('--col', avatar.col);
-        thumb.style.setProperty('--row', avatar.row);
+        const img = document.createElement('img');
+        img.className = 'avatar-img';
+        img.src = avatar.image;
+        img.alt = avatar.name;
 
-        card.appendChild(thumb);
+        card.appendChild(img);
         card.addEventListener('click', () => selectAvatar(avatar.id));
         avatarGrid.appendChild(card);
     });
