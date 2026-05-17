@@ -3,176 +3,219 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bullet Brak - Online Prototype</title>
     <title>Bullet Brak - Lobby</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap');
+
+      :root {
+        --bg-dark: #0b0f1a;
+        --bg-soft: #111a2e;
+        --card-main: #1b2438;
+        --card-deep: #151c2f;
+        --text-main: #f1f3f5;
+        --text-muted: #9aa4b2;
+        --accent: #5de2dd;
+      }
+
       body {
         margin: 0;
-        margin: 0;
-        background: radial-gradient(circle at top, #1c1f2a 0%, #0c0f17 60%, #07080d 100%);
-        color: #f8f9fa;
         min-height: 100vh;
-        font-family: "Pretendard", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #1c2640 0%, #0f1526 50%, #0a0f1b 100%);
+        color: var(--text-main);
+        font-family: "Outfit", "Pretendard", sans-serif;
         display: flex;
         justify-content: center;
         align-items: center;
-      h1 { margin: 10px 0; }
-      h1 {
-        margin: 0 0 10px;
-        font-size: 2.2rem;
       }
-      h2 {
-        margin: 0 0 10px;
-        font-size: 1.1rem;
-        color: #ced4da;
-      }
+
       .screen {
-        width: min(960px, 92vw);
+        width: min(980px, 92vw);
         display: none;
       }
+
       .screen.active {
         display: block;
       }
-      .panel {
-        background: rgba(15, 18, 28, 0.92);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 20px;
+
+      .lobby-wrap {
+        text-align: center;
+      }
+
+      .lobby-title {
+        font-size: 2.4rem;
+        font-weight: 700;
+        color: var(--accent);
+        margin-bottom: 24px;
+        letter-spacing: 0.02em;
+      }
+
+      .lobby-card {
+        background: linear-gradient(160deg, var(--card-main), var(--card-deep));
+        border-radius: 24px;
         padding: 32px 36px;
-        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.08);
       }
-      .intro {
-        color: #adb5bd;
-        margin-bottom: 24px;
+
+      .nickname-input {
+        width: min(520px, 100%);
+        background: #12192b;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--text-main);
+        border-radius: 14px;
+        padding: 14px 16px;
+        font-size: 1rem;
+        text-align: center;
+        margin-bottom: 18px;
       }
-      .section {
-        margin-bottom: 24px;
+
+      .label {
+        color: var(--accent);
+        font-weight: 600;
+        margin-bottom: 12px;
       }
-      .actions {
+
+      .color-grid {
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
+        justify-content: center;
+        margin-bottom: 20px;
       }
-      button {
-        background: #4c6ef5;
-        border: none;
-        color: white;
-        padding: 12px 18px;
-        border-radius: 12px;
-        font-size: 0.95rem;
-        font-weight: 600;
+
+      .avatar-swatch {
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        border: 3px solid transparent;
         cursor: pointer;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
-      button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 8px 20px rgba(76, 110, 245, 0.35);
+
+      .avatar-swatch:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 0 10px rgba(94, 234, 212, 0.35);
       }
-      button.secondary {
-        background: #343a40;
+
+      .avatar-swatch.selected {
+        border-color: #ffffff;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.4);
       }
-      input {
-        background: #151821;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        color: #f8f9fa;
-        padding: 12px 14px;
-        border-radius: 10px;
-        font-size: 1rem;
-        width: 180px;
-      }
-      .avatar-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 14px;
-      }
-      .avatar-card {
-        background: #0f121b;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 12px;
-        text-align: center;
-        color: #e9ecef;
-      }
-      .avatar-card.taken {
-        opacity: 0.35;
+
+      .avatar-swatch.taken {
+        opacity: 0.3;
         cursor: not-allowed;
       }
-      .avatar-card.selected {
-        outline: 2px solid #4c6ef5;
-        box-shadow: 0 0 0 4px rgba(76, 110, 245, 0.2);
-      }
-      .avatar-preview {
-        width: 72px;
-        height: 72px;
-        border-radius: 16px;
-        margin: 0 auto 10px;
-        position: relative;
-      }
-      .avatar-eyes {
-        position: absolute;
-        top: 26px;
-        left: 50%;
-        width: 38px;
-        height: 12px;
+
+      .actions {
         display: flex;
-        justify-content: space-between;
-        transform: translateX(-50%);
+        gap: 14px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
       }
-      .avatar-eye {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #111;
+
+      .btn {
+        border: none;
+        color: #0b0f1a;
+        padding: 12px 22px;
+        border-radius: 14px;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
       }
+
+      .btn.teal {
+        background: #4fd1c5;
+      }
+
+      .btn.coral {
+        background: #ff6b6b;
+      }
+
+      .btn.green {
+        background: #51cf66;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+      }
+
+      .code-area {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      #roomCodeInput {
+        width: 160px;
+        text-align: center;
+        letter-spacing: 4px;
+        background: #0e1524;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: var(--text-main);
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+
       .status {
-        margin-top: 10px;
-        color: #ffa8a8;
+        margin-top: 12px;
+        color: #ff8787;
       }
+
       .room-info {
-        margin-top: 10px;
+        margin-top: 6px;
         color: #74c0fc;
         font-weight: 600;
       }
+
       .hud {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 12px;
+        color: var(--text-muted);
       }
-        background: #2b2b36;
+
+      #gameCanvas {
         background: #121621;
         border-radius: 16px;
         border: 2px solid rgba(255, 255, 255, 0.08);
         width: 800px;
         height: 600px;
         cursor: crosshair;
+      }
+
+      .intro {
+        color: var(--text-muted);
+        margin-top: 12px;
+      }
     </style>
   </head>
   <body>
-    <h1>Bullet Brak (Online MVP)</h1>
     <div id="lobby" class="screen active">
-      <div class="panel">
-        <h1>Bullet Brak</h1>
-        <p class="intro">2D PvP 로그라이크 슈팅 게임 로비</p>
-
-        <div class="section">
-          <h2>캐릭터 선택</h2>
-          <div id="avatarGrid" class="avatar-grid"></div>
-        </div>
-
-        <div class="section actions">
-          <button id="createRoomBtn">방 만들기</button>
-          <button id="joinRoomBtn" class="secondary">방 참가</button>
-          <button id="soloBtn" class="secondary">혼자하기</button>
-        </div>
-
-        <div class="section">
-          <label for="roomCodeInput">초대 코드 (6자리 숫자)</label>
-          <div class="actions" style="margin-top: 10px;">
+      <div class="lobby-wrap">
+        <div class="lobby-title">🎮 협동 게임</div>
+        <div class="lobby-card">
+          <input id="nicknameInput" class="nickname-input" placeholder="닉네임 입력" maxlength="12" />
+          <div class="label">캐릭터 색상 선택:</div>
+          <div id="avatarGrid" class="color-grid"></div>
+          <div class="actions">
+            <button id="createRoomBtn" class="btn teal">방 만들기</button>
+            <button id="joinRoomBtn" class="btn coral">방 참가하기</button>
+            <button id="soloBtn" class="btn green">혼자 하기</button>
+          </div>
+          <div class="code-area">
+            <label for="roomCodeInput">초대 코드 (6자리 숫자)</label>
             <input id="roomCodeInput" maxlength="6" inputmode="numeric" placeholder="123456" />
           </div>
+          <div id="lobbyStatus" class="status"></div>
+          <div id="roomInfo" class="room-info"></div>
         </div>
-
-        <div id="lobbyStatus" class="status"></div>
-        <div id="roomInfo" class="room-info"></div>
       </div>
     </div>
 
@@ -180,10 +223,13 @@
       <div class="hud">
         <div id="roomCodeDisplay"></div>
         <div id="playerCountDisplay"></div>
-        <button id="leaveBtn" class="secondary">로비로</button>
+        <button id="leaveBtn" class="btn coral">로비로</button>
       </div>
       <canvas id="gameCanvas" width="800" height="600"></canvas>
       <p class="intro">조작: A/D 이동, 스페이스 점프, 마우스 조준, 좌클릭 사격</p>
     </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="./src/app.js"></script>
   </body>
 </html>

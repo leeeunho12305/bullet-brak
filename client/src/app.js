@@ -6,6 +6,7 @@ const avatarGrid = document.getElementById('avatarGrid');
 const lobbyStatus = document.getElementById('lobbyStatus');
 const roomInfo = document.getElementById('roomInfo');
 const roomCodeInput = document.getElementById('roomCodeInput');
+const nicknameInput = document.getElementById('nicknameInput');
 const roomCodeDisplay = document.getElementById('roomCodeDisplay');
 const playerCountDisplay = document.getElementById('playerCountDisplay');
 const createRoomBtn = document.getElementById('createRoomBtn');
@@ -20,14 +21,18 @@ const inputs = { left: false, right: false, jump: false };
 const mousePos = { x: 0, y: 0 };
 
 const avatars = [
-    { id: 'flare', name: 'Flare', primary: '#ff6b6b', secondary: '#ffa8a8' },
-    { id: 'nova', name: 'Nova', primary: '#4dabf7', secondary: '#74c0fc' },
+    { id: 'coral', name: 'Coral', primary: '#ff6b6b', secondary: '#ffa8a8' },
+    { id: 'teal', name: 'Teal', primary: '#38d9a9', secondary: '#63e6be' },
+    { id: 'sky', name: 'Sky', primary: '#4dabf7', secondary: '#74c0fc' },
     { id: 'mint', name: 'Mint', primary: '#2ed573', secondary: '#8ce99a' },
-    { id: 'ember', name: 'Ember', primary: '#ffa502', secondary: '#ffd43b' },
-    { id: 'violet', name: 'Violet', primary: '#845ef7', secondary: '#b197fc' },
+    { id: 'lemon', name: 'Lemon', primary: '#ffd43b', secondary: '#ffe066' },
+    { id: 'lilac', name: 'Lilac', primary: '#845ef7', secondary: '#b197fc' },
     { id: 'aqua', name: 'Aqua', primary: '#22b8cf', secondary: '#66d9e8' },
-    { id: 'lime', name: 'Lime', primary: '#94d82d', secondary: '#c0eb75' },
     { id: 'rose', name: 'Rose', primary: '#f06595', secondary: '#faa2c1' },
+    { id: 'orange', name: 'Orange', primary: '#ffa94d', secondary: '#ffd8a8' },
+    { id: 'lime', name: 'Lime', primary: '#94d82d', secondary: '#c0eb75' },
+    { id: 'violet', name: 'Violet', primary: '#5f3dc4', secondary: '#b197fc' },
+    { id: 'ocean', name: 'Ocean', primary: '#3bc9db', secondary: '#99e9f2' },
 ];
 
 const avatarMap = new Map(avatars.map((avatar) => [avatar.id, avatar]));
@@ -55,44 +60,31 @@ function showGame() {
 function renderAvatarGrid() {
     avatarGrid.innerHTML = '';
     avatars.forEach((avatar) => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'avatar-card';
-        card.dataset.avatarId = avatar.id;
-
-        const preview = document.createElement('div');
-        preview.className = 'avatar-preview';
-        preview.style.background = `linear-gradient(145deg, ${avatar.primary}, ${avatar.secondary})`;
-
-        const eyes = document.createElement('div');
-        eyes.className = 'avatar-eyes';
-        const leftEye = document.createElement('div');
-        leftEye.className = 'avatar-eye';
-        const rightEye = document.createElement('div');
-        rightEye.className = 'avatar-eye';
-        eyes.append(leftEye, rightEye);
-        preview.appendChild(eyes);
-
-        const label = document.createElement('div');
-        label.textContent = avatar.name;
-
-        card.append(preview, label);
-        card.addEventListener('click', () => selectAvatar(avatar.id));
-
-        avatarGrid.appendChild(card);
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.className = 'avatar-swatch';
+        swatch.dataset.avatarId = avatar.id;
+        swatch.title = avatar.name;
+        swatch.style.background = `linear-gradient(145deg, ${avatar.primary}, ${avatar.secondary})`;
+        swatch.addEventListener('click', () => selectAvatar(avatar.id));
+        avatarGrid.appendChild(swatch);
     });
 }
 
 function updateAvatarCards(taken = []) {
-    const cards = avatarGrid.querySelectorAll('.avatar-card');
-    cards.forEach((card) => {
-        const id = card.dataset.avatarId;
+    const swatches = avatarGrid.querySelectorAll('.avatar-swatch');
+    swatches.forEach((swatch) => {
+        const id = swatch.dataset.avatarId;
         const isTaken = taken.includes(id) && id !== selectedAvatarId;
-        card.classList.toggle('selected', id === selectedAvatarId);
-        card.classList.toggle('taken', isTaken);
-        card.disabled = isTaken;
+        swatch.classList.toggle('selected', id === selectedAvatarId);
+        swatch.classList.toggle('taken', isTaken);
+        swatch.disabled = isTaken;
     });
 }
+
+roomCodeInput.addEventListener('input', () => {
+    roomCodeInput.value = roomCodeInput.value.replace(/[^0-9]/g, '').slice(0, 6);
+});
 
 function selectAvatar(id) {
     selectedAvatarId = id;
@@ -116,7 +108,7 @@ function ensureAvatarSelected() {
 
 createRoomBtn.addEventListener('click', () => {
     if (!ensureAvatarSelected()) return;
-    socket.emit('createRoom', { avatarId: selectedAvatarId }, (response) => {
+    socket.emit('createRoom', { avatarId: selectedAvatarId, nickname: nicknameInput.value.trim() }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '방 생성에 실패했습니다.');
             return;
@@ -134,7 +126,7 @@ joinRoomBtn.addEventListener('click', () => {
         setStatus('6자리 숫자 코드를 입력해 주세요.');
         return;
     }
-    socket.emit('joinRoom', { code, avatarId: selectedAvatarId }, (response) => {
+    socket.emit('joinRoom', { code, avatarId: selectedAvatarId, nickname: nicknameInput.value.trim() }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '방 참가에 실패했습니다.');
             return;
@@ -147,7 +139,7 @@ joinRoomBtn.addEventListener('click', () => {
 
 soloBtn.addEventListener('click', () => {
     if (!ensureAvatarSelected()) return;
-    socket.emit('startSolo', { avatarId: selectedAvatarId }, (response) => {
+    socket.emit('startSolo', { avatarId: selectedAvatarId, nickname: nicknameInput.value.trim() }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '혼자하기 시작에 실패했습니다.');
             return;
