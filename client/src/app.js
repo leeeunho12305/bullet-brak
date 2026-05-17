@@ -29,6 +29,13 @@ const avatars = [
 
 const avatarMap = new Map(avatars.map((avatar) => [avatar.id, avatar]));
 avatarMap.set('bot', { id: 'bot', name: 'Bot', primary: '#adb5bd', secondary: '#dee2e6' });
+const avatarImages = new Map();
+
+avatars.forEach((avatar) => {
+    const img = new Image();
+    img.src = avatar.image;
+    avatarImages.set(avatar.id, img);
+});
 
 let selectedAvatarId = null;
 let myId = null;
@@ -208,6 +215,12 @@ socket.on('gameState', (state) => {
 
 function drawAvatar(entity) {
     const avatar = avatarMap.get(entity.avatarId) || avatarMap.get('bot');
+    const img = avatarImages.get(avatar.id);
+    if (img && img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, entity.x, entity.y, entity.width, entity.height);
+        return;
+    }
+
     ctx.fillStyle = avatar.primary;
     ctx.fillRect(entity.x, entity.y, entity.width, entity.height);
 
