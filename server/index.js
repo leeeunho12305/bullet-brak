@@ -113,13 +113,18 @@ function createBot(room) {
         color: avatarPalette.bot,
         avatarId: 'bot',
         hp: 100,
-        speed: 0,
-        jumpPower: 0,
+        speed: 3.5,
+        jumpPower: -10,
         grounded: false,
         mouseTarget: { x: 0, y: 0 },
         inputs: { left: false, right: false, jump: false },
         cooldown: 0,
         isBot: true,
+        ai: {
+            dir: 0,
+            timer: 0,
+            jumpCooldown: 0,
+        },
     };
     room.bots.set(bot.id, bot);
     return bot;
@@ -219,6 +224,56 @@ function bulletHitsRect(bullet, rect) {
     );
 }
 
+function updateBot(bot, platforms) {
+    if (!bot.ai) {
+        bot.ai = { dir: 0, timer: 0, jumpCooldown: 0 };
+    }
+
+    if (bot.ai.timer <= 0) {
+        const roll = Math.random();
+        if (roll < 0.35) {
+            bot.ai.dir = 0;
+        } else {
+            bot.ai.dir = Math.random() < 0.5 ? -1 : 1;
+        }
+        bot.ai.timer = 20 + Math.floor(Math.random() * 80);
+    }
+
+    bot.ai.timer -= 1;
+    if (bot.ai.jumpCooldown > 0) {
+        bot.ai.jumpCooldown -= 1;
+    }
+
+    if (bot.ai.dir === -1) bot.vx -= 1.2;
+    if (bot.ai.dir === 1) bot.vx += 1.2;
+
+    if (bot.vx > bot.speed) bot.vx = bot.speed;
+    if (bot.vx < -bot.speed) bot.vx = -bot.speed;
+    if (bot.ai.dir === 0) bot.vx *= friction;
+
+    if (bot.grounded && bot.ai.jumpCooldown === 0 && Math.random() < 0.02) {
+        bot.vy = bot.jumpPower;
+        bot.grounded = false;
+        bot.ai.jumpCooldown = 40;
+    }
+
+    bot.vy += gravity;
+    bot.x += bot.vx;
+    bot.y += bot.vy;
+    bot.grounded = false;
+
+    if (bot.x < 0) {
+        bot.x = 0;
+        bot.vx = 0;
+    }
+    if (bot.x + bot.width > WIDTH) {
+        bot.x = WIDTH - bot.width;
+        bot.vx = 0;
+    }
+
+    platforms.forEach((plat) => checkCollision(bot, plat));
+}
+
 io.on('connection', (socket) => {
     socket.on('createRoom', ({ avatarId } = {}, ack) => {
         leaveRoom(socket);
@@ -256,9 +311,9 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('startSolo', ({ avatarId } = {}, ack) => {
+    const startTraining = ({ avatarId } = {}, ack) => {
         leaveRoom(socket);
-        const room = createRoom('solo');
+        const room = createRoom('training');
         const player = createPlayer(socket.id, avatarId);
         room.players.set(socket.id, player);
         joinRoom(socket, room);
@@ -269,7 +324,10 @@ io.on('connection', (socket) => {
         if (typeof ack === 'function') {
             ack({ ok: true, code: room.code, state: getRoomState(room) });
         }
-    });
+    };
+
+    socket.on('startTraining', startTraining);
+    socket.on('startSolo', startTraining);
 
     socket.on('selectAvatar', ({ avatarId } = {}, ack) => {
         const code = socketRoom.get(socket.id);
@@ -376,13 +434,7 @@ setInterval(() => {
 
         room.bots.forEach((bot) => {
             if (bot.hp <= 0) return;
-            bot.vy += gravity;
-            bot.x += bot.vx;
-            bot.y += bot.vy;
-            bot.grounded = false;
-            if (bot.x < 0) bot.x = 0;
-            if (bot.x + bot.width > WIDTH) bot.x = WIDTH - bot.width;
-            room.platforms.forEach((plat) => checkCollision(bot, plat));
+            updateBot(bot, room.platforms);
         });
 
         room.bullets.forEach((bullet) => {
@@ -442,7 +494,7 @@ setInterval(() => {
 
         room.bullets = room.bullets.filter((bullet) => bullet.active);
 
-        if (room.mode === 'solo') {
+        if (room.mode === 'training') {
             room.bots.forEach((bot, id) => {
                 if (bot.hp <= 0) room.bots.delete(id);
             });

@@ -144,13 +144,13 @@ joinRoomBtn.addEventListener('click', () => {
 
 soloBtn.addEventListener('click', () => {
     if (!ensureAvatarSelected()) return;
-    socket.emit('startSolo', { avatarId: selectedAvatarId, nickname: nicknameInput.value.trim() }, (response) => {
+    socket.emit('startTraining', { avatarId: selectedAvatarId, nickname: nicknameInput.value.trim() }, (response) => {
         if (!response?.ok) {
-            setStatus(response?.message || '혼자하기 시작에 실패했습니다.');
+            setStatus(response?.message || '훈련장 입장에 실패했습니다.');
             return;
         }
         currentRoomCode = response.code;
-        roomInfo.textContent = `혼자하기 시작: ${response.code}`;
+        roomInfo.textContent = `훈련장 입장: ${response.code}`;
         showGame();
     });
 });
@@ -216,8 +216,23 @@ socket.on('gameState', (state) => {
 function drawAvatar(entity) {
     const avatar = avatarMap.get(entity.avatarId) || avatarMap.get('bot');
     const img = avatarImages.get(avatar.id);
+    const shadowX = entity.x + entity.width / 2;
+    const shadowY = entity.y + entity.height - 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    ctx.ellipse(shadowX, shadowY, entity.width * 0.35, entity.height * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     if (img && img.complete && img.naturalWidth > 0) {
         ctx.drawImage(img, entity.x, entity.y, entity.width, entity.height);
+        if (entity.id === myId) {
+            ctx.strokeStyle = '#5de2dd';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(entity.x - 1, entity.y - 1, entity.width + 2, entity.height + 2);
+        }
         return;
     }
 
@@ -252,10 +267,14 @@ function drawState(state) {
         ctx.fillStyle = '#37b24d';
         ctx.fillRect(player.x, player.y - 12, player.width * (player.hp / 100), 5);
 
+        ctx.fillStyle = '#e9ecef';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(`HP ${Math.max(0, Math.round(player.hp))}`, player.x, player.y - 18);
+
         if (player.id === myId) {
-            ctx.fillStyle = '#fff';
+            ctx.fillStyle = '#5de2dd';
             ctx.font = '10px sans-serif';
-            ctx.fillText('Me', player.x + 6, player.y - 16);
+            ctx.fillText('Me', player.x + 6, player.y - 28);
         }
 
         const cx = player.x + player.width / 2;
@@ -272,6 +291,13 @@ function drawState(state) {
     state.bots.forEach((bot) => {
         if (bot.hp <= 0) return;
         drawAvatar(bot);
+        ctx.fillStyle = '#f03e3e';
+        ctx.fillRect(bot.x, bot.y - 12, bot.width, 5);
+        ctx.fillStyle = '#37b24d';
+        ctx.fillRect(bot.x, bot.y - 12, bot.width * (bot.hp / 100), 5);
+        ctx.fillStyle = '#e9ecef';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(`HP ${Math.max(0, Math.round(bot.hp))}`, bot.x, bot.y - 18);
     });
 
     state.bullets.forEach((bullet) => {
