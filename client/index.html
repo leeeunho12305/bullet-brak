@@ -26,6 +26,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        overflow: hidden;
       }
 
       .screen {
@@ -47,6 +48,19 @@
         color: var(--accent);
         margin-bottom: 24px;
         letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+      }
+
+      .coin-display {
+        font-size: 1rem;
+        background: rgba(255, 212, 59, 0.2);
+        color: #ffd43b;
+        padding: 4px 12px;
+        border-radius: 20px;
+        border: 1px solid #ffd43b;
       }
 
       .lobby-card {
@@ -185,6 +199,12 @@
         margin-bottom: 20px;
       }
 
+      .actions.vertical {
+        flex-direction: column;
+        gap: 12px;
+        align-items: center;
+      }
+
       .btn {
         border: none;
         color: #0b0f1a;
@@ -194,11 +214,13 @@
         font-size: 1rem;
         cursor: pointer;
         transition: transform 0.18s ease, box-shadow 0.18s ease;
-        width: auto;
+        text-decoration: none;
+        display: inline-block;
       }
 
       .btn.large {
         width: 100%;
+        max-width: 400px;
         padding: 16px;
         font-size: 1.1rem;
       }
@@ -247,44 +269,141 @@
         font-size: 1.2rem;
       }
 
-      .actions.vertical {
-        flex-direction: column;
-        gap: 12px;
-      }
-        transform: translateY(-2px);
-        box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
-      }
-
-      .code-area {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-      }
-
-      #roomCodeInput {
-        width: 160px;
-        text-align: center;
-        letter-spacing: 4px;
-        background: #0e1524;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: var(--text-main);
-        border-radius: 12px;
-        padding: 10px 12px;
-      }
-
       .status {
         margin-top: 12px;
         color: #ff8787;
       }
 
-      .room-info {
-        margin-top: 6px;
-        color: #74c0fc;
-        font-weight: 600;
+      .hud {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        color: var(--text-muted);
       }
 
-      .hud {
+      #gameCanvas {
+        background: #121621;
+        border-radius: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.08);
+        width: 800px;
+        height: 600px;
+        cursor: crosshair;
+      }
+
+      /* Game UI Overlays */
+      .game-container {
+        position: relative;
+        width: 800px;
+        margin: 0 auto;
+      }
+
+      .overlay {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        border-radius: 16px;
+      }
+
+      .overlay.active { display: flex; }
+
+      .card-container {
+        display: flex;
+        gap: 15px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .card-item {
+        background: #1b2438;
+        border: 2px solid var(--accent);
+        border-radius: 12px;
+        padding: 15px;
+        width: 130px;
+        text-align: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .card-item:hover { transform: scale(1.05); background: #252f4a; }
+      .card-name { font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+      .card-desc { font-size: 0.8rem; color: var(--text-muted); }
+
+      .chat-box {
+        position: absolute;
+        bottom: 110px;
+        left: 20px;
+        width: 250px;
+        height: 180px;
+        background: rgba(0,0,0,0.4);
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        padding: 8px;
+        pointer-events: auto;
+      }
+
+      #chatMessages {
+        flex: 1;
+        overflow-y: auto;
+        font-size: 0.85rem;
+        margin-bottom: 4px;
+        color: #eee;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      #chatInput {
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: white;
+        padding: 6px 10px;
+        border-radius: 4px;
+        outline: none;
+      }
+
+      .score-board {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 80px;
+        font-size: 2.2rem;
+        font-weight: 700;
+        text-shadow: 0 4px 8px rgba(0,0,0,0.6);
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .score-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .round-dots {
+        display: flex;
+        gap: 8px;
+        margin-top: 6px;
+      }
+
+      .round-dot { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.1); }
+      .round-dot.won { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+
+      .intro {
+        color: var(--text-muted);
+        margin-top: 12px;
+        text-align: center;
+      }
+    </style>
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -384,10 +503,51 @@
       <div class="hud">
         <div id="roomCodeDisplay"></div>
         <div id="playerCountDisplay"></div>
-        <button id="leaveBtn" class="btn coral">로비로</button>
+        <button id="leaveBtn" class="btn coral">나가기</button>
       </div>
-      <canvas id="gameCanvas" width="800" height="600"></canvas>
-      <p class="intro">조작: A/D 이동, 스페이스 점프, 마우스 조준, 좌클릭 사격</p>
+      <div class="game-container">
+        <div class="score-board">
+          <div class="score-item">
+            <span id="p1Score">0</span>
+            <div id="p1Rounds" class="round-dots">
+              <div class="round-dot"></div>
+              <div class="round-dot"></div>
+            </div>
+          </div>
+          <span>VS</span>
+          <div class="score-item">
+            <span id="p2Score">0</span>
+            <div id="p2Rounds" class="round-dots">
+              <div class="round-dot"></div>
+              <div class="round-dot"></div>
+            </div>
+          </div>
+        </div>
+        
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="cardOverlay" class="overlay">
+          <h2 style="color: var(--accent); margin-bottom: 5px;">카드 선택</h2>
+          <p style="color: #ccc;">패배자 특권: 카드 하나를 선택하세요!</p>
+          <div id="cardContainer" class="card-container">
+            <!-- Cards will be injected here -->
+          </div>
+        </div>
+
+        <div id="gameOverOverlay" class="overlay">
+          <h1 id="winnerName" style="color: #ffd43b; font-size: 3rem; margin-bottom: 20px;">WINNER!</h1>
+          <div class="actions">
+            <button id="playAgainBtn" class="btn teal large">다시 플레이</button>
+            <button id="menuBtn" class="btn coral large">메뉴로</button>
+          </div>
+        </div>
+
+        <div class="chat-box">
+          <div id="chatMessages"></div>
+          <input id="chatInput" placeholder="메시지 입력..." maxlength="50" />
+        </div>
+      </div>
+      <p class="intro">조작: A/D 이동, 스페이스 점프, 마우스 조준, 좌클릭 사격 | Enter: 채팅</p>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

@@ -19,12 +19,36 @@ const enterGameBtn = document.getElementById('enterGameBtn');
 const roomLobbyLeaveBtn = document.getElementById('roomLobbyLeaveBtn');
 const leaveBtn = document.getElementById('leaveBtn');
 
+const chatInput = document.getElementById('chatInput');
+const chatMessages = document.getElementById('chatMessages');
+const cardOverlay = document.getElementById('cardOverlay');
+const cardContainer = document.getElementById('cardContainer');
+const gameOverOverlay = document.getElementById('gameOverOverlay');
+const winnerName = document.getElementById('winnerName');
+const playAgainBtn = document.getElementById('playAgainBtn');
+const menuBtn = document.getElementById('menuBtn');
+const coinCountText = document.getElementById('coinCount');
+
+const p1Score = document.getElementById('p1Score');
+const p2Score = document.getElementById('p2Score');
+const p1Rounds = document.getElementById('p1Rounds');
+const p2Rounds = document.getElementById('p2Rounds');
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const inputs = { left: false, right: false, jump: false };
 const mousePos = { x: 0, y: 0 };
 const MAX_HP = 120;
+
+let myCoins = parseInt(localStorage.getItem('bulletBrakCoins')) || 0;
+if (coinCountText) coinCountText.textContent = myCoins;
+
+function updateCoins(amount) {
+    myCoins += amount;
+    localStorage.setItem('bulletBrakCoins', myCoins);
+    if (coinCountText) coinCountText.textContent = myCoins;
+}
 
 const optionGrid = document.getElementById('optionGrid');
 const previewCanvas = document.getElementById('previewCanvas');
@@ -143,6 +167,11 @@ function renderOptions() {
     items.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = 'grid-item';
+        
+        // Simple Economy: Some items cost coins (index > 2)
+        const isLocked = index > 2 && currentCategory !== 'colors'; 
+        const price = isLocked ? 50 : 0;
+
         if (currentCategory === 'colors') {
             div.classList.add('color-item');
             div.style.backgroundColor = item.val;
@@ -155,10 +184,29 @@ function renderOptions() {
             ctx.beginPath(); ctx.arc(20, 20, 18, 0, Math.PI * 2); ctx.fill();
             item.draw(ctx, 0, 0, 40, 40);
             div.appendChild(canvas);
+            
+            if (isLocked) {
+                const lock = document.createElement('div');
+                lock.style = 'position:absolute; font-size:10px; bottom:0; padding:2px; background:rgba(0,0,0,0.5); width:100%; text-align:center;';
+                lock.textContent = `💰${price}`;
+                div.appendChild(lock);
+            }
+
             if (customization[currentCategory.slice(0, -1)] === index) div.classList.add('selected');
         }
         
         div.addEventListener('click', () => {
+            if (isLocked) {
+                if (myCoins >= price) {
+                    updateCoins(-price);
+                    // In a real game, we'd save "unlockedItems" to localStorage too.
+                    // For now, let's just allow picking it once bought.
+                } else {
+                    alert('코인이 부족합니다! 게임을 플레이하여 코인을 모으세요.');
+                    return;
+                }
+            }
+
             if (currentCategory === 'colors') {
                 customization.color = item.val;
             } else {
@@ -292,7 +340,8 @@ createRoomBtn.addEventListener('click', () => {
     socket.emit('createRoom', { 
         customization, 
         nickname: nicknameInput.value.trim(),
-        maxPlayers: parseInt(maxPlayersSelect.value) || 2
+        maxPlayers: parseInt(maxPlayersSelect.value) || 2,
+        coins: myCoins
     }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '방 생성에 실패했습니다.');
@@ -315,7 +364,7 @@ joinRoomBtn.addEventListener('click', () => {
         setStatus('6자리 숫자 코드를 입력해 주세요.');
         return;
     }
-    socket.emit('joinRoom', { code, customization, nickname: nicknameInput.value.trim() }, (response) => {
+    socket.emit('joinRoom', { code, customization, nickname: nicknameInput.value.trim(), coins: myCoins }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '방 참가에 실패했습니다.');
             return;
@@ -332,7 +381,7 @@ joinRoomBtn.addEventListener('click', () => {
 
 soloBtn.addEventListener('click', () => {
     if (!ensureAvatarSelected()) return;
-    socket.emit('startTraining', { customization, nickname: nicknameInput.value.trim() }, (response) => {
+    socket.emit('startTraining', { customization, nickname: nicknameInput.value.trim(), coins: myCoins }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '훈련장 입장에 실패했습니다.');
             return;
@@ -402,6 +451,15 @@ socket.on('connect', () => {
 
 socket.on('roomState', (state) => {
     latestState = state;
+    
+    // Update personal coins if found
+    const me = state.players.find(p => p.id === socket.id);
+    if (me && me.coins !== undefined) {
+        myCoins = me.coins;
+        localStorage.setItem('bulletBrakCoins', myCoins);
+        if (coinCountText) coinCountText.textContent = myCoins;
+    }
+
     if (state.code) {
         roomCodeDisplay.textContent = `방 코드: ${state.code}`;
         playerCountDisplay.textContent = `접속 인원: ${state.players.length}/${state.maxPlayers}`;
@@ -423,8 +481,118 @@ socket.on('roomState', (state) => {
 
 socket.on('gameState', (state) => {
     latestState = state;
-    drawState(state);
+    updateOverlay(state);
 });
+
+function gameLoop() {
+    if (latestState && gameScreen.classList.contains('active')) {
+        drawState(latestState);
+    }
+    requestAnimationFrame(gameLoop);
+}
+gameLoop();
+
+function updateOverlay(state) {
+    if (state.phase === 'picking') {
+        if (state.loserToPick === socket.id) {
+            cardOverlay.classList.add('active');
+            renderCards(state.availableCards);
+        } else {
+            cardOverlay.classList.remove('active');
+            cardContainer.innerHTML = '<p style="color:white; font-size:1.5rem;">상대방이 카드를 선택 중입니다...</p>';
+            cardOverlay.classList.add('active');
+        }
+    } else {
+        cardOverlay.classList.remove('active');
+    }
+
+    if (state.phase === 'finished') {
+        const winner = state.players.reduce((prev, current) => (prev.score > current.score) ? prev : current);
+        winnerName.textContent = `${winner.nickname} 승리!`;
+        gameOverOverlay.classList.add('active');
+        
+        // Sync coins back from server
+        const me = state.players.find(p => p.id === socket.id);
+        if (me) {
+            myCoins = me.coins;
+            localStorage.setItem('bulletBrakCoins', myCoins);
+            if (coinCountText) coinCountText.textContent = myCoins;
+        }
+    } else {
+        gameOverOverlay.classList.remove('active');
+    }
+
+    // Update Scores & Dots
+    if (state.players.length >= 2) {
+        const p1 = state.players[0];
+        const p2 = state.players[1];
+        p1Score.textContent = p1.score;
+        p2Score.textContent = p2.score;
+
+        // Rounds
+        updateDots(p1Rounds, p1.roundWins);
+        updateDots(p2Rounds, p2.roundWins);
+    }
+}
+
+function updateDots(container, wins) {
+    const dots = container.querySelectorAll('.round-dot');
+    dots.forEach((dot, i) => {
+        dot.classList.toggle('won', i < wins);
+    });
+}
+
+function renderCards(cards) {
+    cardContainer.innerHTML = '';
+    cards.forEach(card => {
+        const div = document.createElement('div');
+        div.className = 'card-item';
+        div.innerHTML = `
+            <div class="card-name">${card.name}</div>
+            <div class="card-desc">${card.desc}</div>
+        `;
+        div.onclick = () => {
+            socket.emit('pickCard', { cardId: card.id });
+            cardOverlay.classList.remove('active');
+        };
+        cardContainer.appendChild(div);
+    });
+}
+
+chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        const text = chatInput.value.trim();
+        if (text) {
+            socket.emit('chat', text);
+            chatInput.value = '';
+        }
+    }
+});
+
+socket.on('chat', (msg) => {
+    const div = document.createElement('div');
+    div.innerHTML = `<span style="color:var(--accent); font-weight:700;">${msg.sender}:</span> ${msg.text}`;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+
+playAgainBtn.addEventListener('click', () => {
+    socket.emit('restartGame');
+});
+
+menuBtn.addEventListener('click', () => {
+    leaveRoomAndReset();
+});
+
+enterGameBtn.addEventListener('click', () => {
+    socket.emit('startGame');
+});
+
+socket.on('gameStarted', () => {
+    showGame();
+});
+
+let lerpedPlayers = new Map();
 
 function drawAvatar(entity) {
     const shadowX = entity.x + entity.width / 2;
@@ -455,38 +623,48 @@ function drawState(state) {
     if (!gameScreen.classList.contains('active')) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = '#2b2f3a';
+    ctx.fillStyle = '#1b2438';
     state.platforms.forEach((platform) => {
         ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+        ctx.strokeStyle = 'rgba(93, 226, 221, 0.2)';
+        ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
     });
 
     state.players.forEach((player) => {
         if (player.hp <= 0) return;
-        drawAvatar(player);
 
-        ctx.fillStyle = '#f03e3e';
-        ctx.fillRect(player.x, player.y - 12, player.width, 5);
-        ctx.fillStyle = '#37b24d';
-        ctx.fillRect(player.x, player.y - 12, player.width * (player.hp / MAX_HP), 5);
-
-        ctx.fillStyle = '#e9ecef';
-        ctx.font = '10px sans-serif';
-        ctx.fillText(`HP ${Math.max(0, Math.round(player.hp))}`, player.x, player.y - 18);
-
-        if (player.id === myId) {
-            ctx.fillStyle = '#5de2dd';
-            ctx.font = '10px sans-serif';
-            ctx.fillText('Me', player.x + 6, player.y - 28);
+        // Simple Lerping for smoother motion
+        if (!lerpedPlayers.has(player.id)) {
+            lerpedPlayers.set(player.id, { x: player.x, y: player.y });
         }
+        let lp = lerpedPlayers.get(player.id);
+        lp.x += (player.x - lp.x) * 0.35;
+        lp.y += (player.y - lp.y) * 0.35;
 
-        const cx = player.x + player.width / 2;
-        const cy = player.y + player.height / 2;
+        const drawPlayer = { ...player, x: lp.x, y: lp.y };
+        drawAvatar(drawPlayer);
+
+        const bx = lp.x, by = lp.y, bw = player.width;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(bx, by - 14, bw, 6);
+        ctx.fillStyle = player.id === myId ? '#5de2dd' : '#f03e3e';
+        ctx.fillRect(bx, by - 14, bw * (player.hp / player.maxHp), 6);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px Outfit';
+        ctx.textAlign = 'center';
+        ctx.fillText(player.nickname || '익명', bx + bw/2, by - 22);
+        ctx.textAlign = 'left';
+
+        // Draw weapon line
+        const cx = lp.x + player.width / 2;
+        const cy = lp.y + player.height / 2;
         const angle = Math.atan2(player.mouseTarget.y - cy, player.mouseTarget.x - cx);
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + Math.cos(angle) * 26, cy + Math.sin(angle) * 26);
+        ctx.lineTo(cx + Math.cos(angle) * 30, cy + Math.sin(angle) * 30);
         ctx.stroke();
     });
 
@@ -497,16 +675,16 @@ function drawState(state) {
         ctx.fillRect(bot.x, bot.y - 12, bot.width, 5);
         ctx.fillStyle = '#37b24d';
         ctx.fillRect(bot.x, bot.y - 12, bot.width * (bot.hp / MAX_HP), 5);
-        ctx.fillStyle = '#e9ecef';
-        ctx.font = '10px sans-serif';
-        ctx.fillText(`HP ${Math.max(0, Math.round(bot.hp))}`, bot.x, bot.y - 18);
     });
 
     state.bullets.forEach((bullet) => {
         ctx.beginPath();
-        ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
-        ctx.fillStyle = bullet.color;
+        ctx.arc(bullet.x, bullet.y, bullet.size || 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#5de2dd';
         ctx.fill();
+        ctx.shadowBlur = 0;
     });
 }
 

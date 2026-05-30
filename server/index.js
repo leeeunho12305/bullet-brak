@@ -25,6 +25,16 @@ const DAMAGE_CLOSE = 30;
 const DAMAGE_FAR = 8;
 const DAMAGE_FALLOFF_RANGE = 600;
 
+const CARDS = [
+    { id: 'hp', name: 'Health Up', desc: '최대 체력 +40', effect: (p) => { p.maxHp += 40; p.hp += 40; } },
+    { id: 'speed', name: 'Speed Up', desc: '이동 속도 +2', effect: (p) => { p.speed += 2; } },
+    { id: 'jump', name: 'Jump Up', desc: '점프력 강화', effect: (p) => { p.jumpPower -= 3; } },
+    { id: 'reload', name: 'Quick Reload', desc: '공격 속도 증가', effect: (p) => { p.maxCooldown = Math.max(5, p.maxCooldown - 5); } },
+    { id: 'big', name: 'Big Bullet', desc: '총알 크기 및 넉백 증가', effect: (p) => { p.bulletSize += 3; p.knockbackMult += 0.5; } },
+    { id: 'tank', name: 'Tank', desc: '체력 +100, 속도 -2', effect: (p) => { p.maxHp += 100; p.hp += 100; p.speed -= 2; } },
+    { id: 'glass', name: 'Glass Cannon', desc: '공격력 대폭 증가, 체력 절반', effect: (p) => { p.damageMult += 1.0; p.maxHp /= 2; p.hp = Math.min(p.hp, p.maxHp); } },
+];
+
 const platforms = [
     { x: 0, y: 550, width: 800, height: 50 },
     { x: 100, y: 400, width: 200, height: 20 },
@@ -50,6 +60,8 @@ const avatarPalette = {
 const rooms = new Map();
 const socketRoom = new Map();
 
+const BAD_WORDS = /바보|멍청이|정치|섹스|성미|노무|문재|윤석|이재|정당|공산|친일|선정/gi;
+
 function generateRoomCode() {
     let code = '';
     do {
@@ -69,6 +81,12 @@ function createRoom(mode, maxPlayers = MAX_PLAYERS) {
         platforms,
         maxPlayers,
         botSeq: 0,
+        phase: 'waiting', // waiting, playing, picking, finished
+        roundWins: {}, // playerId -> 0,1,2
+        scores: {},    // playerId -> 0-5
+        loserToPick: null, 
+        availableCards: [],
+        messages: []
     };
     rooms.set(code, room);
     return room;
@@ -81,7 +99,7 @@ function randomSpawn() {
     };
 }
 
-function createPlayer(id, customization, room = null) {
+function createPlayer(id, customization, room = null, initialCoins = 0) {
     const spawn = randomSpawn();
     const player = {
         id,
@@ -98,8 +116,15 @@ function createPlayer(id, customization, room = null) {
         mouseTarget: { x: 0, y: 0 },
         inputs: { left: false, right: false, jump: false },
         cooldown: 0,
+        maxCooldown: 15,
+        maxHp: MAX_HP,
+        damageMult: 1.0,
+        bulletSize: 5,
+        knockbackMult: 1.0,
         customization: customization || { eye: 0, mouth: 0, detail: 0, color: '#ff6b6b' },
-        nickname: '익명'
+        nickname: '익명',
+        cards: [],
+        coins: initialCoins
     };
 
     // Assign random color if in a room
@@ -153,6 +178,7 @@ function getRoomState(room) {
         id: player.id,
         customization: player.customization,
         nickname: player.nickname,
+        coins: player.coins,
     }));
     return {
         code: room.code,
@@ -292,10 +318,10 @@ function updateBot(bot, platforms) {
 }
 
 io.on('connection', (socket) => {
-    socket.on('createRoom', ({ customization, nickname, maxPlayers } = {}, ack) => {
+    socket.on('createRoom', ({ customization, nickname, maxPlayers, coins } = {}, ack) => {
         leaveRoom(socket);
         const room = createRoom('pvp', maxPlayers);
-        const player = createPlayer(socket.id, customization, room);
+        const player = createPlayer(socket.id, customization, room, coins);
         player.nickname = nickname || '익명';
         room.players.set(socket.id, player);
         joinRoom(socket, room);
@@ -305,7 +331,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('joinRoom', ({ code, customization, nickname } = {}, ack) => {
+    socket.on('joinRoom', ({ code, customization, nickname, coins } = {}, ack) => {
         const room = rooms.get(code);
         if (!room) {
             if (typeof ack === 'function') ack({ ok: false, message: '존재하지 않는 방입니다.' });
@@ -316,7 +342,7 @@ io.on('connection', (socket) => {
             return;
         }
         leaveRoom(socket);
-        const player = createPlayer(socket.id, customization, room);
+        const player = createPlayer(socket.id, customization, room, coins);
         player.nickname = nickname || '익명';
         room.players.set(socket.id, player);
         joinRoom(socket, room);
@@ -326,10 +352,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    const startTraining = ({ customization, nickname } = {}, ack) => {
+    const startTraining = ({ customization, nickname, coins } = {}, ack) => {
         leaveRoom(socket);
         const room = createRoom('training');
-        const player = createPlayer(socket.id, customization, room);
+        const player = createPlayer(socket.id, customization, room, coins);
         player.nickname = nickname || '익명';
         room.players.set(socket.id, player);
         joinRoom(socket, room);
@@ -344,6 +370,54 @@ io.on('connection', (socket) => {
 
     socket.on('startTraining', startTraining);
     socket.on('startSolo', startTraining);
+
+    socket.on('startGame', () => {
+        const code = socketRoom.get(socket.id);
+        const room = rooms.get(code);
+        if (!room) return;
+        room.phase = 'playing';
+        io.to(code).emit('gameStarted');
+    });
+
+    socket.on('pickCard', ({ cardId }) => {
+        const code = socketRoom.get(socket.id);
+        const room = rooms.get(code);
+        if (!room || room.phase !== 'picking' || room.loserToPick !== socket.id) return;
+
+        const card = CARDS.find(c => c.id === cardId);
+        const player = room.players.get(socket.id);
+        if (card && player) {
+            player.cards.push(card.id);
+            card.effect(player);
+            room.phase = 'playing';
+            room.loserToPick = null;
+            resetRound(room);
+        }
+    });
+
+    socket.on('chat', (text) => {
+        const code = socketRoom.get(socket.id);
+        const room = rooms.get(code);
+        if (!room) return;
+
+        const player = room.players.get(socket.id);
+        const censoredText = text.replace(BAD_WORDS, '***');
+        const msg = {
+            sender: player ? player.nickname : 'System',
+            text: censoredText,
+            time: Date.now()
+        };
+        room.messages.push(msg);
+        if (room.messages.length > 5) room.messages.shift();
+        io.to(code).emit('chat', msg);
+    });
+
+    socket.on('restartGame', () => {
+        const code = socketRoom.get(socket.id);
+        const room = rooms.get(code);
+        if (!room || room.phase !== 'finished') return;
+        resetMatch(room);
+    });
 
     socket.on('selectAvatar', ({ customization } = {}, ack) => {
         const code = socketRoom.get(socket.id);
@@ -413,102 +487,143 @@ io.on('connection', (socket) => {
 
 setInterval(() => {
     rooms.forEach((room) => {
-        room.players.forEach((player) => {
-            if (player.hp <= 0) return;
-
-            if (player.cooldown > 0) player.cooldown -= 1;
-
-            if (player.inputs.left) player.vx -= 1.5;
-            if (player.inputs.right) player.vx += 1.5;
-            if (player.inputs.jump && player.grounded) {
-                player.vy = player.jumpPower;
-                player.grounded = false;
-            }
-
-            if (player.vx > player.speed) player.vx = player.speed;
-            if (player.vx < -player.speed) player.vx = -player.speed;
-            if (!player.inputs.left && !player.inputs.right) player.vx *= friction;
-
-            player.vy += gravity;
-            player.x += player.vx;
-            player.y += player.vy;
-            player.grounded = false;
-
-            if (player.x < 0) {
-                player.x = 0;
-                player.vx = 0;
-            }
-            if (player.x + player.width > WIDTH) {
-                player.x = WIDTH - player.width;
-                player.vx = 0;
-            }
-
-            room.platforms.forEach((plat) => checkCollision(player, plat));
-        });
-
-        room.bots.forEach((bot) => {
-            if (bot.hp <= 0) return;
-            updateBot(bot, room.platforms);
-        });
-
-        room.bullets.forEach((bullet) => {
-            if (!bullet.active) return;
-            bullet.x += bullet.vx;
-            bullet.y += bullet.vy;
-            bullet.life -= 1;
-
-            if (
-                bullet.life <= 0 ||
-                bullet.x < 0 ||
-                bullet.x > WIDTH ||
-                bullet.y < 0 ||
-                bullet.y > HEIGHT
-            ) {
-                bullet.active = false;
-                return;
-            }
-
-            for (const plat of room.platforms) {
-                if (bulletHitsRect(bullet, plat)) {
-                    bullet.active = false;
-                    return;
-                }
-            }
-
+        if (room.phase === 'playing' || room.mode === 'training') {
             room.players.forEach((player) => {
-                if (!bullet.active || player.hp <= 0 || bullet.owner === player.id) return;
-                if (
-                    bullet.x > player.x &&
-                    bullet.x < player.x + player.width &&
-                    bullet.y > player.y &&
-                    bullet.y < player.y + player.height
-                ) {
-                    const damage = getBulletDamage(bullet);
-                    player.hp -= damage;
-                    player.vx += bullet.vx * 0.4;
-                    player.vy -= 4;
-                    bullet.active = false;
+                if (player.hp <= 0) return;
+
+                if (player.cooldown > 0) player.cooldown -= 1;
+
+                // Smoother acceleration
+                const accel = 0.8;
+                if (player.inputs.left) player.vx -= accel;
+                if (player.inputs.right) player.vx += accel;
+                if (player.inputs.jump && player.grounded) {
+                    player.vy = player.jumpPower;
+                    player.grounded = false;
                 }
+
+                if (player.vx > player.speed) player.vx = player.speed;
+                if (player.vx < -player.speed) player.vx = -player.speed;
+                if (!player.inputs.left && !player.inputs.right) player.vx *= friction;
+
+                player.vy += gravity;
+                player.x += player.vx;
+                player.y += player.vy;
+                player.grounded = false;
+
+                if (player.x < 0) {
+                    player.x = 0;
+                    player.vx = 0;
+                }
+                if (player.x + player.width > WIDTH) {
+                    player.x = WIDTH - player.width;
+                    player.vx = 0;
+                }
+
+                room.platforms.forEach((plat) => checkCollision(player, plat));
             });
 
             room.bots.forEach((bot) => {
-                if (!bullet.active || bot.hp <= 0 || bullet.owner === bot.id) return;
-                if (
-                    bullet.x > bot.x &&
-                    bullet.x < bot.x + bot.width &&
-                    bullet.y > bot.y &&
-                    bullet.y < bot.y + bot.height
-                ) {
-                    const damage = getBulletDamage(bullet);
-                    bot.hp -= damage;
-                    bot.vx += bullet.vx * 0.4;
-                    bot.vy -= 4;
-                    bullet.active = false;
-                }
+                if (bot.hp <= 0) return;
+                updateBot(bot, room.platforms);
             });
-        });
 
-        room.bullets = room.bullets.filter((bullet) => bullet.active);
+            room.bullets.forEach((bullet) => {
+                if (!bullet.active) return;
+                bullet.x += bullet.vx;
+                bullet.y += bullet.vy;
+                bullet.life -= 1;
+
+                if (
+                    bullet.life <= 0 ||
+                    bullet.x < 0 ||
+                    bullet.x > WIDTH ||
+                    bullet.y < 0 ||
+                    bullet.y > HEIGHT
+                ) {
+                    bullet.active = false;
+                    return;
+                }
+
+                for (const plat of room.platforms) {
+                    if (bulletHitsRect(bullet, plat)) {
+                        bullet.active = false;
+                        return;
+                    }
+                }
+
+                room.players.forEach((player) => {
+                    if (!bullet.active || player.hp <= 0 || bullet.owner === player.id) return;
+                    if (
+                        bullet.x > player.x &&
+                        bullet.x < player.x + player.width &&
+                        bullet.y > player.y &&
+                        bullet.y < player.y + player.height
+                    ) {
+                        const damage = getBulletDamage(bullet) * (room.players.get(bullet.owner)?.damageMult || 1.0);
+                        player.hp -= damage;
+                        player.vx += bullet.vx * 0.4 * (room.players.get(bullet.owner)?.knockbackMult || 1.0);
+                        player.vy -= 4;
+                        bullet.active = false;
+                    }
+                });
+
+                room.bots.forEach((bot) => {
+                    if (!bullet.active || bot.hp <= 0 || bullet.owner === bot.id) return;
+                    if (
+                        bullet.x > bot.x &&
+                        bullet.x < bot.x + bot.width &&
+                        bullet.y > bot.y &&
+                        bullet.y < bot.y + bot.height
+                    ) {
+                        const damage = getBulletDamage(bullet);
+                        bot.hp -= damage;
+                        bot.vx += bullet.vx * 0.4;
+                        bot.vy -= 4;
+                        bullet.active = false;
+                    }
+                });
+            });
+
+            room.bullets = room.bullets.filter((bullet) => bullet.active);
+
+            // Round End Logic
+            if (room.mode === 'pvp') {
+                const alive = Array.from(room.players.values()).filter(p => p.hp > 0);
+                if (alive.length <= 1 && room.players.size > 1) {
+                    const winner = alive[0];
+                    const allPlayers = Array.from(room.players.keys());
+                    const loserId = allPlayers.find(id => id !== winner?.id);
+                    
+                    if (winner) {
+                        room.roundWins[winner.id] = (room.roundWins[winner.id] || 0) + 1;
+                        winner.coins += 10;
+                        
+                        // If winner got 2 round wins, they get 1 point
+                        if (room.roundWins[winner.id] >= 2) {
+                            room.scores[winner.id] = (room.scores[winner.id] || 0) + 1;
+                            room.roundWins = {}; // Reset round wins
+                            
+                            if (room.scores[winner.id] >= 5) {
+                                room.phase = 'finished';
+                                winner.coins += 100; // Big reward for winning match
+                            } else {
+                                // Loser picks a card
+                                room.phase = 'picking';
+                                room.loserToPick = loserId;
+                                room.availableCards = CARDS.sort(() => 0.5 - Math.random()).slice(0, 5);
+                            }
+                        } else {
+                            // Next round in few seconds
+                            setTimeout(() => resetRound(room), 2000);
+                        }
+                    } else if (room.players.size > 1) {
+                        // Draw? Just reset
+                        setTimeout(() => resetRound(room), 2000);
+                    }
+                }
+            }
+        }
 
         if (room.mode === 'training') {
             room.bots.forEach((bot, id) => {
@@ -522,14 +637,54 @@ setInterval(() => {
         io.to(room.code).emit('gameState', {
             code: room.code,
             mode: room.mode,
-            players: Array.from(room.players.values()),
+            phase: room.phase,
+            players: Array.from(room.players.values()).map(p => ({
+                ...p,
+                roundWins: room.roundWins[p.id] || 0,
+                score: room.scores[p.id] || 0
+            })),
             bots: Array.from(room.bots.values()),
             bullets: room.bullets,
             platforms: room.platforms,
             maxPlayers: room.maxPlayers,
+            loserToPick: room.loserToPick,
+            availableCards: room.availableCards,
+            messages: room.messages
         });
     });
 }, TICK_RATE);
+
+function resetRound(room) {
+    if (room.phase === 'finished') return;
+    room.phase = 'playing';
+    room.bullets = [];
+    room.players.forEach(p => {
+        const spawn = randomSpawn();
+        p.x = spawn.x;
+        p.y = spawn.y;
+        p.hp = p.maxHp;
+        p.vx = 0;
+        p.vy = 0;
+    });
+}
+
+function resetMatch(room) {
+    room.scores = {};
+    room.roundWins = {};
+    room.players.forEach(p => {
+        p.maxHp = MAX_HP;
+        p.hp = MAX_HP;
+        p.speed = 5;
+        p.jumpPower = -16;
+        p.maxCooldown = 15;
+        p.damageMult = 1.0;
+        p.bulletSize = 5;
+        p.knockbackMult = 1.0;
+        p.cards = [];
+    });
+    room.phase = 'waiting';
+    emitRoomState(room);
+}
 
 server.listen(port, '0.0.0.0', () => {
     console.log(`Server listening on http://0.0.0.0:${port}`);
