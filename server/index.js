@@ -20,6 +20,10 @@ const TICK_RATE = 1000 / 60;
 const MAX_PLAYERS = 2;
 const gravity = 0.6;
 const friction = 0.8;
+const MAX_HP = 120;
+const DAMAGE_CLOSE = 30;
+const DAMAGE_FAR = 8;
+const DAMAGE_FALLOFF_RANGE = 600;
 
 const platforms = [
     { x: 0, y: 550, width: 800, height: 50 },
@@ -33,6 +37,13 @@ const avatarPalette = {
     green: '#51cf66',
     purple: '#845ef7',
     orange: '#ffa94d',
+    red: '#ff6b6b',
+    yellow: '#ffd43b',
+    teal: '#20c997',
+    cyan: '#3bc9db',
+    indigo: '#5c7cfa',
+    pink: '#f06595',
+    lime: '#94d82d',
     bot: '#adb5bd',
 };
 
@@ -70,13 +81,7 @@ function randomSpawn() {
     };
 }
 
-function assignAvatar(player, avatarId) {
-    const safeId = avatarPalette[avatarId] ? avatarId : 'blue';
-    player.avatarId = safeId;
-    player.color = avatarPalette[safeId];
-}
-
-function createPlayer(id, avatarId) {
+function createPlayer(id, customization, room = null) {
     const spawn = randomSpawn();
     const player = {
         id,
@@ -86,22 +91,30 @@ function createPlayer(id, avatarId) {
         height: 30,
         vx: 0,
         vy: 0,
-        color: avatarPalette.blue,
-        avatarId: 'blue',
-        hp: 100,
+        hp: MAX_HP,
         speed: 5,
-        jumpPower: -12,
+        jumpPower: -16,
         grounded: false,
         mouseTarget: { x: 0, y: 0 },
         inputs: { left: false, right: false, jump: false },
         cooldown: 0,
+        customization: customization || { eyes: 0, mouth: 0, detail: 0, color: '#ff6b6b' }
     };
-    assignAvatar(player, avatarId);
+
+    // Assign random color if in a room
+    if (room) {
+        const takenColors = Array.from(room.players.values()).map(p => p.customization.color);
+        const availablePalette = Object.values(avatarPalette);
+        const available = availablePalette.filter(c => !takenColors.includes(c));
+        player.customization.color = (available.length > 0) ? available[Math.floor(Math.random() * available.length)] : availablePalette[0];
+    }
+    
     return player;
 }
 
 function createBot(room) {
     const spawn = randomSpawn();
+    const availablePalette = Object.values(avatarPalette);
     const bot = {
         id: `bot-${room.botSeq++}`,
         x: spawn.x,
@@ -110,11 +123,9 @@ function createBot(room) {
         height: 30,
         vx: 0,
         vy: 0,
-        color: avatarPalette.bot,
-        avatarId: 'bot',
-        hp: 100,
+        hp: MAX_HP,
         speed: 3.5,
-        jumpPower: -10,
+        jumpPower: -14,
         grounded: false,
         mouseTarget: { x: 0, y: 0 },
         inputs: { left: false, right: false, jump: false },
@@ -125,30 +136,25 @@ function createBot(room) {
             timer: 0,
             jumpCooldown: 0,
         },
+        customization: {
+            eyes: Math.floor(Math.random() * 5),
+            mouth: Math.floor(Math.random() * 5),
+            detail: Math.floor(Math.random() * 5),
+            color: availablePalette[Math.floor(Math.random() * availablePalette.length)]
+        }
     };
     room.bots.set(bot.id, bot);
     return bot;
 }
 
-function isAvatarTaken(room, avatarId, exceptId) {
-    for (const player of room.players.values()) {
-        if (player.id !== exceptId && player.avatarId === avatarId) {
-            return true;
-        }
-    }
-    return false;
-}
-
 function getRoomState(room) {
     const players = Array.from(room.players.values()).map((player) => ({
         id: player.id,
-        avatarId: player.avatarId,
+        customization: player.customization,
     }));
-    const takenAvatars = players.map((player) => player.avatarId);
     return {
         code: room.code,
         players,
-        takenAvatars,
         maxPlayers: room.maxPlayers,
         mode: room.mode,
     };
@@ -224,6 +230,15 @@ function bulletHitsRect(bullet, rect) {
     );
 }
 
+function getBulletDamage(bullet) {
+    const dx = bullet.x - bullet.startX;
+    const dy = bullet.y - bullet.startY;
+    const distance = Math.hypot(dx, dy);
+    const t = Math.min(distance / DAMAGE_FALLOFF_RANGE, 1);
+    const damage = DAMAGE_CLOSE - (DAMAGE_CLOSE - DAMAGE_FAR) * t;
+    return Math.round(damage);
+}
+
 function updateBot(bot, platforms) {
     if (!bot.ai) {
         bot.ai = { dir: 0, timer: 0, jumpCooldown: 0 };
@@ -275,10 +290,10 @@ function updateBot(bot, platforms) {
 }
 
 io.on('connection', (socket) => {
-    socket.on('createRoom', ({ avatarId } = {}, ack) => {
+    socket.on('createRoom', ({ customization } = {}, ack) => {
         leaveRoom(socket);
         const room = createRoom('pvp');
-        const player = createPlayer(socket.id, avatarId);
+        const player = createPlayer(socket.id, customization, room);
         room.players.set(socket.id, player);
         joinRoom(socket, room);
         emitRoomState(room);
@@ -287,7 +302,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('joinRoom', ({ code, avatarId } = {}, ack) => {
+    socket.on('joinRoom', ({ code, customization } = {}, ack) => {
         const room = rooms.get(code);
         if (!room) {
             if (typeof ack === 'function') ack({ ok: false, message: '존재하지 않는 방입니다.' });
@@ -297,12 +312,8 @@ io.on('connection', (socket) => {
             if (typeof ack === 'function') ack({ ok: false, message: '방이 가득 찼습니다.' });
             return;
         }
-        if (isAvatarTaken(room, avatarId)) {
-            if (typeof ack === 'function') ack({ ok: false, message: '이미 선택된 캐릭터입니다.' });
-            return;
-        }
         leaveRoom(socket);
-        const player = createPlayer(socket.id, avatarId);
+        const player = createPlayer(socket.id, customization, room);
         room.players.set(socket.id, player);
         joinRoom(socket, room);
         emitRoomState(room);
@@ -311,10 +322,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    const startTraining = ({ avatarId } = {}, ack) => {
+    const startTraining = ({ customization } = {}, ack) => {
         leaveRoom(socket);
         const room = createRoom('training');
-        const player = createPlayer(socket.id, avatarId);
+        const player = createPlayer(socket.id, customization, room);
         room.players.set(socket.id, player);
         joinRoom(socket, room);
         for (let i = 0; i < 3; i += 1) {
@@ -329,17 +340,13 @@ io.on('connection', (socket) => {
     socket.on('startTraining', startTraining);
     socket.on('startSolo', startTraining);
 
-    socket.on('selectAvatar', ({ avatarId } = {}, ack) => {
+    socket.on('selectAvatar', ({ customization } = {}, ack) => {
         const code = socketRoom.get(socket.id);
         const room = rooms.get(code);
         if (!room) return;
-        if (isAvatarTaken(room, avatarId, socket.id)) {
-            if (typeof ack === 'function') ack({ ok: false, message: '이미 선택된 캐릭터입니다.' });
-            return;
-        }
         const player = room.players.get(socket.id);
         if (!player) return;
-        assignAvatar(player, avatarId);
+        player.customization = customization;
         emitRoomState(room);
         if (typeof ack === 'function') ack({ ok: true });
     });
@@ -382,6 +389,8 @@ io.on('connection', (socket) => {
             owner: player.id,
             active: true,
             life: 80,
+            startX: cx,
+            startY: cy,
         });
 
         player.vx -= Math.cos(angle) * 2;
@@ -469,7 +478,8 @@ setInterval(() => {
                     bullet.y > player.y &&
                     bullet.y < player.y + player.height
                 ) {
-                    player.hp -= 25;
+                    const damage = getBulletDamage(bullet);
+                    player.hp -= damage;
                     player.vx += bullet.vx * 0.4;
                     player.vy -= 4;
                     bullet.active = false;
@@ -484,7 +494,8 @@ setInterval(() => {
                     bullet.y > bot.y &&
                     bullet.y < bot.y + bot.height
                 ) {
-                    bot.hp -= 50;
+                    const damage = getBulletDamage(bullet);
+                    bot.hp -= damage;
                     bot.vx += bullet.vx * 0.4;
                     bot.vy -= 4;
                     bullet.active = false;

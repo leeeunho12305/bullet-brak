@@ -1,6 +1,7 @@
 const socket = io();
 
 const lobbyScreen = document.getElementById('lobby');
+const roomLobbyScreen = document.getElementById('roomLobby');
 const gameScreen = document.getElementById('game');
 const avatarGrid = document.getElementById('avatarGrid');
 const lobbyStatus = document.getElementById('lobbyStatus');
@@ -9,9 +10,13 @@ const roomCodeInput = document.getElementById('roomCodeInput');
 const nicknameInput = document.getElementById('nicknameInput');
 const roomCodeDisplay = document.getElementById('roomCodeDisplay');
 const playerCountDisplay = document.getElementById('playerCountDisplay');
+const roomLobbyCode = document.getElementById('roomLobbyCode');
+const roomLobbyCount = document.getElementById('roomLobbyCount');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
 const soloBtn = document.getElementById('soloBtn');
+const enterGameBtn = document.getElementById('enterGameBtn');
+const roomLobbyLeaveBtn = document.getElementById('roomLobbyLeaveBtn');
 const leaveBtn = document.getElementById('leaveBtn');
 
 const canvas = document.getElementById('gameCanvas');
@@ -19,41 +24,218 @@ const ctx = canvas.getContext('2d');
 
 const inputs = { left: false, right: false, jump: false };
 const mousePos = { x: 0, y: 0 };
+const MAX_HP = 120;
+
+const optionGrid = document.getElementById('optionGrid');
+const previewCanvas = document.getElementById('previewCanvas');
+const pCtx = previewCanvas.getContext('2d');
+
+const customization = {
+    eyes: 0,
+    mouth: 0,
+    detail: 0,
+    color: '#ff6b6b'
+};
+
+const options = {
+    eyes: [
+        { name: 'Normal', draw: (ctx, x, y, w, h) => {
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.4, w * 0.08, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.4, w * 0.08, 0, Math.PI * 2); ctx.fill();
+        }},
+        { name: 'Angry', draw: (ctx, x, y, w, h) => {
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.3); ctx.lineTo(x + w * 0.4, y + h * 0.4); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.8, y + h * 0.3); ctx.lineTo(x + w * 0.6, y + h * 0.4); ctx.stroke();
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.45, w * 0.06, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.45, w * 0.06, 0, Math.PI * 2); ctx.fill();
+        }},
+        { name: 'Cute', draw: (ctx, x, y, w, h) => {
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.4, w * 0.1, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.4, w * 0.1, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(x + w * 0.28, y + h * 0.38, w * 0.03, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.68, y + h * 0.38, w * 0.03, 0, Math.PI * 2); ctx.fill();
+        }},
+        { name: 'Dead', draw: (ctx, x, y, w, h) => {
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.35); ctx.lineTo(x + w * 0.4, y + h * 0.45); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.4, y + h * 0.35); ctx.lineTo(x + w * 0.2, y + h * 0.45); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.6, y + h * 0.35); ctx.lineTo(x + w * 0.8, y + h * 0.45); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.8, y + h * 0.35); ctx.lineTo(x + w * 0.6, y + h * 0.45); ctx.stroke();
+        }},
+        { name: 'Cool', draw: (ctx, x, y, w, h) => {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x + w * 0.15, y + h * 0.35, w * 0.7, h * 0.1);
+        }}
+    ],
+    mouths: [
+        { name: 'Smile', draw: (ctx, x, y, w, h) => {
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x + w * 0.5, y + h * 0.5, w * 0.2, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
+        }},
+        { name: 'Flat', draw: (ctx, x, y, w, h) => {
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x + w * 0.35, y + h * 0.65); ctx.lineTo(x + w * 0.65, y + h * 0.65); ctx.stroke();
+        }},
+        { name: 'O', draw: (ctx, x, y, w, h) => {
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x + w * 0.5, y + h * 0.65, w * 0.08, 0, Math.PI * 2); ctx.stroke();
+        }},
+        { name: 'Cat', draw: (ctx, x, y, w, h) => {
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x + w * 0.4, y + h * 0.6, w * 0.1, 0, Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.arc(x + w * 0.6, y + h * 0.6, w * 0.1, 0, Math.PI); ctx.stroke();
+        }},
+        { name: 'Grin', draw: (ctx, x, y, w, h) => {
+            ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.rect(x + w * 0.35, y + h * 0.6, w * 0.3, h * 0.12); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.35, y + h * 0.66); ctx.lineTo(x + w * 0.65, y + h * 0.66); ctx.stroke();
+        }}
+    ],
+    details: [
+        { name: 'None', draw: () => {} },
+        { name: 'Blush', draw: (ctx, x, y, w, h) => {
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.4)';
+            ctx.beginPath(); ctx.ellipse(x + w * 0.2, y + h * 0.5, w * 0.1, h * 0.05, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(x + w * 0.8, y + h * 0.5, w * 0.1, h * 0.05, 0, 0, Math.PI * 2); ctx.fill();
+        }},
+        { name: 'Bow', draw: (ctx, x, y, w, h) => {
+            ctx.fillStyle = '#ff4a9e';
+            ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.15); ctx.lineTo(x + w * 0.4, y + h * 0.25); ctx.lineTo(x + w * 0.2, y + h * 0.35); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.1, y + h * 0.25); ctx.arc(x + w * 0.1, y + h * 0.25, w * 0.05, 0, Math.PI * 2); ctx.fill();
+        }},
+        { name: 'Hat', draw: (ctx, x, y, w, h) => {
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x + w * 0.2, y, w * 0.6, h * 0.15);
+            ctx.fillRect(x + w * 0.1, y + h * 0.1, w * 0.8, h * 0.05);
+        }},
+        { name: 'Mustache', draw: (ctx, x, y, w, h) => {
+            ctx.fillStyle = '#222';
+            ctx.beginPath(); ctx.arc(x + w * 0.4, y + h * 0.72, w * 0.12, Math.PI, 0); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.6, y + h * 0.72, w * 0.12, Math.PI, 0); ctx.fill();
+        }}
+    ],
+    colors: [
+        { name: 'Red', val: '#ff6b6b' },
+        { name: 'Blue', val: '#4dabf7' },
+        { name: 'Green', val: '#51cf66' },
+        { name: 'Purple', val: '#845ef7' },
+        { name: 'Orange', val: '#ffa94d' },
+        { name: 'Yellow', val: '#ffd43b' },
+        { name: 'Teal', val: '#20c997' },
+        { name: 'Pink', val: '#f06595' },
+        { name: 'Dark', val: '#343a40' },
+        { name: 'White', val: '#f8f9fa' }
+    ]
+};
+
+let currentCategory = 'eyes';
+
+function renderOptions() {
+    optionGrid.innerHTML = '';
+    const items = options[currentCategory];
+    items.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'grid-item';
+        if (currentCategory === 'colors') {
+            div.style.backgroundColor = item.val;
+            if (customization.color === item.val) div.classList.add('selected');
+        } else {
+            const canvas = document.createElement('canvas');
+            canvas.width = 40; canvas.height = 40;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ddd';
+            ctx.beginPath(); ctx.arc(20, 20, 18, 0, Math.PI * 2); ctx.fill();
+            item.draw(ctx, 0, 0, 40, 40);
+            div.appendChild(canvas);
+            if (customization[currentCategory.slice(0, -1)] === index) div.classList.add('selected');
+        }
+        
+        div.addEventListener('click', () => {
+            if (currentCategory === 'colors') {
+                customization.color = item.val;
+            } else {
+                customization[currentCategory.slice(0, -1)] = index;
+            }
+            renderOptions();
+            drawPreview();
+        });
+        optionGrid.appendChild(div);
+    });
+}
+
+function drawPreview() {
+    pCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+    const x = 25, y = 25, w = 100, h = 100;
+    
+    // Body
+    pCtx.fillStyle = customization.color;
+    pCtx.beginPath(); pCtx.arc(x + w/2, y + h/2, w/2, 0, Math.PI * 2); pCtx.fill();
+    pCtx.strokeStyle = 'rgba(0,0,0,0.1)'; pCtx.lineWidth = 2; pCtx.stroke();
+
+    options.eyes[customization.eyes].draw(pCtx, x, y, w, h);
+    options.mouths[customization.mouth].draw(pCtx, x, y, w, h);
+    options.details[customization.detail].draw(pCtx, x, y, w, h);
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCategory = btn.dataset.category;
+        renderOptions();
+    });
+});
 
 const avatars = [
-    { id: 'blue', name: 'Blue', primary: '#4dabf7', secondary: '#74c0fc', image: '/assets/avatars/blue.png' },
-    { id: 'green', name: 'Green', primary: '#51cf66', secondary: '#8ce99a', image: '/assets/avatars/green.png' },
-    { id: 'purple', name: 'Purple', primary: '#845ef7', secondary: '#b197fc', image: '/assets/avatars/purple.png' },
-    { id: 'orange', name: 'Orange', primary: '#ffa94d', secondary: '#ffd8a8', image: '/assets/avatars/orange.png' },
+    { id: 'red', name: 'Red', primary: '#ff6b6b', secondary: '#ffa8a8' },
+    { id: 'teal', name: 'Teal', primary: '#4ecdc4', secondary: '#7ee7df' },
+    { id: 'cyan', name: 'Cyan', primary: '#4cc9e8', secondary: '#7dddf2' },
+    { id: 'mint', name: 'Mint', primary: '#9ad9bf', secondary: '#c2eadb' },
+    { id: 'cream', name: 'Cream', primary: '#ffe8a3', secondary: '#fff2cc' },
+    { id: 'pink', name: 'Pink', primary: '#dd9ae2', secondary: '#efc4f0' },
+    { id: 'seafoam', name: 'Seafoam', primary: '#9bdccf', secondary: '#c2ece4' },
+    { id: 'yellow', name: 'Yellow', primary: '#f7dc62', secondary: '#fbe58f' },
+    { id: 'purple', name: 'Purple', primary: '#c08ad9', secondary: '#d8b6ea' },
+    { id: 'blue', name: 'Blue', primary: '#8cc6f7', secondary: '#b6ddfb' },
+    { id: 'orange', name: 'Orange', primary: '#f7bf6e', secondary: '#ffd79a' },
+    { id: 'green', name: 'Green', primary: '#84e08c', secondary: '#b2efb8' },
 ];
 
 const avatarMap = new Map(avatars.map((avatar) => [avatar.id, avatar]));
 avatarMap.set('bot', { id: 'bot', name: 'Bot', primary: '#adb5bd', secondary: '#dee2e6' });
-const avatarImages = new Map();
-
-avatars.forEach((avatar) => {
-    const img = new Image();
-    img.src = avatar.image;
-    avatarImages.set(avatar.id, img);
-});
 
 let selectedAvatarId = null;
 let myId = null;
 let currentRoomCode = null;
 let latestState = null;
+const screens = [lobbyScreen, roomLobbyScreen, gameScreen];
 
 function setStatus(message = '') {
     lobbyStatus.textContent = message;
 }
 
+function activateScreen(target) {
+    screens.forEach((screen) => {
+        if (!screen) return;
+        screen.classList.toggle('active', screen === target);
+    });
+}
+
 function showLobby() {
-    lobbyScreen.classList.add('active');
-    gameScreen.classList.remove('active');
+    activateScreen(lobbyScreen);
+}
+
+function showRoomLobby() {
+    activateScreen(roomLobbyScreen);
 }
 
 function showGame() {
-    lobbyScreen.classList.remove('active');
-    gameScreen.classList.add('active');
+    activateScreen(gameScreen);
 }
 
 function renderAvatarGrid() {
@@ -64,13 +246,13 @@ function renderAvatarGrid() {
         card.className = 'avatar-card';
         card.dataset.avatarId = avatar.id;
         card.title = avatar.name;
+        card.setAttribute('aria-label', `${avatar.name} 캐릭터`);
 
-        const img = document.createElement('img');
-        img.className = 'avatar-img';
-        img.src = avatar.image;
-        img.alt = avatar.name;
+        const swatch = document.createElement('div');
+        swatch.className = 'avatar-swatch';
+        swatch.style.background = `linear-gradient(135deg, ${avatar.primary}, ${avatar.secondary})`;
 
-        card.appendChild(img);
+        card.appendChild(swatch);
         card.addEventListener('click', () => selectAvatar(avatar.id));
         avatarGrid.appendChild(card);
     });
@@ -94,33 +276,26 @@ roomCodeInput.addEventListener('input', () => {
 function selectAvatar(id) {
     selectedAvatarId = id;
     updateAvatarCards(latestState?.takenAvatars ?? []);
-    if (currentRoomCode) {
-        socket.emit('selectAvatar', { avatarId: selectedAvatarId }, (response) => {
-            if (response?.ok === false) {
-                setStatus(response.message || '캐릭터 선택에 실패했습니다.');
-            }
-        });
-    }
 }
 
 function ensureAvatarSelected() {
-    if (!selectedAvatarId) {
-        setStatus('캐릭터를 먼저 선택해 주세요.');
-        return false;
-    }
-    return true;
+    return true; // No longer blocking
 }
 
 createRoomBtn.addEventListener('click', () => {
     if (!ensureAvatarSelected()) return;
-    socket.emit('createRoom', { avatarId: selectedAvatarId, nickname: nicknameInput.value.trim() }, (response) => {
+    socket.emit('createRoom', { customization, nickname: nicknameInput.value.trim() }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '방 생성에 실패했습니다.');
             return;
         }
         currentRoomCode = response.code;
         roomInfo.textContent = `초대 코드: ${response.code}`;
-        showGame();
+        if (roomLobbyCode) roomLobbyCode.textContent = response.code;
+        if (roomLobbyCount && response.state) {
+            roomLobbyCount.textContent = `접속 인원: ${response.state.players.length}/${response.state.maxPlayers}`;
+        }
+        showRoomLobby();
     });
 });
 
@@ -131,20 +306,24 @@ joinRoomBtn.addEventListener('click', () => {
         setStatus('6자리 숫자 코드를 입력해 주세요.');
         return;
     }
-    socket.emit('joinRoom', { code, avatarId: selectedAvatarId, nickname: nicknameInput.value.trim() }, (response) => {
+    socket.emit('joinRoom', { code, customization, nickname: nicknameInput.value.trim() }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '방 참가에 실패했습니다.');
             return;
         }
         currentRoomCode = response.code;
         roomInfo.textContent = `입장 완료: ${response.code}`;
-        showGame();
+        if (roomLobbyCode) roomLobbyCode.textContent = response.code;
+        if (roomLobbyCount && response.state) {
+            roomLobbyCount.textContent = `접속 인원: ${response.state.players.length}/${response.state.maxPlayers}`;
+        }
+        showRoomLobby();
     });
 });
 
 soloBtn.addEventListener('click', () => {
     if (!ensureAvatarSelected()) return;
-    socket.emit('startTraining', { avatarId: selectedAvatarId, nickname: nicknameInput.value.trim() }, (response) => {
+    socket.emit('startTraining', { customization, nickname: nicknameInput.value.trim() }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '훈련장 입장에 실패했습니다.');
             return;
@@ -155,14 +334,26 @@ soloBtn.addEventListener('click', () => {
     });
 });
 
-leaveBtn.addEventListener('click', () => {
-    socket.emit('leaveRoom');
+function resetRoomUi() {
     currentRoomCode = null;
     latestState = null;
     setStatus('');
     roomInfo.textContent = '';
+    roomCodeDisplay.textContent = '';
+    playerCountDisplay.textContent = '';
+    if (roomLobbyCode) roomLobbyCode.textContent = '';
+    if (roomLobbyCount) roomLobbyCount.textContent = '';
+}
+
+function leaveRoomAndReset() {
+    socket.emit('leaveRoom');
+    resetRoomUi();
     showLobby();
-});
+}
+
+leaveBtn.addEventListener('click', leaveRoomAndReset);
+if (roomLobbyLeaveBtn) roomLobbyLeaveBtn.addEventListener('click', leaveRoomAndReset);
+if (enterGameBtn) enterGameBtn.addEventListener('click', () => showGame());
 
 window.addEventListener('keydown', (event) => {
     if (!gameScreen.classList.contains('active')) return;
@@ -205,6 +396,10 @@ socket.on('roomState', (state) => {
     if (state.code) {
         roomCodeDisplay.textContent = `방 코드: ${state.code}`;
         playerCountDisplay.textContent = `접속 인원: ${state.players.length}/${state.maxPlayers}`;
+        if (roomLobbyCode) roomLobbyCode.textContent = state.code;
+        if (roomLobbyCount) {
+            roomLobbyCount.textContent = `접속 인원: ${state.players.length}/${state.maxPlayers}`;
+        }
     }
 });
 
@@ -214,8 +409,6 @@ socket.on('gameState', (state) => {
 });
 
 function drawAvatar(entity) {
-    const avatar = avatarMap.get(entity.avatarId) || avatarMap.get('bot');
-    const img = avatarImages.get(avatar.id);
     const shadowX = entity.x + entity.width / 2;
     const shadowY = entity.y + entity.height - 2;
 
@@ -226,27 +419,18 @@ function drawAvatar(entity) {
     ctx.fill();
     ctx.restore();
 
-    if (img && img.complete && img.naturalWidth > 0) {
-        ctx.drawImage(img, entity.x, entity.y, entity.width, entity.height);
-        if (entity.id === myId) {
-            ctx.strokeStyle = '#5de2dd';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(entity.x - 1, entity.y - 1, entity.width + 2, entity.height + 2);
-        }
-        return;
-    }
-
-    ctx.fillStyle = avatar.primary;
-    ctx.fillRect(entity.x, entity.y, entity.width, entity.height);
-
-    ctx.fillStyle = avatar.secondary;
-    ctx.fillRect(entity.x + 4, entity.y + 4, entity.width - 8, entity.height - 8);
-
-    ctx.fillStyle = '#111';
+    const cust = entity.customization || { color: '#ff6b6b', eyes: 0, mouth: 0, detail: 0 };
+    
+    // Body
+    ctx.fillStyle = cust.color;
     ctx.beginPath();
-    ctx.arc(entity.x + 10, entity.y + 12, 3, 0, Math.PI * 2);
-    ctx.arc(entity.x + entity.width - 10, entity.y + 12, 3, 0, Math.PI * 2);
+    ctx.arc(entity.x + entity.width/2, entity.y + entity.height/2, entity.width/2, 0, Math.PI * 2);
     ctx.fill();
+
+    // Features
+    if (options.eyes[cust.eyes]) options.eyes[cust.eyes].draw(ctx, entity.x, entity.y, entity.width, entity.height);
+    if (options.mouths[cust.mouth]) options.mouths[cust.mouth].draw(ctx, entity.x, entity.y, entity.width, entity.height);
+    if (options.details[cust.detail]) options.details[cust.detail].draw(ctx, entity.x, entity.y, entity.width, entity.height);
 }
 
 function drawState(state) {
@@ -265,7 +449,7 @@ function drawState(state) {
         ctx.fillStyle = '#f03e3e';
         ctx.fillRect(player.x, player.y - 12, player.width, 5);
         ctx.fillStyle = '#37b24d';
-        ctx.fillRect(player.x, player.y - 12, player.width * (player.hp / 100), 5);
+        ctx.fillRect(player.x, player.y - 12, player.width * (player.hp / MAX_HP), 5);
 
         ctx.fillStyle = '#e9ecef';
         ctx.font = '10px sans-serif';
@@ -294,7 +478,7 @@ function drawState(state) {
         ctx.fillStyle = '#f03e3e';
         ctx.fillRect(bot.x, bot.y - 12, bot.width, 5);
         ctx.fillStyle = '#37b24d';
-        ctx.fillRect(bot.x, bot.y - 12, bot.width * (bot.hp / 100), 5);
+        ctx.fillRect(bot.x, bot.y - 12, bot.width * (bot.hp / MAX_HP), 5);
         ctx.fillStyle = '#e9ecef';
         ctx.font = '10px sans-serif';
         ctx.fillText(`HP ${Math.max(0, Math.round(bot.hp))}`, bot.x, bot.y - 18);
@@ -308,5 +492,10 @@ function drawState(state) {
     });
 }
 
-renderAvatarGrid();
+function initCustomization() {
+    renderOptions();
+    drawPreview();
+}
+
+initCustomization();
 showLobby();

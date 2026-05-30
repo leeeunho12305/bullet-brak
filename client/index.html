@@ -75,45 +75,95 @@
         margin-bottom: 12px;
       }
 
-      .avatar-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
-        gap: 12px;
+      .customize-layout {
+        display: flex;
+        gap: 24px;
+        margin-bottom: 24px;
+        align-items: flex-start;
         justify-content: center;
-        margin-bottom: 20px;
       }
 
-      .avatar-card {
+      .preview-box {
         background: #0e1524;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 14px;
-        padding: 6px;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px;
+        width: 200px;
+        height: 200px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+
+      #previewCanvas {
+        width: 150px;
+        height: 150px;
+      }
+
+      .options-box {
+        flex: 1;
+        max-width: 400px;
+        background: #0e1524;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .option-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding-bottom: 8px;
+      }
+
+      .tab-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        font-weight: 600;
         cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        padding: 4px 8px;
+        border-radius: 4px;
       }
 
-      .avatar-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 18px rgba(0, 0, 0, 0.35);
+      .tab-btn.active {
+        color: var(--accent);
+        background: rgba(93, 226, 221, 0.1);
       }
 
-      .avatar-card.selected {
-        outline: 2px solid #5de2dd;
-        box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.25);
+      .option-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        max-height: 240px;
+        overflow-y: auto;
+        padding-right: 4px;
       }
 
-      .avatar-card.taken {
-        opacity: 0.35;
-        cursor: not-allowed;
+      .grid-item {
+        aspect-ratio: 1/1;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        font-size: 1.2rem;
+        transition: background 0.2s, border-color 0.2s;
       }
 
-      .avatar-img {
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        border-radius: 10px;
-        object-fit: cover;
-        display: block;
-        background: #101522;
+      .grid-item:hover {
+        background: rgba(255,255,255,0.1);
+      }
+
+      .grid-item.selected {
+        border-color: var(--accent);
+        background: rgba(93, 226, 221, 0.1);
       }
 
       .actions {
@@ -210,8 +260,25 @@
         <div class="lobby-title">🎮 협동 게임</div>
         <div class="lobby-card">
           <input id="nicknameInput" class="nickname-input" placeholder="닉네임 입력" maxlength="12" />
-          <div class="label">캐릭터 선택:</div>
-          <div id="avatarGrid" class="avatar-grid"></div>
+          <div class="label">캐릭터 꾸미기:</div>
+          
+          <div class="customize-layout">
+            <div class="preview-box">
+              <canvas id="previewCanvas" width="150" height="150"></canvas>
+            </div>
+            <div class="options-box">
+              <div class="option-tabs">
+                <button class="tab-btn active" data-category="eyes">EYES</button>
+                <button class="tab-btn" data-category="mouths">MOUTHS</button>
+                <button class="tab-btn" data-category="details">DETAILS</button>
+                <button class="tab-btn" data-category="colors">COLORS</button>
+              </div>
+              <div id="optionGrid" class="option-grid">
+                <!-- Items will be injected here -->
+              </div>
+            </div>
+          </div>
+
           <div class="actions">
             <button id="createRoomBtn" class="btn teal">방 만들기</button>
             <button id="joinRoomBtn" class="btn coral">방 참가하기</button>
