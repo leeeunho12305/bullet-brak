@@ -58,7 +58,7 @@ function generateRoomCode() {
     return code;
 }
 
-function createRoom(mode) {
+function createRoom(mode, maxPlayers = MAX_PLAYERS) {
     const code = generateRoomCode();
     const room = {
         code,
@@ -67,7 +67,7 @@ function createRoom(mode) {
         bots: new Map(),
         bullets: [],
         platforms,
-        maxPlayers: MAX_PLAYERS,
+        maxPlayers,
         botSeq: 0,
     };
     rooms.set(code, room);
@@ -98,7 +98,8 @@ function createPlayer(id, customization, room = null) {
         mouseTarget: { x: 0, y: 0 },
         inputs: { left: false, right: false, jump: false },
         cooldown: 0,
-        customization: customization || { eyes: 0, mouth: 0, detail: 0, color: '#ff6b6b' }
+        customization: customization || { eye: 0, mouth: 0, detail: 0, color: '#ff6b6b' },
+        nickname: '익명'
     };
 
     // Assign random color if in a room
@@ -151,6 +152,7 @@ function getRoomState(room) {
     const players = Array.from(room.players.values()).map((player) => ({
         id: player.id,
         customization: player.customization,
+        nickname: player.nickname,
     }));
     return {
         code: room.code,
@@ -290,10 +292,11 @@ function updateBot(bot, platforms) {
 }
 
 io.on('connection', (socket) => {
-    socket.on('createRoom', ({ customization } = {}, ack) => {
+    socket.on('createRoom', ({ customization, nickname, maxPlayers } = {}, ack) => {
         leaveRoom(socket);
-        const room = createRoom('pvp');
+        const room = createRoom('pvp', maxPlayers);
         const player = createPlayer(socket.id, customization, room);
+        player.nickname = nickname || '익명';
         room.players.set(socket.id, player);
         joinRoom(socket, room);
         emitRoomState(room);
@@ -302,7 +305,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('joinRoom', ({ code, customization } = {}, ack) => {
+    socket.on('joinRoom', ({ code, customization, nickname } = {}, ack) => {
         const room = rooms.get(code);
         if (!room) {
             if (typeof ack === 'function') ack({ ok: false, message: '존재하지 않는 방입니다.' });
@@ -314,6 +317,7 @@ io.on('connection', (socket) => {
         }
         leaveRoom(socket);
         const player = createPlayer(socket.id, customization, room);
+        player.nickname = nickname || '익명';
         room.players.set(socket.id, player);
         joinRoom(socket, room);
         emitRoomState(room);
@@ -322,10 +326,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    const startTraining = ({ customization } = {}, ack) => {
+    const startTraining = ({ customization, nickname } = {}, ack) => {
         leaveRoom(socket);
         const room = createRoom('training');
         const player = createPlayer(socket.id, customization, room);
+        player.nickname = nickname || '익명';
         room.players.set(socket.id, player);
         joinRoom(socket, room);
         for (let i = 0; i < 3; i += 1) {

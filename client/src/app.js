@@ -3,7 +3,6 @@ const socket = io();
 const lobbyScreen = document.getElementById('lobby');
 const roomLobbyScreen = document.getElementById('roomLobby');
 const gameScreen = document.getElementById('game');
-const avatarGrid = document.getElementById('avatarGrid');
 const lobbyStatus = document.getElementById('lobbyStatus');
 const roomInfo = document.getElementById('roomInfo');
 const roomCodeInput = document.getElementById('roomCodeInput');
@@ -12,6 +11,7 @@ const roomCodeDisplay = document.getElementById('roomCodeDisplay');
 const playerCountDisplay = document.getElementById('playerCountDisplay');
 const roomLobbyCode = document.getElementById('roomLobbyCode');
 const roomLobbyCount = document.getElementById('roomLobbyCount');
+const playerList = document.getElementById('playerList');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
 const soloBtn = document.getElementById('soloBtn');
@@ -31,7 +31,7 @@ const previewCanvas = document.getElementById('previewCanvas');
 const pCtx = previewCanvas.getContext('2d');
 
 const customization = {
-    eyes: 0,
+    eye: 0,
     mouth: 0,
     detail: 0,
     color: '#ff6b6b'
@@ -99,9 +99,9 @@ const options = {
     details: [
         { name: 'None', draw: () => {} },
         { name: 'Blush', draw: (ctx, x, y, w, h) => {
-            ctx.fillStyle = 'rgba(255, 100, 100, 0.4)';
-            ctx.beginPath(); ctx.ellipse(x + w * 0.2, y + h * 0.5, w * 0.1, h * 0.05, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(x + w * 0.8, y + h * 0.5, w * 0.1, h * 0.05, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255, 120, 160, 0.6)';
+            ctx.beginPath(); ctx.arc(x + w * 0.25, y + h * 0.52, w * 0.08, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.75, y + h * 0.52, w * 0.08, 0, Math.PI * 2); ctx.fill();
         }},
         { name: 'Bow', draw: (ctx, x, y, w, h) => {
             ctx.fillStyle = '#ff4a9e';
@@ -121,15 +121,17 @@ const options = {
     ],
     colors: [
         { name: 'Red', val: '#ff6b6b' },
-        { name: 'Blue', val: '#4dabf7' },
-        { name: 'Green', val: '#51cf66' },
-        { name: 'Purple', val: '#845ef7' },
-        { name: 'Orange', val: '#ffa94d' },
-        { name: 'Yellow', val: '#ffd43b' },
-        { name: 'Teal', val: '#20c997' },
+        { name: 'Teal', val: '#4ecdc4' },
+        { name: 'Cyan', val: '#4cc9e8' },
+        { name: 'Mint', val: '#9ad9bf' },
+        { name: 'Cream', val: '#ffe8a3' },
         { name: 'Pink', val: '#f06595' },
-        { name: 'Dark', val: '#343a40' },
-        { name: 'White', val: '#f8f9fa' }
+        { name: 'Seafoam', val: '#9bdccf' },
+        { name: 'Yellow', val: '#ffd43b' },
+        { name: 'Purple', val: '#c08ad9' },
+        { name: 'Blue', val: '#4dabf7' },
+        { name: 'Orange', val: '#ffa94d' },
+        { name: 'Green', val: '#51cf66' }
     ]
 };
 
@@ -142,6 +144,7 @@ function renderOptions() {
         const div = document.createElement('div');
         div.className = 'grid-item';
         if (currentCategory === 'colors') {
+            div.classList.add('color-item');
             div.style.backgroundColor = item.val;
             if (customization.color === item.val) div.classList.add('selected');
         } else {
@@ -177,7 +180,7 @@ function drawPreview() {
     pCtx.beginPath(); pCtx.arc(x + w/2, y + h/2, w/2, 0, Math.PI * 2); pCtx.fill();
     pCtx.strokeStyle = 'rgba(0,0,0,0.1)'; pCtx.lineWidth = 2; pCtx.stroke();
 
-    options.eyes[customization.eyes].draw(pCtx, x, y, w, h);
+    options.eyes[customization.eye].draw(pCtx, x, y, w, h);
     options.mouths[customization.mouth].draw(pCtx, x, y, w, h);
     options.details[customization.detail].draw(pCtx, x, y, w, h);
 }
@@ -282,9 +285,15 @@ function ensureAvatarSelected() {
     return true; // No longer blocking
 }
 
+const maxPlayersSelect = document.getElementById('maxPlayersSelect');
+
 createRoomBtn.addEventListener('click', () => {
     if (!ensureAvatarSelected()) return;
-    socket.emit('createRoom', { customization, nickname: nicknameInput.value.trim() }, (response) => {
+    socket.emit('createRoom', { 
+        customization, 
+        nickname: nicknameInput.value.trim(),
+        maxPlayers: parseInt(maxPlayersSelect.value) || 2
+    }, (response) => {
         if (!response?.ok) {
             setStatus(response?.message || '방 생성에 실패했습니다.');
             return;
@@ -343,6 +352,7 @@ function resetRoomUi() {
     playerCountDisplay.textContent = '';
     if (roomLobbyCode) roomLobbyCode.textContent = '';
     if (roomLobbyCount) roomLobbyCount.textContent = '';
+    if (playerList) playerList.innerHTML = '';
 }
 
 function leaveRoomAndReset() {
@@ -392,13 +402,21 @@ socket.on('connect', () => {
 
 socket.on('roomState', (state) => {
     latestState = state;
-    updateAvatarCards(state.takenAvatars || []);
     if (state.code) {
         roomCodeDisplay.textContent = `방 코드: ${state.code}`;
         playerCountDisplay.textContent = `접속 인원: ${state.players.length}/${state.maxPlayers}`;
         if (roomLobbyCode) roomLobbyCode.textContent = state.code;
         if (roomLobbyCount) {
-            roomLobbyCount.textContent = `접속 인원: ${state.players.length}/${state.maxPlayers}`;
+            roomLobbyCount.textContent = `플레이어: ${state.players.length} / ${state.maxPlayers}명`;
+        }
+        if (playerList) {
+            playerList.innerHTML = '';
+            state.players.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'player-item';
+                div.textContent = p.nickname || '익명 플레이어';
+                playerList.appendChild(div);
+            });
         }
     }
 });
@@ -419,7 +437,7 @@ function drawAvatar(entity) {
     ctx.fill();
     ctx.restore();
 
-    const cust = entity.customization || { color: '#ff6b6b', eyes: 0, mouth: 0, detail: 0 };
+    const cust = entity.customization || { color: '#ff6b6b', eye: 0, mouth: 0, detail: 0 };
     
     // Body
     ctx.fillStyle = cust.color;
@@ -428,7 +446,7 @@ function drawAvatar(entity) {
     ctx.fill();
 
     // Features
-    if (options.eyes[cust.eyes]) options.eyes[cust.eyes].draw(ctx, entity.x, entity.y, entity.width, entity.height);
+    if (options.eyes[cust.eye]) options.eyes[cust.eye].draw(ctx, entity.x, entity.y, entity.width, entity.height);
     if (options.mouths[cust.mouth]) options.mouths[cust.mouth].draw(ctx, entity.x, entity.y, entity.width, entity.height);
     if (options.details[cust.detail]) options.details[cust.detail].draw(ctx, entity.x, entity.y, entity.width, entity.height);
 }

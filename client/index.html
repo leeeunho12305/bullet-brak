@@ -164,6 +164,17 @@
       .grid-item.selected {
         border-color: var(--accent);
         background: rgba(93, 226, 221, 0.1);
+        box-shadow: 0 0 10px var(--accent);
+      }
+
+      .grid-item.color-item {
+        border-radius: 50%;
+        border: 2px solid transparent;
+      }
+
+      .grid-item.color-item.selected {
+        border-color: white;
+        box-shadow: 0 0 12px rgba(255,255,255,0.5);
       }
 
       .actions {
@@ -183,21 +194,63 @@
         font-size: 1rem;
         cursor: pointer;
         transition: transform 0.18s ease, box-shadow 0.18s ease;
+        width: auto;
       }
 
-      .btn.teal {
-        background: #4fd1c5;
+      .btn.large {
+        width: 100%;
+        padding: 16px;
+        font-size: 1.1rem;
       }
 
-      .btn.coral {
-        background: #ff6b6b;
-      }
-
-      .btn.green {
-        background: #51cf66;
-      }
+      .btn.teal { background: #4fd1c5; }
+      .btn.coral { background: #ff6b6b; }
+      .btn.green { background: #51cf66; }
+      .btn.purple { background: #9b6dff; }
+      .btn.blue { background: #4f8cff; }
 
       .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+      }
+
+      .code-area {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .room-code-box {
+        background: #0e1524;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #ffd43b;
+        border-radius: 12px;
+        padding: 10px 24px;
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: 4px;
+      }
+
+      .player-list {
+        margin: 24px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 40px;
+      }
+
+      .player-item {
+        color: #ff8787;
+        font-weight: 600;
+        font-size: 1.2rem;
+      }
+
+      .actions.vertical {
+        flex-direction: column;
+        gap: 12px;
+      }
         transform: translateY(-2px);
         box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
       }
@@ -288,8 +341,41 @@
             <label for="roomCodeInput">초대 코드 (6자리 숫자)</label>
             <input id="roomCodeInput" maxlength="6" inputmode="numeric" placeholder="123456" />
           </div>
+          <div class="code-area">
+            <label for="maxPlayersSelect">최대 인원: </label>
+            <select id="maxPlayersSelect" class="btn" style="background: #1b2438; color: white; border: 1px solid rgba(255,255,255,0.2);">
+                <option value="2">2명</option>
+                <option value="4">4명</option>
+                <option value="6">6명</option>
+                <option value="8">8명</option>
+            </select>
+          </div>
           <div id="lobbyStatus" class="status"></div>
           <div id="roomInfo" class="room-info"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="roomLobby" class="screen">
+      <div class="lobby-wrap">
+        <div class="lobby-title">대기실</div>
+        <div class="lobby-card">
+          <div class="code-area">
+            <span class="label">방 코드:</span>
+            <div id="roomLobbyCode" class="room-code-box">000000</div>
+          </div>
+          <div id="roomLobbyCount" class="room-info">플레이어: 1 / 2명</div>
+          
+          <div id="playerList" class="player-list">
+            <!-- 플레이어 닉네임이 여기에 표시됩니다 -->
+          </div>
+
+          <div class="actions vertical">
+            <button id="enterGameBtn" class="btn teal large">게임 시작</button>
+            <button class="btn purple large">맵 에디터</button>
+            <button class="btn blue large">맵 불러오기</button>
+            <button id="roomLobbyLeaveBtn" class="btn coral" style="margin-top: 20px;">나가기</button>
+          </div>
         </div>
       </div>
     </div>
