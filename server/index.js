@@ -599,24 +599,29 @@ setInterval(() => {
                         room.roundWins[winner.id] = (room.roundWins[winner.id] || 0) + 1;
                         winner.coins += 10;
                         
-                        // If winner got 2 round wins, they get 1 point
-                        if (room.roundWins[winner.id] >= 2) {
-                            room.scores[winner.id] = (room.scores[winner.id] || 0) + 1;
-                            room.roundWins = {}; // Reset round wins
-                            
-                            if (room.scores[winner.id] >= 5) {
-                                room.phase = 'finished';
-                                winner.coins += 100; // Big reward for winning match
+                        // Wait for 2 seconds so players can see the score change/round dot
+                        setTimeout(() => {
+                            // Room check in case players left during timeout
+                            if (!rooms.has(room.code)) return;
+
+                            // If winner got 2 round wins, they get 1 point
+                            if (room.roundWins[winner.id] >= 2) {
+                                room.scores[winner.id] = (room.scores[winner.id] || 0) + 1;
+                                room.roundWins = {}; // Reset round wins for next set
+                                
+                                if (room.scores[winner.id] >= 5) {
+                                    room.phase = 'finished';
+                                    winner.coins += 100;
+                                } else {
+                                    // Loser picks a card
+                                    room.phase = 'picking';
+                                    room.loserToPick = loserId;
+                                    room.availableCards = CARDS.sort(() => 0.5 - Math.random()).slice(0, 5);
+                                }
                             } else {
-                                // Loser picks a card
-                                room.phase = 'picking';
-                                room.loserToPick = loserId;
-                                room.availableCards = CARDS.sort(() => 0.5 - Math.random()).slice(0, 5);
+                                resetRound(room);
                             }
-                        } else {
-                            // Next round in few seconds
-                            setTimeout(() => resetRound(room), 2000);
-                        }
+                        }, 2000);
                     } else if (room.players.size > 1) {
                         // Draw? Just reset
                         setTimeout(() => resetRound(room), 2000);
