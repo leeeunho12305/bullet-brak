@@ -65,67 +65,67 @@ const options = {
     eyes: [
         { name: 'Normal', draw: (ctx, x, y, w, h) => {
             ctx.fillStyle = '#000';
-            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.4, w * 0.08, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.4, w * 0.08, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.45, w * 0.08, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.45, w * 0.08, 0, Math.PI * 2); ctx.fill();
         }},
         { name: 'Angry', draw: (ctx, x, y, w, h) => {
             ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.3); ctx.lineTo(x + w * 0.4, y + h * 0.4); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x + w * 0.8, y + h * 0.3); ctx.lineTo(x + w * 0.6, y + h * 0.4); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.35); ctx.lineTo(x + w * 0.4, y + h * 0.45); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.8, y + h * 0.35); ctx.lineTo(x + w * 0.6, y + h * 0.45); ctx.stroke();
             ctx.fillStyle = '#000';
-            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.45, w * 0.06, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.45, w * 0.06, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.5, w * 0.06, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.5, w * 0.06, 0, Math.PI * 2); ctx.fill();
         }},
         { name: 'Cute', draw: (ctx, x, y, w, h) => {
             ctx.fillStyle = '#000';
-            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.4, w * 0.1, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.4, w * 0.1, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.45, w * 0.1, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.7, y + h * 0.45, w * 0.1, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.arc(x + w * 0.28, y + h * 0.38, w * 0.03, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + w * 0.68, y + h * 0.38, w * 0.03, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.28, y + h * 0.43, w * 0.03, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.68, y + h * 0.43, w * 0.03, 0, Math.PI * 2); ctx.fill();
         }},
         { name: 'Dead', draw: (ctx, x, y, w, h) => {
             ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.35); ctx.lineTo(x + w * 0.4, y + h * 0.45); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x + w * 0.4, y + h * 0.35); ctx.lineTo(x + w * 0.2, y + h * 0.45); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x + w * 0.6, y + h * 0.35); ctx.lineTo(x + w * 0.8, y + h * 0.45); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x + w * 0.8, y + h * 0.35); ctx.lineTo(x + w * 0.6, y + h * 0.45); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.4); ctx.lineTo(x + w * 0.4, y + h * 0.5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.4, y + h * 0.4); ctx.lineTo(x + w * 0.2, y + h * 0.5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.6, y + h * 0.4); ctx.lineTo(x + w * 0.8, y + h * 0.5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.8, y + h * 0.4); ctx.lineTo(x + w * 0.6, y + h * 0.5); ctx.stroke();
         }},
         { name: 'Cool', draw: (ctx, x, y, w, h) => {
             ctx.fillStyle = '#000';
-            ctx.fillRect(x + w * 0.15, y + h * 0.35, w * 0.7, h * 0.1);
+            ctx.fillRect(x + w * 0.15, y + h * 0.4, w * 0.7, h * 0.1);
         }}
     ],
     mouths: [
         { name: 'Smile', draw: (ctx, x, y, w, h) => {
             ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(x + w * 0.5, y + h * 0.5, w * 0.2, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.arc(x + w * 0.5, y + h * 0.6, w * 0.2, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
         }},
         { name: 'Flat', draw: (ctx, x, y, w, h) => {
             ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(x + w * 0.35, y + h * 0.65); ctx.lineTo(x + w * 0.65, y + h * 0.65); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.35, y + h * 0.75); ctx.lineTo(x + w * 0.65, y + h * 0.75); ctx.stroke();
         }},
         { name: 'O', draw: (ctx, x, y, w, h) => {
             ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(x + w * 0.5, y + h * 0.65, w * 0.08, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(x + w * 0.5, y + h * 0.75, w * 0.08, 0, Math.PI * 2); ctx.stroke();
         }},
         { name: 'Cat', draw: (ctx, x, y, w, h) => {
             ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(x + w * 0.4, y + h * 0.6, w * 0.1, 0, Math.PI); ctx.stroke();
-            ctx.beginPath(); ctx.arc(x + w * 0.6, y + h * 0.6, w * 0.1, 0, Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.arc(x + w * 0.4, y + h * 0.7, w * 0.1, 0, Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.arc(x + w * 0.6, y + h * 0.7, w * 0.1, 0, Math.PI); ctx.stroke();
         }},
         { name: 'Grin', draw: (ctx, x, y, w, h) => {
             ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.rect(x + w * 0.35, y + h * 0.6, w * 0.3, h * 0.12); ctx.fill(); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x + w * 0.35, y + h * 0.66); ctx.lineTo(x + w * 0.65, y + h * 0.66); ctx.stroke();
+            ctx.beginPath(); ctx.rect(x + w * 0.35, y + h * 0.7, w * 0.3, h * 0.12); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + w * 0.35, y + h * 0.76); ctx.lineTo(x + w * 0.65, y + h * 0.76); ctx.stroke();
         }}
     ],
     details: [
         { name: 'None', draw: () => {} },
         { name: 'Blush', draw: (ctx, x, y, w, h) => {
             ctx.fillStyle = 'rgba(255, 120, 160, 0.6)';
-            ctx.beginPath(); ctx.arc(x + w * 0.25, y + h * 0.52, w * 0.08, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + w * 0.75, y + h * 0.52, w * 0.08, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.25, y + h * 0.6, w * 0.08, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + w * 0.75, y + h * 0.6, w * 0.08, 0, Math.PI * 2); ctx.fill();
         }},
         { name: 'Bow', draw: (ctx, x, y, w, h) => {
             ctx.fillStyle = '#ff4a9e';
@@ -289,48 +289,16 @@ function showGame() {
     activateScreen(gameScreen);
 }
 
-function renderAvatarGrid() {
-    avatarGrid.innerHTML = '';
-    avatars.forEach((avatar) => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'avatar-card';
-        card.dataset.avatarId = avatar.id;
-        card.title = avatar.name;
-        card.setAttribute('aria-label', `${avatar.name} 캐릭터`);
-
-        const swatch = document.createElement('div');
-        swatch.className = 'avatar-swatch';
-        swatch.style.background = `linear-gradient(135deg, ${avatar.primary}, ${avatar.secondary})`;
-
-        card.appendChild(swatch);
-        card.addEventListener('click', () => selectAvatar(avatar.id));
-        avatarGrid.appendChild(card);
-    });
-}
-
-function updateAvatarCards(taken = []) {
-    const cards = avatarGrid.querySelectorAll('.avatar-card');
-    cards.forEach((card) => {
-        const id = card.dataset.avatarId;
-        const isTaken = taken.includes(id) && id !== selectedAvatarId;
-        card.classList.toggle('selected', id === selectedAvatarId);
-        card.classList.toggle('taken', isTaken);
-        card.disabled = isTaken;
-    });
+function selectAvatar(id) {
+    selectedAvatarId = id;
 }
 
 roomCodeInput.addEventListener('input', () => {
     roomCodeInput.value = roomCodeInput.value.replace(/[^0-9]/g, '').slice(0, 6);
 });
 
-function selectAvatar(id) {
-    selectedAvatarId = id;
-    updateAvatarCards(latestState?.takenAvatars ?? []);
-}
-
 function ensureAvatarSelected() {
-    return true; // No longer blocking
+    return true; 
 }
 
 const maxPlayersSelect = document.getElementById('maxPlayersSelect');
