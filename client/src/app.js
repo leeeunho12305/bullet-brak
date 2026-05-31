@@ -563,7 +563,7 @@ function renderCards(cards) {
 
         div.innerHTML = `
             <div class="card-category" style="color: ${card.color || 'var(--accent)'}">${card.category || 'Special'}</div>
-            <div class="card-icon">${getCardEmoji(card.id)}</div>
+            <div class="card-icon">${card.emoji || '🃏'}</div>
             <div>
                 <div class="card-name">${card.name}</div>
                 <div class="card-desc">${card.desc}</div>
