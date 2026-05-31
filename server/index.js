@@ -565,6 +565,22 @@ function updateBot(bot, platforms) {
     platforms.forEach((plat) => checkCollision(bot, plat));
 }
 
+function checkPlayerDeath(playerId, killerId) {
+    for (const room of rooms.values()) {
+        const player = room.players.get(playerId);
+        if (!player) continue;
+        player.hp = 0;
+        player.vx = 0;
+        player.vy = 0;
+        player.blockActiveTime = 0;
+        player.blockCooldown = Math.max(player.blockCooldown || 0, 30);
+        player.silencedTimer = 0;
+        player.activePoison = 0;
+        return true;
+    }
+    return false;
+}
+
 io.on('connection', (socket) => {
     socket.on('createRoom', ({ customization, nickname, maxPlayers, coins } = {}, ack) => {
         leaveRoom(socket);
