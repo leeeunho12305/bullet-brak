@@ -793,9 +793,11 @@ setInterval(() => {
                 player.stillTicks = (Math.abs(player.vx) < 0.25 && Math.abs(player.vy) < 1.5) ? (player.stillTicks || 0) + 1 : 0;
                 player.windupCharge = clamp((player.windupCharge || 0) + (player.stillTicks > 0 ? 1 : -2), 0, 60);
 
+                const isBlocking = player.inputs.block && player.blockMeter > 0;
+
                 // Smoother acceleration
                 const accel = 0.8;
-                if (!player.blockActiveTime) {
+                if (!isBlocking) {
                     if (player.inputs.left) player.vx -= accel;
                     if (player.inputs.right) player.vx += accel;
                     if (player.inputs.jump && player.jumps < (player.maxJumps || 1) && !player.inputs.jumpProcessed) {
@@ -813,8 +815,8 @@ setInterval(() => {
 
                 const blockDrain = player.shieldsUpCard ? 0.75 : 1;
                 const blockRegen = player.shieldsUpCard ? 1.25 : 1;
-                if (player.inputs.block && player.blockMeter > 0) {
-                    player.blockActiveTime = 1;
+                player.blockActiveTime = isBlocking ? 1 : 0;
+                if (isBlocking) {
                     player.blockMeter = Math.max(0, player.blockMeter - blockDrain);
                     const centerX = player.x + player.width / 2;
                     const centerY = player.y + player.height / 2;
@@ -846,7 +848,6 @@ setInterval(() => {
                     if (player.echoCard) player.echoCardReady = true;
                     if (player.sawCard) room.bullets.push(spawnBullet(room, player, Math.atan2(dirY, dirX), { speedMult: 0.8, damageMult: 0.7, life: 60, maxBounces: 3 }));
                 } else {
-                    player.blockActiveTime = 0;
                     player.blockMeter = Math.min(player.blockMeterMax || 600, player.blockMeter + blockRegen);
                 }
 
@@ -1023,7 +1024,8 @@ setInterval(() => {
                         bullet.y < player.y + player.height
                     )) return;
 
-                    if (player.blockActiveTime > 0) {
+                    const isBlocking = player.inputs.block && player.blockMeter > 0;
+                    if (isBlocking) {
                         const reflectedOwnerId = bullet.owner;
                         bullet.vx *= -1.35;
                         bullet.vy *= -1.35;

@@ -683,7 +683,7 @@ function drawState(state) {
         if (player.hp > 0) {
             
             // Draw Block Shield
-            if (player.blockActiveTime > 0) {
+            if (player.inputs && player.inputs.block && (player.blockMeter || 0) > 0) {
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(lp.x + player.width/2, lp.y + player.height/2, player.width * 0.8, 0, Math.PI * 2);
