@@ -701,6 +701,14 @@ function drawState(state) {
             ctx.fillStyle = player.id === myId ? '#5de2dd' : '#f03e3e';
             ctx.fillRect(bx, by - 14, bw * (player.hp / player.maxHp), 6);
 
+            const blockRatio = Math.max(0, Math.min(1, (player.blockMeter || 0) / Math.max(1, player.blockMeterMax || 1)));
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(bx, by - 6, bw, 4);
+            ctx.fillStyle = '#4dabf7';
+            ctx.fillRect(bx, by - 6, bw * blockRatio, 4);
+            ctx.strokeStyle = 'rgba(77, 171, 247, 0.5)';
+            ctx.strokeRect(bx, by - 6, bw, 4);
+
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 12px Outfit';
             ctx.textAlign = 'center';

@@ -56,7 +56,7 @@ const CARDS = [
     makeCard('refresh', 'REFRESH', '적중 시 쿨타임이 일부 회복됨', 'utility', '#63e6be', '♻️', (p) => { p.refreshCard = true; }),
     makeCard('healing_field', 'HEALING FIELD', '가드하면 회복 장판이 생김', 'survival', '#51cf66', '➕', (p) => { p.healingFieldCard = true; }),
     makeCard('shockwave', 'SHOCKWAVE', '가드가 주변 적을 밀쳐냄', 'utility', '#ff922b', '〰️', (p) => { p.shockwaveCard = true; }),
-    makeCard('shields_up', 'SHIELDS UP', '가드 성능이 크게 향상됨', 'survival', '#3b5bdb', '🪖', (p) => { p.shieldsUpCard = true; p.blockCooldownMax = Math.max(40, (p.blockCooldownMax || 120) - 50); }),
+    makeCard('shields_up', 'SHIELDS UP', '가드 게이지가 늘어남', 'survival', '#3b5bdb', '🪖', (p) => { p.shieldsUpCard = true; p.blockMeterMax = Math.max(300, (p.blockMeterMax || 600) + 150); p.blockMeter = p.blockMeterMax; }),
     makeCard('teleport', 'TELEPORT', '가드하면 바라보는 방향으로 짧게 이동함', 'special', '#be4bdb', '🌀', (p) => { p.teleportCard = true; }),
     makeCard('explosive_bullet', 'EXPLOSIVE BULLET', '탄환이 맞는 순간 폭발함', 'attack', '#ff6b6b', '🧨', (p) => { p.explosiveCard = true; }),
     makeCard('decay', 'DECAY', '탄환이 오래 갈수록 힘을 잃음', 'attack', '#845ef7', '🕳️', (p) => { p.decayCard = true; }),
@@ -73,7 +73,7 @@ const CARDS = [
     makeCard('wind_up', 'WIND UP', '천천히 준비할수록 더 강한 한 발', 'attack', '#fab005', '🌀', (p) => { p.windUpCard = true; }),
     makeCard('careful_planning', 'CAREFUL PLANNING', '신중하게 쏘면 더 정확하고 강함', 'utility', '#c0eb75', '🧠', (p) => { p.carefulPlanningCard = true; }),
     makeCard('tank', 'TANK', '체력이 많아지지만 둔해짐', 'survival', '#228be6', '🛡️', (p) => { p.maxHp += 100; p.hp += 100; p.speed -= 2; }),
-    makeCard('defender', 'DEFENDER', '가드 쿨타임이 짧아짐', 'survival', '#3b5bdb', '🧱', (p) => { p.maxHp += 30; p.hp += 30; p.blockCooldownMax = Math.max(40, (p.blockCooldownMax || 120) - 40); }),
+    makeCard('defender', 'DEFENDER', '가드 게이지가 늘어남', 'survival', '#3b5bdb', '🧱', (p) => { p.maxHp += 30; p.hp += 30; p.blockMeterMax = Math.max(300, (p.blockMeterMax || 600) + 120); p.blockMeter = p.blockMeterMax; }),
     makeCard('burst', 'BURST', '발사할 때 점사로 나감', 'attack', '#74c0fc', '〰️', (p) => { p.burst = (p.burst || 0) + 2; }),
     makeCard('drill_ammo', 'DRILL AMMO', '탄환이 적을 관통함', 'attack', '#adb5bd', '🪛', (p) => { p.drillAmmoCard = true; }),
     makeCard('implode', 'IMPLODE', '가드하면 적을 끌어당김', 'utility', '#ae3ec9', '🕳️', (p) => { p.implodeCard = true; }),
@@ -164,7 +164,8 @@ function randomSpawn() {
 }
 
 function applyCardState(player) {
-    player.blockCooldownMax = 120;
+    player.blockMeterMax = 600;
+    player.blockMeter = player.blockMeterMax;
     player.bulletSpeedMult = 1.0;
     player.revives = 0;
     player.empowerCard = false;
@@ -255,8 +256,8 @@ function createPlayer(id, customization, room = null, initialCoins = 0) {
         bulletSize: 5,
         knockbackMult: 1.0,
         maxBounces: 0,
-        blockCooldown: 0,
-        blockCooldownMax: 120,
+        blockMeterMax: 600,
+        blockMeter: 600,
         blockActiveTime: 0,
         bulletSpeedMult: 1.0,
         revives: 0,
@@ -573,7 +574,7 @@ function checkPlayerDeath(playerId, killerId) {
         player.vx = 0;
         player.vy = 0;
         player.blockActiveTime = 0;
-        player.blockCooldown = Math.max(player.blockCooldown || 0, 30);
+        player.blockMeter = 0;
         player.silencedTimer = 0;
         player.activePoison = 0;
         return true;
@@ -810,12 +811,11 @@ setInterval(() => {
                     player.inputs.jumpProcessed = false;
                 }
 
-                if (player.blockCooldown > 0) player.blockCooldown -= 1;
-                if (player.blockActiveTime > 0) player.blockActiveTime -= 1;
-
-                if (player.inputs.block && player.blockCooldown <= 0) {
-                    player.blockActiveTime = player.shieldsUpCard ? 30 : 20;
-                    player.blockCooldown = player.blockCooldownMax || 120;
+                const blockDrain = player.shieldsUpCard ? 0.75 : 1;
+                const blockRegen = player.shieldsUpCard ? 1.25 : 1;
+                if (player.inputs.block && player.blockMeter > 0) {
+                    player.blockActiveTime = 1;
+                    player.blockMeter = Math.max(0, player.blockMeter - blockDrain);
                     const centerX = player.x + player.width / 2;
                     const centerY = player.y + player.height / 2;
                     const aimDx = player.mouseTarget.x - centerX;
@@ -845,6 +845,9 @@ setInterval(() => {
                     if (player.frostSlamCard) createZone(room, { type: 'frost', x: centerX, y: centerY, radius: 120, duration: 14, owner: player.id });
                     if (player.echoCard) player.echoCardReady = true;
                     if (player.sawCard) room.bullets.push(spawnBullet(room, player, Math.atan2(dirY, dirX), { speedMult: 0.8, damageMult: 0.7, life: 60, maxBounces: 3 }));
+                } else {
+                    player.blockActiveTime = 0;
+                    player.blockMeter = Math.min(player.blockMeterMax || 600, player.blockMeter + blockRegen);
                 }
 
                 if (player.vx > player.speed) player.vx = player.speed;
@@ -1240,6 +1243,8 @@ function resetRound(room) {
         p.vx = 0;
         p.vy = 0;
         p.cooldown = 0;
+        p.blockMeter = p.blockMeterMax || 600;
+        p.blockActiveTime = 0;
     });
     if (room.mode === 'training') {
         room.bots.clear();
