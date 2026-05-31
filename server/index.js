@@ -25,14 +25,18 @@ const DAMAGE_CLOSE = 30;
 const DAMAGE_FAR = 8;
 const DAMAGE_FALLOFF_RANGE = 600;
 
-const CARDS = [
-    { id: 'hp', name: 'Health Up', desc: '최대 체력 +40', effect: (p) => { p.maxHp += 40; p.hp += 40; } },
-    { id: 'speed', name: 'Speed Up', desc: '이동 속도 +2', effect: (p) => { p.speed += 2; } },
-    { id: 'jump', name: 'Jump Up', desc: '점프력 강화', effect: (p) => { p.jumpPower -= 3; } },
-    { id: 'reload', name: 'Quick Reload', desc: '공격 속도 증가', effect: (p) => { p.maxCooldown = Math.max(5, p.maxCooldown - 5); } },
-    { id: 'big', name: 'Big Bullet', desc: '총알 크기 및 넉백 증가', effect: (p) => { p.bulletSize += 3; p.knockbackMult += 0.5; } },
-    { id: 'tank', name: 'Tank', desc: '체력 +100, 속도 -2', effect: (p) => { p.maxHp += 100; p.hp += 100; p.speed -= 2; } },
-    { id: 'glass', name: 'Glass Cannon', desc: '공격력 대폭 증가, 체력 절반', effect: (p) => { p.damageMult += 1.0; p.maxHp /= 2; p.hp = Math.min(p.hp, p.maxHp); } },
+    const CARDS = [
+    { id: 'hp', name: 'Health Up', desc: '최대 체력 +40', category: 'survival', color: '#ff6b6b', effect: (p) => { p.maxHp += 40; p.hp += 40; } },
+    { id: 'speed', name: 'Speed Up', desc: '이동 속도 +2', category: 'speed', color: '#ffd43b', effect: (p) => { p.speed += 2; } },
+    { id: 'jump', name: 'Jump Up', desc: '다단 점프 가능 및 점프력 상승', category: 'speed', color: '#51cf66', effect: (p) => { p.jumpPower -= 3; p.maxJumps = (p.maxJumps || 1) + 1; } },
+    { id: 'reload', name: 'Quick Reload', desc: '공격 속도 증가', category: 'attack', color: '#4dabf7', effect: (p) => { p.maxCooldown = Math.max(5, p.maxCooldown - 5); } },
+    { id: 'big', name: 'Big Bullet', desc: '총알 크기 및 넉백 증가', category: 'attack', color: '#ffa94d', effect: (p) => { p.bulletSize += 3; p.knockbackMult += 0.5; } },
+    { id: 'tank', name: 'Tank', desc: '체력 +100, 속도 -2', category: 'survival', color: '#845ef7', effect: (p) => { p.maxHp += 100; p.hp += 100; p.speed -= 2; } },
+    { id: 'glass', name: 'Glass Cannon', desc: '공격력 대폭 증가, 체력 절반', category: 'attack', color: '#f06595', effect: (p) => { p.damageMult += 1.0; p.maxHp /= 2; p.hp = Math.min(p.hp, p.maxHp); } },
+    { id: 'brawler', name: 'BRAWLER', desc: '근접 공격력 강화', category: 'attack', color: '#e03131', effect: (p) => { p.damageMult += 0.5; p.maxHp += 20; p.hp += 20; } },
+    { id: 'dazzle', name: 'DAZZLE', desc: '총알이 상대를 기절시킴', category: 'utility', color: '#ae3ec9', effect: (p) => { p.bulletSize += 1; } },
+    { id: 'huge', name: 'HUGE', desc: '모든 것이 커짐', category: 'special', color: '#1098ad', effect: (p) => { p.width *= 1.5; p.height *= 1.5; p.bulletSize += 10; } },
+    { id: 'bounce', name: 'Bouncy', desc: '총알 도탄 +2회', category: 'utility', color: '#20c997', effect: (p) => { p.maxBounces = (p.maxBounces || 0) + 2; } }
 ];
 
 const platforms = [
@@ -113,14 +117,19 @@ function createPlayer(id, customization, room = null, initialCoins = 0) {
         speed: 5,
         jumpPower: -16,
         grounded: false,
+        jumps: 0,
+        maxJumps: 1,
         mouseTarget: { x: 0, y: 0 },
-        inputs: { left: false, right: false, jump: false },
+        inputs: { left: false, right: false, jump: false, block: false },
         cooldown: 0,
         maxCooldown: 15,
         maxHp: MAX_HP,
         damageMult: 1.0,
         bulletSize: 5,
         knockbackMult: 1.0,
+        maxBounces: 0,
+        blockCooldown: 0,
+        blockActiveTime: 0,
         customization: customization || { eye: 0, mouth: 0, detail: 0, color: '#ff6b6b' },
         nickname: '익명',
         cards: [],
@@ -236,6 +245,7 @@ function checkCollision(entity, rect) {
             entity.y = rect.y - entity.height;
             entity.vy = 0;
             entity.grounded = true;
+            entity.jumps = 0;
         } else if (min === overlapTop && entity.vy < 0) {
             entity.y = rect.y + rect.height;
             entity.vy = 0;
@@ -355,6 +365,7 @@ io.on('connection', (socket) => {
     const startTraining = ({ customization, nickname, coins } = {}, ack) => {
         leaveRoom(socket);
         const room = createRoom('training');
+        room.phase = 'playing';
         const player = createPlayer(socket.id, customization, room, coins);
         player.nickname = nickname || '익명';
         room.players.set(socket.id, player);
@@ -389,9 +400,13 @@ io.on('connection', (socket) => {
         if (card && player) {
             player.cards.push(card.id);
             card.effect(player);
-            room.phase = 'playing';
-            room.loserToPick = null;
-            resetRound(room);
+            room.phase = 'roundOver'; // Temporary state to avoid multiple picks
+            setTimeout(() => {
+                if (!rooms.has(room.code)) return;
+                room.phase = 'playing';
+                room.loserToPick = null;
+                resetRound(room);
+            }, 1000);
         }
     });
 
@@ -487,19 +502,59 @@ io.on('connection', (socket) => {
 
 setInterval(() => {
     rooms.forEach((room) => {
-        if (room.phase === 'playing' || room.mode === 'training') {
+        if (room.phase === 'playing' || room.phase === 'roundOver') {
             room.players.forEach((player) => {
-                if (player.hp <= 0) return;
+                if (player.hp <= 0) {
+                    player.vy += gravity;
+                    player.x += player.vx;
+                    player.y += player.vy;
+                    // Dead players apply simple bounds and floor so they don't fall forever
+                    if (player.x < 0) { player.x = 0; player.vx *= -0.5; }
+                    if (player.x > WIDTH) { player.x = WIDTH; player.vx *= -0.5; }
+                    room.platforms.forEach((plat) => {
+                        const overlapLeft = (player.x + player.width) - plat.x;
+                        const overlapRight = (plat.x + plat.width) - player.x;
+                        const overlapTop = (player.y + player.height) - plat.y;
+                        const overlapBottom = (plat.y + plat.height) - player.y;
+
+                        if (overlapLeft > 0 && overlapRight > 0 && overlapTop > 0 && overlapBottom > 0) {
+                            const min = Math.min(overlapBottom, Math.max(0, overlapTop), Math.max(0, overlapRight), Math.max(0, overlapLeft));
+                            if (min === overlapBottom && player.vy > 0) {
+                                player.y = plat.y - player.height;
+                                player.vy = 0;
+                                player.vx *= 0.8; // friction
+                            }
+                        }
+                    });
+                    return;
+                }
 
                 if (player.cooldown > 0) player.cooldown -= 1;
 
                 // Smoother acceleration
                 const accel = 0.8;
-                if (player.inputs.left) player.vx -= accel;
-                if (player.inputs.right) player.vx += accel;
-                if (player.inputs.jump && player.grounded) {
-                    player.vy = player.jumpPower;
-                    player.grounded = false;
+                if (!player.blockActiveTime) {
+                    if (player.inputs.left) player.vx -= accel;
+                    if (player.inputs.right) player.vx += accel;
+                    if (player.inputs.jump && player.jumps < (player.maxJumps || 1) && !player.inputs.jumpProcessed) {
+                        player.vy = player.jumpPower;
+                        player.grounded = false;
+                        player.jumps += 1;
+                        player.inputs.jumpProcessed = true;
+                    }
+                } else {
+                    player.vx *= 0.5; // slow down while blocking
+                }
+                if (!player.inputs.jump) {
+                    player.inputs.jumpProcessed = false;
+                }
+
+                if (player.blockCooldown > 0) player.blockCooldown -= 1;
+                if (player.blockActiveTime > 0) player.blockActiveTime -= 1;
+
+                if (player.inputs.block && player.blockCooldown <= 0) {
+                    player.blockActiveTime = 20; // active for 20 ticks
+                    player.blockCooldown = 120; // 2 seconds cooldown
                 }
 
                 if (player.vx > player.speed) player.vx = player.speed;
@@ -524,52 +579,119 @@ setInterval(() => {
             });
 
             room.bots.forEach((bot) => {
-                if (bot.hp <= 0) return;
+                if (bot.hp <= 0) {
+                    bot.vy += gravity;
+                    bot.x += bot.vx;
+                    bot.y += bot.vy;
+                    if (bot.x < 0) { bot.x = 0; bot.vx *= -0.5; }
+                    if (bot.x > WIDTH) { bot.x = WIDTH; bot.vx *= -0.5; }
+                    room.platforms.forEach((plat) => {
+                        const overlapLeft = (bot.x + bot.width) - plat.x;
+                        const overlapRight = (plat.x + plat.width) - bot.x;
+                        const overlapTop = (bot.y + bot.height) - plat.y;
+                        const overlapBottom = (plat.y + plat.height) - bot.y;
+
+                        if (overlapLeft > 0 && overlapRight > 0 && overlapTop > 0 && overlapBottom > 0) {
+                            const min = Math.min(overlapBottom, Math.max(0, overlapTop), Math.max(0, overlapRight), Math.max(0, overlapLeft));
+                            if (min === overlapBottom && bot.vy > 0) {
+                                bot.y = plat.y - bot.height;
+                                bot.vy = 0;
+                                bot.vx *= 0.8;
+                            }
+                        }
+                    });
+                    return;
+                }
                 updateBot(bot, room.platforms);
             });
 
-            room.bullets.forEach((bullet) => {
+                room.bullets.forEach((bullet) => {
                 if (!bullet.active) return;
                 bullet.x += bullet.vx;
                 bullet.y += bullet.vy;
                 bullet.life -= 1;
 
-                if (
-                    bullet.life <= 0 ||
-                    bullet.x < 0 ||
-                    bullet.x > WIDTH ||
-                    bullet.y < 0 ||
-                    bullet.y > HEIGHT
-                ) {
+                if (bullet.life <= 0) {
+                    bullet.active = false;
+                    return;
+                }
+
+                // Window Bounds Bounce (도탄)
+                if (bullet.x < 0) {
+                    bullet.x = 0;
+                    bullet.vx *= -1;
+                    bullet.bounces = (bullet.bounces || 0) + 1;
+                } else if (bullet.x > WIDTH) {
+                    bullet.x = WIDTH;
+                    bullet.vx *= -1;
+                    bullet.bounces = (bullet.bounces || 0) + 1;
+                }
+                if (bullet.y < 0) {
+                    bullet.y = 0;
+                    bullet.vy *= -1;
+                    bullet.bounces = (bullet.bounces || 0) + 1;
+                } else if (bullet.y > HEIGHT) {
+                    bullet.y = HEIGHT;
+                    bullet.vy *= -1;
+                    bullet.bounces = (bullet.bounces || 0) + 1;
+                }
+
+                if (bullet.bounces > (bullet.maxBounces || 0)) {
                     bullet.active = false;
                     return;
                 }
 
                 for (const plat of room.platforms) {
                     if (bulletHitsRect(bullet, plat)) {
-                        bullet.active = false;
-                        return;
+                        // Platform Bounce Logic (Simple reflection based on entry side)
+                        if (bullet.maxBounces > 0 && (bullet.bounces || 0) < bullet.maxBounces) {
+                            // Determine which side it hit
+                            const prevX = bullet.x - bullet.vx;
+                            const prevY = bullet.y - bullet.vy;
+                            const hitFromTopOrBottom = (prevY < plat.y || prevY > plat.y + plat.height);
+                            
+                            if (hitFromTopOrBottom) {
+                                bullet.vy *= -1;
+                            } else {
+                                bullet.vx *= -1;
+                            }
+                            bullet.bounces = (bullet.bounces || 0) + 1;
+                        } else {
+                            bullet.active = false;
+                            return;
+                        }
                     }
                 }
 
                 room.players.forEach((player) => {
-                    if (!bullet.active || player.hp <= 0 || bullet.owner === player.id) return;
+                    if (!bullet.active || player.hp <= 0 || (bullet.owner === player.id && (!bullet.bounces || bullet.bounces === 0))) return;
                     if (
                         bullet.x > player.x &&
                         bullet.x < player.x + player.width &&
                         bullet.y > player.y &&
                         bullet.y < player.y + player.height
                     ) {
-                        const damage = getBulletDamage(bullet) * (room.players.get(bullet.owner)?.damageMult || 1.0);
-                        player.hp -= damage;
-                        player.vx += bullet.vx * 0.4 * (room.players.get(bullet.owner)?.knockbackMult || 1.0);
-                        player.vy -= 4;
-                        bullet.active = false;
+                        if (player.blockActiveTime > 0) {
+                            // Blocked! Reflect bullet
+                            bullet.vx *= -1.5;
+                            bullet.vy *= -1.5;
+                            bullet.owner = player.id; // now owned by the blocking player
+                            bullet.bounces = (bullet.bounces || 0) + 1;
+                        } else {
+                            const ownerPlayer = room.players.get(bullet.owner) || {};
+                            const damageMult = ownerPlayer.damageMult || 1.0;
+                            const knockbackMult = ownerPlayer.knockbackMult || 1.0;
+                            const damage = getBulletDamage(bullet) * damageMult;
+                            player.hp -= damage;
+                            player.vx += bullet.vx * 0.4 * knockbackMult;
+                            player.vy -= 4;
+                            bullet.active = false;
+                        }
                     }
                 });
 
                 room.bots.forEach((bot) => {
-                    if (!bullet.active || bot.hp <= 0 || bullet.owner === bot.id) return;
+                    if (!bullet.active || bot.hp <= 0 || (bullet.owner === bot.id && (!bullet.bounces || bullet.bounces === 0))) return;
                     if (
                         bullet.x > bot.x &&
                         bullet.x < bot.x + bot.width &&
@@ -588,43 +710,54 @@ setInterval(() => {
             room.bullets = room.bullets.filter((bullet) => bullet.active);
 
             // Round End Logic
-            if (room.mode === 'pvp') {
-                const alive = Array.from(room.players.values()).filter(p => p.hp > 0);
-                if (alive.length <= 1 && room.players.size > 1) {
-                    const winner = alive[0];
-                    const allPlayers = Array.from(room.players.keys());
-                    const loserId = allPlayers.find(id => id !== winner?.id);
-                    
-                    if (winner) {
-                        room.roundWins[winner.id] = (room.roundWins[winner.id] || 0) + 1;
-                        winner.coins += 10;
+            if (room.phase === 'playing') {
+                if (room.mode === 'pvp') {
+                    const alive = Array.from(room.players.values()).filter(p => p.hp > 0);
+                    if (alive.length <= 1 && room.players.size > 1) {
+                        room.phase = 'roundOver';
+                        const winner = alive[0];
+                        const allPlayers = Array.from(room.players.keys());
+                        const loserId = allPlayers.find(id => id !== winner?.id);
                         
-                        // Wait for 2 seconds so players can see the score change/round dot
+                        if (winner) {
+                            room.roundWins[winner.id] = (room.roundWins[winner.id] || 0) + 1;
+                            winner.coins += 10;
+                        }
+
                         setTimeout(() => {
-                            // Room check in case players left during timeout
                             if (!rooms.has(room.code)) return;
 
-                            // If winner got 2 round wins, they get 1 point
-                            if (room.roundWins[winner.id] >= 2) {
-                                room.scores[winner.id] = (room.scores[winner.id] || 0) + 1;
-                                room.roundWins = {}; // Reset round wins for next set
-                                
-                                if (room.scores[winner.id] >= 5) {
-                                    room.phase = 'finished';
-                                    winner.coins += 100;
+                            if (winner) {
+                                if (room.roundWins[winner.id] >= 2) {
+                                    room.scores[winner.id] = (room.scores[winner.id] || 0) + 1;
+                                    room.roundWins = {};
+                                    
+                                    if (room.scores[winner.id] >= 5) {
+                                        room.phase = 'finished';
+                                        winner.coins += 100;
+                                    } else {
+                                        room.phase = 'picking';
+                                        room.loserToPick = loserId;
+                                        room.availableCards = CARDS.sort(() => 0.5 - Math.random()).slice(0, 5);
+                                    }
                                 } else {
-                                    // Loser picks a card
-                                    room.phase = 'picking';
-                                    room.loserToPick = loserId;
-                                    room.availableCards = CARDS.sort(() => 0.5 - Math.random()).slice(0, 5);
+                                    resetRound(room);
                                 }
                             } else {
                                 resetRound(room);
                             }
                         }, 2000);
-                    } else if (room.players.size > 1) {
-                        // Draw? Just reset
-                        setTimeout(() => resetRound(room), 2000);
+                    }
+                } else if (room.mode === 'training') {
+                    const player = Array.from(room.players.values())[0];
+                    if (player && player.hp <= 0) {
+                        room.phase = 'roundOver';
+                        setTimeout(() => {
+                            if (!rooms.has(room.code)) return;
+                            room.phase = 'picking';
+                            room.loserToPick = player.id;
+                            room.availableCards = CARDS.sort(() => 0.5 - Math.random()).slice(0, 5);
+                        }, 2000);
                     }
                 }
             }
@@ -632,13 +765,22 @@ setInterval(() => {
 
         if (room.mode === 'training') {
             room.bots.forEach((bot, id) => {
-                if (bot.hp <= 0) room.bots.delete(id);
+                if (bot.hp <= 0 && bot.y > HEIGHT + 200) room.bots.delete(id);
             });
-            while (room.bots.size < 3) {
-                createBot(room);
+            if (room.phase === 'playing') {
+                while (room.bots.size < 3) {
+                    createBot(room);
+                }
             }
         }
 
+        // Handle Death by falling out of bounds
+        if (room.mode === 'pvp' || room.mode === 'training') {
+            room.players.forEach((player) => {
+                if (player.y > HEIGHT + 100) player.hp = 0;
+            });
+        }
+        
         io.to(room.code).emit('gameState', {
             code: room.code,
             mode: room.mode,
@@ -670,7 +812,15 @@ function resetRound(room) {
         p.hp = p.maxHp;
         p.vx = 0;
         p.vy = 0;
+        p.cooldown = 0;
     });
+    if (room.mode === 'training') {
+        room.bots.clear();
+        room.botSeq = 0;
+        for (let i = 0; i < 3; i++) {
+            createBot(room);
+        }
+    }
 }
 
 function resetMatch(room) {

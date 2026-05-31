@@ -37,7 +37,7 @@ const p2Rounds = document.getElementById('p2Rounds');
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const inputs = { left: false, right: false, jump: false };
+const inputs = { left: false, right: false, jump: false, block: false };
 const mousePos = { x: 0, y: 0 };
 const MAX_HP = 120;
 
@@ -386,7 +386,8 @@ window.addEventListener('keydown', (event) => {
     if (!gameScreen.classList.contains('active')) return;
     if (event.code === 'KeyA') inputs.left = true;
     if (event.code === 'KeyD') inputs.right = true;
-    if (event.code === 'Space') inputs.jump = true;
+    if (event.code === 'Space' || event.code === 'KeyW') inputs.jump = true;
+    if (event.code === 'ShiftLeft' || event.code === 'KeyS') inputs.block = true;
     socket.emit('input', inputs);
 });
 
@@ -394,8 +395,30 @@ window.addEventListener('keyup', (event) => {
     if (!gameScreen.classList.contains('active')) return;
     if (event.code === 'KeyA') inputs.left = false;
     if (event.code === 'KeyD') inputs.right = false;
-    if (event.code === 'Space') inputs.jump = false;
+    if (event.code === 'Space' || event.code === 'KeyW') inputs.jump = false;
+    if (event.code === 'ShiftLeft' || event.code === 'KeyS') inputs.block = false;
     socket.emit('input', inputs);
+});
+
+gameScreen.addEventListener('contextmenu', (e) => {
+    e.preventDefault(); // disable right click menu
+});
+
+gameScreen.addEventListener('mousedown', (e) => {
+    if (e.button === 2) { // Right Click
+        inputs.block = true;
+        socket.emit('input', inputs);
+    }
+    if (e.button === 0) {
+        socket.emit('shoot');
+    }
+});
+
+gameScreen.addEventListener('mouseup', (e) => {
+    if (e.button === 2) {
+        inputs.block = false;
+        socket.emit('input', inputs);
+    }
 });
 
 canvas.addEventListener('mousemove', (event) => {
@@ -406,12 +429,8 @@ canvas.addEventListener('mousemove', (event) => {
     socket.emit('mouseMove', mousePos);
 });
 
-canvas.addEventListener('mousedown', (event) => {
-    if (!gameScreen.classList.contains('active')) return;
-    if (event.button === 0) {
-        socket.emit('shoot');
-    }
-});
+// Using window level for mousedown/up/contextmenu handles so it captures clicks anywhere on game screen
+// Handled above in keydown section now
 
 socket.on('connect', () => {
     myId = socket.id;
@@ -448,6 +467,9 @@ socket.on('roomState', (state) => {
 });
 
 socket.on('gameState', (state) => {
+    if (latestState && latestState.phase !== state.phase && state.phase === 'playing') {
+        lerpedPlayers.clear();
+    }
     latestState = state;
     updateOverlay(state);
 });
@@ -462,13 +484,17 @@ gameLoop();
 
 function updateOverlay(state) {
     if (state.phase === 'picking') {
-        if (state.loserToPick === socket.id) {
-            cardOverlay.classList.add('active');
-            renderCards(state.availableCards);
-        } else {
-            cardOverlay.classList.remove('active');
-            cardContainer.innerHTML = '<p style="color:white; font-size:1.5rem;">상대방이 카드를 선택 중입니다...</p>';
-            cardOverlay.classList.add('active');
+        const titleSpan = cardOverlay.querySelector('.picking-title');
+        if (!cardOverlay.classList.contains('active')) {
+            if (state.loserToPick === socket.id) {
+                if (titleSpan) titleSpan.textContent = 'PICK A CARD';
+                cardOverlay.classList.add('active');
+                renderCards(state.availableCards);
+            } else {
+                if (titleSpan) titleSpan.textContent = 'WAITING...';
+                cardContainer.innerHTML = '<p style="color:white; font-size:1.5rem; text-align:center; width:100%;">상대방이 카드를 구성 중입니다...</p>';
+                cardOverlay.classList.add('active');
+            }
         }
     } else {
         cardOverlay.classList.remove('active');
@@ -512,12 +538,36 @@ function updateDots(container, wins) {
 
 function renderCards(cards) {
     cardContainer.innerHTML = '';
-    cards.forEach(card => {
+    const total = cards.length;
+    const arcRadius = 380;
+    const spanAngle = Math.PI * 0.45;
+
+    cards.forEach((card, index) => {
         const div = document.createElement('div');
         div.className = 'card-item';
+        
+        // Arc positioning
+        const angle = (index - (total - 1) / 2) * (spanAngle / Math.max(1, total - 1)) - Math.PI / 2;
+        const x = Math.cos(angle) * arcRadius;
+        const y = Math.sin(angle) * (arcRadius * 0.5) + 200;
+        const rotation = (angle + Math.PI / 2) * (180 / Math.PI);
+
+        div.style.left = `calc(50% + ${x}px - 80px)`;
+        div.style.top = `${y}px`;
+        div.style.transform = `rotate(${rotation}deg)`;
+        
+        if (card.color) {
+            div.style.borderColor = card.color;
+            div.style.setProperty('--accent-glow', `${card.color}66`);
+        }
+
         div.innerHTML = `
-            <div class="card-name">${card.name}</div>
-            <div class="card-desc">${card.desc}</div>
+            <div class="card-category" style="color: ${card.color || 'var(--accent)'}">${card.category || 'Special'}</div>
+            <div class="card-icon">${getCardEmoji(card.id)}</div>
+            <div>
+                <div class="card-name">${card.name}</div>
+                <div class="card-desc">${card.desc}</div>
+            </div>
         `;
         div.onclick = () => {
             socket.emit('pickCard', { cardId: card.id });
@@ -525,6 +575,15 @@ function renderCards(cards) {
         };
         cardContainer.appendChild(div);
     });
+}
+
+function getCardEmoji(id) {
+    const emojis = {
+        hp: '❤️', speed: '⚡', jump: '☁️', reload: '🔫', 
+        big: '💣', tank: '🛡️', glass: '🥃', brawler: '🥊',
+        dazzle: '✨', huge: '🐘'
+    };
+    return emojis[id] || '🃏';
 }
 
 chatInput.addEventListener('keydown', (e) => {
@@ -599,8 +658,6 @@ function drawState(state) {
     });
 
     state.players.forEach((player) => {
-        if (player.hp <= 0) return;
-
         // Simple Lerping for smoother motion
         if (!lerpedPlayers.has(player.id)) {
             lerpedPlayers.set(player.id, { x: player.x, y: player.y });
@@ -610,39 +667,79 @@ function drawState(state) {
         lp.y += (player.y - lp.y) * 0.35;
 
         const drawPlayer = { ...player, x: lp.x, y: lp.y };
+        
+        ctx.save();
+        if (player.hp <= 0) {
+            ctx.translate(lp.x + player.width / 2, lp.y + player.height / 2);
+            ctx.rotate(Math.PI / 2);
+            // Translate back for drawing
+            drawPlayer.x = -player.width / 2;
+            drawPlayer.y = -player.height / 2;
+        }
+
         drawAvatar(drawPlayer);
+        ctx.restore();
 
-        const bx = lp.x, by = lp.y, bw = player.width;
-        ctx.fillStyle = '#333';
-        ctx.fillRect(bx, by - 14, bw, 6);
-        ctx.fillStyle = player.id === myId ? '#5de2dd' : '#f03e3e';
-        ctx.fillRect(bx, by - 14, bw * (player.hp / player.maxHp), 6);
+        if (player.hp > 0) {
+            
+            // Draw Block Shield
+            if (player.blockActiveTime > 0) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(lp.x + player.width/2, lp.y + player.height/2, player.width * 0.8, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.restore();
+            }
 
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px Outfit';
-        ctx.textAlign = 'center';
-        ctx.fillText(player.nickname || '익명', bx + bw/2, by - 22);
-        ctx.textAlign = 'left';
+            const bx = lp.x, by = lp.y, bw = player.width;
+            ctx.fillStyle = '#333';
+            ctx.fillRect(bx, by - 14, bw, 6);
+            ctx.fillStyle = player.id === myId ? '#5de2dd' : '#f03e3e';
+            ctx.fillRect(bx, by - 14, bw * (player.hp / player.maxHp), 6);
 
-        // Draw weapon line
-        const cx = lp.x + player.width / 2;
-        const cy = lp.y + player.height / 2;
-        const angle = Math.atan2(player.mouseTarget.y - cy, player.mouseTarget.x - cx);
-        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + Math.cos(angle) * 30, cy + Math.sin(angle) * 30);
-        ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Outfit';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.nickname || '익명', bx + bw/2, by - 22);
+            ctx.textAlign = 'left';
+
+            // Draw weapon line
+            const cx = lp.x + player.width / 2;
+            const cy = lp.y + player.height / 2;
+            const angle = Math.atan2(player.mouseTarget.y - cy, player.mouseTarget.x - cx);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(angle) * 30, cy + Math.sin(angle) * 30);
+            ctx.stroke();
+        }
     });
 
     state.bots.forEach((bot) => {
-        if (bot.hp <= 0) return;
-        drawAvatar(bot);
-        ctx.fillStyle = '#f03e3e';
-        ctx.fillRect(bot.x, bot.y - 12, bot.width, 5);
-        ctx.fillStyle = '#37b24d';
-        ctx.fillRect(bot.x, bot.y - 12, bot.width * (bot.hp / MAX_HP), 5);
+        ctx.save();
+        const drawBot = { ...bot };
+        
+        if (bot.hp <= 0) {
+            ctx.translate(bot.x + bot.width / 2, bot.y + bot.height / 2);
+            ctx.rotate(Math.PI / 2);
+            drawBot.x = -bot.width / 2;
+            drawBot.y = -bot.height / 2;
+        }
+        
+        drawAvatar(drawBot);
+        ctx.restore();
+
+        if (bot.hp > 0) {
+            ctx.fillStyle = '#f03e3e';
+            ctx.fillRect(bot.x, bot.y - 12, bot.width, 5);
+            ctx.fillStyle = '#37b24d';
+            ctx.fillRect(bot.x, bot.y - 12, bot.width * (bot.hp / MAX_HP), 5);
+        }
     });
 
     state.bullets.forEach((bullet) => {
