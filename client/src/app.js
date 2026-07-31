@@ -44,10 +44,37 @@ const MAX_HP = 120;
 let myCoins = parseInt(localStorage.getItem('bulletBrakCoins')) || 0;
 if (coinCountText) coinCountText.textContent = myCoins;
 
+const ownedItemsKey = 'bulletBrakOwnedItems';
+let ownedItems = {};
+
+try {
+    ownedItems = JSON.parse(localStorage.getItem(ownedItemsKey) || '{}');
+} catch (e) {
+    ownedItems = {};
+}
+
 function updateCoins(amount) {
     myCoins += amount;
     localStorage.setItem('bulletBrakCoins', myCoins);
     if (coinCountText) coinCountText.textContent = myCoins;
+}
+
+function getItemKey(category, index, item) {
+    if (category === 'colors') return `color:${item.val}`;
+    return `${category}:${index}`;
+}
+
+function isItemOwned(category, index, item) {
+    if (category === 'colors') return true;
+    const key = getItemKey(category, index, item);
+    return index <= 2 || !!ownedItems[key];
+}
+
+function setItemOwned(category, index, item) {
+    if (category === 'colors') return;
+    const key = getItemKey(category, index, item);
+    ownedItems[key] = true;
+    localStorage.setItem(ownedItemsKey, JSON.stringify(ownedItems));
 }
 
 const optionGrid = document.getElementById('optionGrid');
@@ -167,15 +194,18 @@ function renderOptions() {
     items.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = 'grid-item';
-        
-        // Simple Economy: Some items cost coins (index > 2)
-        const isLocked = index > 2 && currentCategory !== 'colors'; 
+
+        const isOwned = isItemOwned(currentCategory, index, item);
+        const isLocked = currentCategory !== 'colors' && !isOwned && index > 2;
         const price = isLocked ? 50 : 0;
+        const isSelected = currentCategory === 'colors'
+            ? customization.color === item.val
+            : customization[currentCategory.slice(0, -1)] === index;
 
         if (currentCategory === 'colors') {
             div.classList.add('color-item');
             div.style.backgroundColor = item.val;
-            if (customization.color === item.val) div.classList.add('selected');
+            if (isSelected) div.classList.add('selected');
         } else {
             const canvas = document.createElement('canvas');
             canvas.width = 40; canvas.height = 40;
@@ -184,23 +214,26 @@ function renderOptions() {
             ctx.beginPath(); ctx.arc(20, 20, 18, 0, Math.PI * 2); ctx.fill();
             item.draw(ctx, 0, 0, 40, 40);
             div.appendChild(canvas);
-            
-            if (isLocked) {
-                const lock = document.createElement('div');
-                lock.style = 'position:absolute; font-size:10px; bottom:0; padding:2px; background:rgba(0,0,0,0.5); width:100%; text-align:center;';
-                lock.textContent = `💰${price}`;
-                div.appendChild(lock);
+
+            if (isOwned) {
+                div.classList.add('owned-item');
+            }
+            if (isSelected) {
+                div.classList.add('selected');
             }
 
-            if (customization[currentCategory.slice(0, -1)] === index) div.classList.add('selected');
+            const footer = document.createElement('div');
+            footer.className = 'item-footer';
+            footer.textContent = isSelected ? '사용 중' : (isOwned ? '보유 중' : `💰 ${price} 코인`);
+            if (isOwned) footer.classList.add('owned');
+            div.appendChild(footer);
         }
-        
+
         div.addEventListener('click', () => {
             if (isLocked) {
                 if (myCoins >= price) {
                     updateCoins(-price);
-                    // In a real game, we'd save "unlockedItems" to localStorage too.
-                    // For now, let's just allow picking it once bought.
+                    setItemOwned(currentCategory, index, item);
                 } else {
                     alert('코인이 부족합니다! 게임을 플레이하여 코인을 모으세요.');
                     return;
