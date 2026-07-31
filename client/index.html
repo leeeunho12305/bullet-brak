@@ -373,16 +373,23 @@
 
       .chat-box {
         position: absolute;
-        bottom: 110px;
-        left: 20px;
-        width: 250px;
-        height: 180px;
-        background: rgba(0,0,0,0.4);
-        border-radius: 8px;
-        display: flex;
+        top: 16px;
+        right: 16px;
+        width: 270px;
+        height: 200px;
+        background: rgba(0,0,0,0.45);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 10px;
+        display: none;
         flex-direction: column;
         padding: 8px;
         pointer-events: auto;
+        z-index: 20;
+        backdrop-filter: blur(6px);
+      }
+
+      .chat-box.open {
+        display: flex;
       }
 
       #chatMessages {
@@ -556,7 +563,7 @@
           </div>
         </div>
 
-        <div class="chat-box">
+        <div id="chatBox" class="chat-box">
           <div id="chatMessages"></div>
           <input id="chatInput" placeholder="메시지 입력..." maxlength="50" />
         </div>

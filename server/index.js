@@ -726,7 +726,6 @@ io.on('connection', (socket) => {
         const fireCount = player.buckshot > 0 ? player.buckshot + 1 : (player.barrageCard ? 3 : 1);
         const burstCount = player.burst > 0 ? 3 : 1;
         const totalShots = fireCount * burstCount;
-        const recoil = player.carefulPlanningCard ? 1.2 : 2;
 
         for (let i = 0; i < totalShots; i += 1) {
             const spread = totalShots > 1 ? (i - (totalShots - 1) / 2) * 0.08 : 0;
@@ -735,8 +734,30 @@ io.on('connection', (socket) => {
 
         if (player.demonicPactCard) player.hp = Math.max(1, player.hp - 2);
         if (player.ritualCountdownCard) player.windupCharge = clamp((player.windupCharge || 0) + 8, 0, 60);
-        player.vx -= Math.cos(angle) * recoil;
-        player.cooldown = Math.max(2, player.maxCooldown || 15);
+        player.cooldown = 180;
+    });
+
+    socket.on('strongAttack', () => {
+        const code = socketRoom.get(socket.id);
+        const room = rooms.get(code);
+        const player = room?.players.get(socket.id);
+        if (!player || player.hp <= 0 || player.cooldown > 0 || player.silencedTimer > 0) return;
+
+        const cx = player.x + player.width / 2;
+        const cy = player.y + player.height / 2;
+        const angle = Math.atan2(player.mouseTarget.y - cy, player.mouseTarget.x - cx);
+        room.bullets.push(spawnBullet(room, player, angle, {
+            damageMult: 2.2,
+            sizeBonus: 4,
+            damage: 40,
+            knockback: 18,
+            life: 100,
+            speedMult: 0.9
+        }));
+
+        if (player.demonicPactCard) player.hp = Math.max(1, player.hp - 2);
+        if (player.ritualCountdownCard) player.windupCharge = clamp((player.windupCharge || 0) + 8, 0, 60);
+        player.cooldown = 180;
     });
 
     socket.on('leaveRoom', () => {

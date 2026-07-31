@@ -19,6 +19,7 @@ const enterGameBtn = document.getElementById('enterGameBtn');
 const roomLobbyLeaveBtn = document.getElementById('roomLobbyLeaveBtn');
 const leaveBtn = document.getElementById('leaveBtn');
 
+const chatBox = document.getElementById('chatBox');
 const chatInput = document.getElementById('chatInput');
 const chatMessages = document.getElementById('chatMessages');
 const cardOverlay = document.getElementById('cardOverlay');
@@ -37,7 +38,7 @@ const p2Rounds = document.getElementById('p2Rounds');
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const inputs = { left: false, right: false, jump: false, block: false };
+const inputs = { left: false, right: false, jump: false, block: false, strongAttack: false };
 const mousePos = { x: 0, y: 0 };
 const MAX_HP = 120;
 
@@ -417,10 +418,28 @@ if (enterGameBtn) enterGameBtn.addEventListener('click', () => showGame());
 
 window.addEventListener('keydown', (event) => {
     if (!gameScreen.classList.contains('active')) return;
+
+    if (event.code === 'Enter' && !event.repeat) {
+        if (!chatOpen) {
+            event.preventDefault();
+            openChatBox();
+            return;
+        }
+        if (document.activeElement !== chatInput) {
+            event.preventDefault();
+            openChatBox();
+            return;
+        }
+    }
+
     if (event.code === 'KeyA') inputs.left = true;
     if (event.code === 'KeyD') inputs.right = true;
     if (event.code === 'Space' || event.code === 'KeyW') inputs.jump = true;
     if (event.code === 'ShiftLeft' || event.code === 'KeyS') inputs.block = true;
+    if (event.code === 'KeyX' && !event.repeat) {
+        event.preventDefault();
+        socket.emit('strongAttack');
+    }
     socket.emit('input', inputs);
 });
 
@@ -444,6 +463,13 @@ gameScreen.addEventListener('mousedown', (e) => {
     }
     if (e.button === 0) {
         socket.emit('shoot');
+        const me = latestState?.players.find((p) => p.id === socket.id);
+        if (me && me.hp > 0) {
+            const cx = me.x + me.width / 2;
+            const cy = me.y + me.height / 2;
+            const angle = Math.atan2(mousePos.y - cy, mousePos.x - cx);
+            spawnMuzzleEffect(socket.id, cx + Math.cos(angle) * 24, cy + Math.sin(angle) * 24, angle);
+        }
     }
 });
 
@@ -619,13 +645,34 @@ function getCardEmoji(id) {
     return emojis[id] || '🃏';
 }
 
+let chatOpen = false;
+
+function openChatBox() {
+    if (!chatBox) return;
+    chatBox.classList.add('open');
+    chatOpen = true;
+    chatInput.focus();
+}
+
+function closeChatBox() {
+    if (!chatBox) return;
+    chatBox.classList.remove('open');
+    chatOpen = false;
+    chatInput.blur();
+}
+
 chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
+        e.preventDefault();
         const text = chatInput.value.trim();
         if (text) {
             socket.emit('chat', text);
             chatInput.value = '';
+            closeChatBox();
         }
+    }
+    if (e.key === 'Escape') {
+        closeChatBox();
     }
 });
 
@@ -653,6 +700,20 @@ socket.on('gameStarted', () => {
 });
 
 let lerpedPlayers = new Map();
+const muzzleEffects = [];
+
+function spawnMuzzleEffect(ownerId, x, y, angle) {
+    muzzleEffects.push({ ownerId, x, y, angle, life: 8, maxLife: 8 });
+}
+
+function updateMuzzleEffects() {
+    for (let i = muzzleEffects.length - 1; i >= 0; i -= 1) {
+        muzzleEffects[i].life -= 1;
+        if (muzzleEffects[i].life <= 0) {
+            muzzleEffects.splice(i, 1);
+        }
+    }
+}
 
 function drawAvatar(entity) {
     const shadowX = entity.x + entity.width / 2;
@@ -681,6 +742,7 @@ function drawAvatar(entity) {
 
 function drawState(state) {
     if (!gameScreen.classList.contains('active')) return;
+    updateMuzzleEffects();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = '#1b2438';
@@ -742,6 +804,14 @@ function drawState(state) {
             ctx.strokeStyle = 'rgba(77, 171, 247, 0.5)';
             ctx.strokeRect(bx, by - 6, bw, 4);
 
+            const attackReadyRatio = Math.max(0, Math.min(1, player.cooldown <= 0 ? 1 : 1 - (player.cooldown || 0) / 180));
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(bx, by - 1, bw, 4);
+            ctx.fillStyle = '#f5c542';
+            ctx.fillRect(bx, by - 1, bw * attackReadyRatio, 4);
+            ctx.strokeStyle = 'rgba(245, 197, 66, 0.45)';
+            ctx.strokeRect(bx, by - 1, bw, 4);
+
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 12px Outfit';
             ctx.textAlign = 'center';
@@ -752,6 +822,22 @@ function drawState(state) {
             const cx = lp.x + player.width / 2;
             const cy = lp.y + player.height / 2;
             const angle = Math.atan2(player.mouseTarget.y - cy, player.mouseTarget.x - cx);
+            const flashEffect = muzzleEffects.find((effect) => effect.ownerId === player.id);
+            if (flashEffect) {
+                const alpha = flashEffect.life / flashEffect.maxLife;
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 220, 120, ${0.8 * alpha})`;
+                ctx.lineWidth = 6 + alpha * 5;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.cos(angle) * 36, cy + Math.sin(angle) * 36);
+                ctx.stroke();
+                ctx.fillStyle = `rgba(255, 140, 0, ${0.6 * alpha})`;
+                ctx.beginPath();
+                ctx.arc(cx + Math.cos(angle) * 34, cy + Math.sin(angle) * 34, 6 + alpha * 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
             ctx.strokeStyle = 'rgba(255,255,255,0.5)';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -786,11 +872,19 @@ function drawState(state) {
     state.bullets.forEach((bullet) => {
         ctx.beginPath();
         ctx.arc(bullet.x, bullet.y, bullet.size || 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = bullet.color || '#f5c542';
         ctx.shadowBlur = 10;
-        ctx.shadowColor = '#5de2dd';
+        ctx.shadowColor = '#f5c542';
         ctx.fill();
         ctx.shadowBlur = 0;
+
+        const angle = Math.atan2(bullet.vy, bullet.vx);
+        ctx.strokeStyle = 'rgba(245, 197, 66, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(bullet.x, bullet.y);
+        ctx.lineTo(bullet.x - Math.cos(angle) * 10, bullet.y - Math.sin(angle) * 10);
+        ctx.stroke();
     });
 }
 
