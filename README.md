@@ -49,6 +49,25 @@ make down / make prod-down
 | Docker Engine 을 WSL 안에만 설치 | WSL 셸에서 `make up` 하거나, Windows 에서 `make up COMPOSE="wsl docker compose"` |
 | Windows 에 make 설치 | `winget install ezwinports.make` (Makefile 이 Git Bash 를 셸로 잡는다) |
 
+Docker Desktop 없이 WSL 에만 엔진을 설치하려면 (sudo 비밀번호 없이 됨 — WSL 의 root 접근은 Windows 권한으로 통제된다):
+
+```powershell
+wsl -u root -e bash -lc "apt-get update && apt-get install -y docker.io docker-compose-v2 make"
+wsl -u root -e bash -lc "usermod -aG docker $(wsl -e whoami)"
+wsl -u root -e bash -lc "systemctl enable --now docker"
+wsl --shutdown          # 그룹 반영
+```
+
+**⚠ WSL 은 세션이 모두 끝나면 VM 을 내려버린다.** 그러면 컨테이너도 같이 죽는다(`docker compose ps` 를 볼 때마다 "Up 4 seconds" 로 보이면 이 증상이다). 둘 중 하나로 해결한다.
+
+- Ubuntu 터미널 창을 하나 열어둔 채 작업하거나
+- `%USERPROFILE%\.wslconfig` 에 아래를 넣는다:
+
+```ini
+[wsl2]
+vmIdleTimeout=-1
+```
+
 레포가 `C:\...` 에 있고 도커가 WSL 에서 돌면 마운트가 `/mnt/c` 를 거쳐 **느리고 파일 변경 감지가 안 된다.** 이때만 `.env` 에 `WATCH_POLLING=true` 를 넣으면 폴링으로 동작한다. 아예 빠르게 하려면 레포를 WSL 파일시스템(`~/projects/...`)에 두고 거기서 `make up` 하는 것이 정석이다.
 
 > 일상 개발은 도커 없이 `make dev` 가 가장 빠르다. 도커는 운영 스택 검증(`make prod-up`)에 쓰는 것을 권한다.

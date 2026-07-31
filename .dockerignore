@@ -1,0 +1,31 @@
+# 저장소 루트가 web 이미지의 빌드 컨텍스트다(docker build -f apps/web/Dockerfile .).
+# 호스트의 node_modules 가 딸려 들어가면 pnpm 심볼릭 링크가 호스트 절대경로를 가리켜
+# 컨테이너 안에서 전부 깨진다. 반드시 제외한다.
+**/node_modules
+**/.pnpm-store
+
+# 파이썬
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# 빌드 산출물
+**/dist
+**/*.tsbuildinfo
+**/.vite
+
+# 비밀값
+**/.env
+**/.env.*
+!**/.env.sample
+
+# 이미지에 필요 없는 것
+.git
+.github
+.vscode
+docs
+Makefile
+docker-compose*.yml
