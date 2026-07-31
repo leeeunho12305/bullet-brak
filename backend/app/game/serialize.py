@@ -9,6 +9,7 @@ from typing import Any
 
 from app.game.cards import card_info
 from app.game.models import Bot, Bullet, Player, Room, Zone
+from app.game.stats import damage_table, stat_summary
 
 
 def _customization(raw: dict[str, Any] | None) -> dict[str, Any]:
@@ -50,6 +51,9 @@ def player_snap(room: Room, p: Player) -> dict[str, Any]:
         "silenced": p.silence_timer > 0,
         "poison": p.poison,
         "cold": p.cold_timer > 0,
+        # Tab 오버레이용. 카드를 먹을 때만 바뀌지만 계산이 가벼워 매 틱 같이 보낸다.
+        "stats": stat_summary(p),
+        "damage_table": damage_table(p),
     }
 
 

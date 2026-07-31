@@ -80,7 +80,11 @@ PlayerSnap = {
   "charging": bool, "charge": f,          // 강공격 (0~60)
   "score": int, "round_wins": int, "coins": int,
   "cards": ["glass_cannon", ...],
-  "silenced": bool, "poison": int, "cold": bool
+  "silenced": bool, "poison": int, "cold": bool,
+  // Tab 오버레이용
+  "stats": { "damage_mult","max_hp","speed","cooldown","bullet_speed","bullet_size",
+             "bounces","knockback","block_meter_max","shots_per_fire" },   // 전부 number
+  "damage_table": [ { "distance": 0, "damage": 30.0 }, ... ]  // 0,100,200,400,600,800px
 }
 
 BotSnap = { "id","x","y","width","height","hp","max_hp","customization" }
@@ -114,6 +118,10 @@ Snapshot = {
 - HP 120, 중력 0.6, 마찰 0.8, 이동속도 5, 점프 -16, 기본 쿨다운 15틱.
 - 라운드: 상대를 먼저 쓰러뜨리면 `round_wins` +1. **2 라운드 승 = 1 점**, **5 점 = 매치 승리**.
 - 라운드 종료 2초 뒤: 점수가 났으면 패자가 카드 5장 중 1장 선택(`picking`), 아니면 즉시 다음 라운드.
+- **거리별 대미지 감쇠**: 탄환이 발사 지점에서 날아간 거리에 비례해 위력이 줄어든다.
+  배율 = 0px 에서 1.5배 → 600px 이상 0.4배 (선형). 기본 탄(20) 기준 근접 30 / 원거리 8.
+  가드 반사 시 반사 지점이 새 기준점이 되고, 위력은 반사한 쪽 공격력 배율로 환산된다.
+  공격력 배율은 **발사 시점에 한 번만** 적용한다(명중 시 재적용 금지).
 - 낙사: `y > HEIGHT + 100` 이면 즉사.
 - 가드: `block_meter` 소모, 총알 반사(×-1.35, 소유권 이전).
 - 강공격: `strong_start`~`strong_release` 차징(0~60), 발사 후 쿨다운 180틱.

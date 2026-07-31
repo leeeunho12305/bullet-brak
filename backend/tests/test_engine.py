@@ -238,6 +238,8 @@ PLAYER_KEYS = {
     "silenced",
     "poison",
     "cold",
+    "stats",
+    "damage_table",
 }
 
 
@@ -260,6 +262,10 @@ def test_snapshot_shape(manager: RoomManager) -> None:
     assert player["score"] == 2 and player["round_wins"] == 1
     assert set(player["customization"]) == {"eye", "mouth", "detail", "color"}
     assert "flags" not in player and "inputs" not in player
+    # Tab 오버레이용 필드: 거리별 대미지는 가까울수록 커야 한다.
+    table = player["damage_table"]
+    assert [row["distance"] for row in table] == list(C.DAMAGE_TABLE_DISTANCES)
+    assert table[0]["damage"] > table[-1]["damage"]
 
 
 def test_snapshot_available_cards_are_card_infos(manager: RoomManager) -> None:

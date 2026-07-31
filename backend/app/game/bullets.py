@@ -15,6 +15,7 @@ from app.game.physics import (
     entity_hit,
     handle_lethal,
 )
+from app.game.stats import bullet_falloff
 
 # 소유자 카드에서 탄환으로 그대로 복사되는 플래그
 _INHERITED_FLAGS = (
@@ -202,7 +203,8 @@ def _detonate(room: Room, bullet: Bullet, damage: float, radius: float, knockbac
 def _expire(room: Room, bullet: Bullet, damage_ratio: float) -> None:
     """수명/도탄 소진으로 탄환을 없앤다. 폭발 계열이면 터뜨린다."""
     if any(bullet.has(f) for f in _BLAST_FLAGS):
-        _detonate(room, bullet, bullet.damage * damage_ratio, bullet.explode_radius, 16.0)
+        damage = bullet.damage * damage_ratio * bullet_falloff(bullet)
+        _detonate(room, bullet, damage, bullet.explode_radius, 16.0)
     bullet.active = False
 
 
@@ -241,7 +243,8 @@ def _hit_platforms(room: Room, bullet: Bullet) -> None:
             if bullet.has("target_bounce"):
                 bullet.flags["homing"] = True
             if bullet.has("bombs_away"):
-                _detonate(room, bullet, bullet.damage * 0.35, 70.0, 12.0)
+                damage = bullet.damage * 0.35 * bullet_falloff(bullet)
+                _detonate(room, bullet, damage, 70.0, 12.0)
         else:
             _expire(room, bullet, 0.7)
             return
@@ -258,16 +261,20 @@ def _consume(bullet: Bullet) -> None:
 def _reflect(room: Room, bullet: Bullet, player: Player) -> None:
     """가드 반사: 속도 반전 + 소유권 이전, echo 면 반격탄 1발."""
     previous_owner_id = bullet.owner
+    attacker = room.players.get(previous_owner_id)
     bullet.vx *= -1.35
     bullet.vy *= -1.35
     bullet.owner = player.id
     bullet.owner_aim = Vec(player.aim.x, player.aim.y)
     bullet.bounces += 1
+    # 반사한 순간이 새 발사 지점이다(거리 감쇠 기준 재설정) + 위력은 반사한 쪽 배율로 환산.
+    bullet.start_x, bullet.start_y = bullet.x, bullet.y
+    if attacker is not None and attacker.damage_mult:
+        bullet.damage *= player.damage_mult / attacker.damage_mult
 
     if not player.has("echo") or player.echo_cooldown > 0:
         return
     player.echo_cooldown = 30
-    attacker = room.players.get(previous_owner_id)
     if attacker is None:
         return
     angle = math.atan2(attacker.cy - player.cy, attacker.cx - player.cx)
@@ -276,9 +283,9 @@ def _reflect(room: Room, bullet: Bullet, player: Player) -> None:
 
 def _damage_player(room: Room, bullet: Bullet, player: Player) -> None:
     owner = room.players.get(bullet.owner)
-    damage_mult = owner.damage_mult if owner else 1.0
     knockback_mult = owner.knockback_mult if owner else 1.0
-    hit_damage = bullet.damage * damage_mult
+    # 소유자 공격력 배율은 발사 시점에 이미 반영됐다. 여기선 거리 감쇠만 곱한다.
+    hit_damage = bullet.damage * bullet_falloff(bullet)
 
     player.hp -= hit_damage
     player.vx += bullet.vx * 0.4 * knockback_mult
@@ -343,7 +350,7 @@ def _hit_bots(room: Room, bullet: Bullet) -> None:
             continue
         if not entity_hit(bullet, bot):
             continue
-        hit_damage = bullet.damage
+        hit_damage = bullet.damage * bullet_falloff(bullet)
         bot.hp -= hit_damage
         bot.vx += bullet.vx * 0.4
         bot.vy -= 4

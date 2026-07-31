@@ -34,6 +34,24 @@ export interface RoomState {
   players: RoomPlayer[];
 }
 
+export interface PlayerStats {
+  damage_mult: number;
+  max_hp: number;
+  speed: number;
+  cooldown: number;
+  bullet_speed: number;
+  bullet_size: number;
+  bounces: number;
+  knockback: number;
+  block_meter_max: number;
+  shots_per_fire: number;
+}
+
+export interface DamageRow {
+  distance: number;
+  damage: number;
+}
+
 export interface PlayerSnap {
   id: string;
   nickname: string;
@@ -62,6 +80,8 @@ export interface PlayerSnap {
   silenced: boolean;
   poison: number;
   cold: boolean;
+  stats: PlayerStats;
+  damage_table: DamageRow[];
 }
 
 export interface BotSnap {

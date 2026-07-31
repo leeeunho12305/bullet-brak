@@ -9,8 +9,11 @@ import Hud from '@/components/Hud';
 import CardPicker from '@/components/CardPicker';
 import ChatBox from '@/components/ChatBox';
 import GameOverOverlay from '@/components/GameOverOverlay';
+import InfoPanel from '@/components/InfoPanel';
+import KeyLegend from '@/components/KeyLegend';
 import type { Phase, RoomState } from '@/types/game';
 import '@/styles/game.css';
+import '@/styles/overlay.css';
 
 const SAMPLE_MS = 200;
 
@@ -25,7 +28,7 @@ interface BannerState {
   text: string;
 }
 
-const CONTROLS = 'A/D 이동 · W·Space 점프 · 마우스 조준 · 좌클릭 사격 · 길게 누르기/E 강공격 · 우클릭·Shift 가드 · Enter 채팅';
+const CONTROLS = 'Tab 을 누르고 있으면 내 대미지·스탯·카드를 볼 수 있습니다';
 
 export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -77,6 +80,8 @@ export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.El
           <div className="game-canvas-wrap">
             <GameCanvas canvasRef={canvasRef} />
             {banner.text && <div className="game-banner">{banner.text}</div>}
+            <InfoPanel />
+            <KeyLegend />
             <CardPicker />
             <GameOverOverlay onLeave={handleLeave} />
           </div>
