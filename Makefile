@@ -1,10 +1,10 @@
 # Bullet Brak — 개발/운영 엔트리포인트
 # 사용법: make <target>  (그냥 `make` 만 치면 목록이 나온다)
 #
-# Windows 에서 make 가 없다면:
-#   - WSL 안에서 실행하거나
-#   - scoop install make / choco install make 로 설치하거나
-#   - 이 파일의 명령을 그대로 복사해 쓰면 된다(각 타깃이 한두 줄이다).
+# 설치:
+#   Windows : winget install ezwinports.make   (Git for Windows 가 이미 있어야 한다)
+#   WSL/Linux/macOS : 대부분 기본 설치됨
+# make 없이 쓰려면 루트 package.json 의 pnpm 스크립트가 같은 일을 한다.
 
 API_DIR  := apps/api
 WEB_DIR  := apps/web
@@ -12,15 +12,26 @@ PNPM     ?= pnpm
 COMPOSE  ?= docker compose
 PROD     := $(COMPOSE) -f docker-compose.prod.yml
 
-# 가상환경 실행 파일 경로는 OS 마다 다르다.
 ifeq ($(OS),Windows_NT)
+# Windows make 의 기본 셸은 cmd.exe 라서 grep/awk/rm/find 가 없다.
+# Git for Windows 의 bash 를 셸로 쓴다(경로는 GIT_BASH 로 덮어쓸 수 있다).
+GIT_BASH ?= C:/Program Files/Git/bin/bash.exe
+ifneq ($(wildcard $(GIT_BASH)),)
+SHELL := $(GIT_BASH)
+.SHELLFLAGS := -o pipefail -c
+endif
 VENV_BIN := $(API_DIR)/.venv/Scripts
 PY       ?= python
 else
+SHELL := /bin/sh
 VENV_BIN := $(API_DIR)/.venv/bin
 PY       ?= python3
 endif
 VENV_PY  := $(VENV_BIN)/python
+
+# docker 를 WSL 안에만 설치했고 make 는 Windows 에서 돌리는 경우:
+#   make up COMPOSE="wsl docker compose"
+# (WSL 이 현재 디렉터리를 /mnt/c/... 로 자동 변환해준다. 다만 느리다 — README 참고)
 
 .DEFAULT_GOAL := help
 .PHONY: help setup setup-api setup-web dev dev-api dev-web test test-api typecheck build \

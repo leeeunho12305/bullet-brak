@@ -11,6 +11,8 @@ services:
     environment:
       DEBUG: ${DEBUG:-true}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      # 레포가 Windows 파일시스템에 있고 도커는 WSL 에서 돌 때 --reload 가 먹으려면 폴링이 필요하다.
+      WATCHFILES_FORCE_POLLING: ${WATCH_POLLING:-false}
     volumes:
       - ./apps/api:/app
       # 호스트의 .venv 가 컨테이너를 오염시키지 않도록 가린다.
@@ -38,6 +40,7 @@ services:
       # vite dev 서버가 프록시할 대상 (컨테이너 네트워크 내부 이름)
       API_PROXY_TARGET: http://api:8000
       VITE_HOST: 0.0.0.0
+      VITE_POLLING: ${WATCH_POLLING:-false}
     volumes:
       - ./apps/web:/repo/apps/web
       # node_modules 는 이미지 안의 것을 쓴다(호스트 OS 바이너리 혼입 방지).

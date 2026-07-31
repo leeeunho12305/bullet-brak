@@ -15,6 +15,9 @@ export default defineConfig({
   server: {
     port: Number(process.env.WEB_PORT ?? 5173),
     host: process.env.VITE_HOST ?? 'localhost',
+    // WSL/컨테이너에서 Windows 파일시스템(/mnt/c)을 마운트하면 inotify 가 오지 않는다.
+    // 그때만 VITE_POLLING=true 로 켠다(평소엔 CPU 낭비라 끈다).
+    watch: process.env.VITE_POLLING === 'true' ? { usePolling: true, interval: 300 } : undefined,
     proxy: {
       '/api': { target, changeOrigin: true },
       '/ws': { target: wsTarget, ws: true },

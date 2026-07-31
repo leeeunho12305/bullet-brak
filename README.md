@@ -41,6 +41,18 @@ make prod-up     # 운영 스택 (nginx 단일 진입점) -> http://localhost:80
 make down / make prod-down
 ```
 
+#### Windows + WSL 조합 메모
+
+| 상황 | 방법 |
+|---|---|
+| Docker Desktop (WSL2 백엔드) | `docker` 가 Windows PATH 에도 잡히므로 위 명령 그대로 |
+| Docker Engine 을 WSL 안에만 설치 | WSL 셸에서 `make up` 하거나, Windows 에서 `make up COMPOSE="wsl docker compose"` |
+| Windows 에 make 설치 | `winget install ezwinports.make` (Makefile 이 Git Bash 를 셸로 잡는다) |
+
+레포가 `C:\...` 에 있고 도커가 WSL 에서 돌면 마운트가 `/mnt/c` 를 거쳐 **느리고 파일 변경 감지가 안 된다.** 이때만 `.env` 에 `WATCH_POLLING=true` 를 넣으면 폴링으로 동작한다. 아예 빠르게 하려면 레포를 WSL 파일시스템(`~/projects/...`)에 두고 거기서 `make up` 하는 것이 정석이다.
+
+> 일상 개발은 도커 없이 `make dev` 가 가장 빠르다. 도커는 운영 스택 검증(`make prod-up`)에 쓰는 것을 권한다.
+
 ### 검증
 
 ```bash
