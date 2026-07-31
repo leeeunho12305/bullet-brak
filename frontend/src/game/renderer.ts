@@ -71,7 +71,7 @@ function getVignette(ctx: CanvasRenderingContext2D): CanvasGradient {
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = '#0b0f1a';
+  ctx.fillStyle = '#0b0d17';
   ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
   // 네온 그리드 (경로 1개로 한 번에 stroke)

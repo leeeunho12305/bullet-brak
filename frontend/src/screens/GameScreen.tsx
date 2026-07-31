@@ -53,8 +53,8 @@ export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.El
     return () => window.clearInterval(timer);
   }, [storePhase]);
 
+  // 소켓 종료/상태 초기화는 App 의 onLeave 가 담당한다.
   const handleLeave = (): void => {
-    net.disconnect();
     onLeave();
   };
 

@@ -46,7 +46,7 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
       fitToDpr();
       const snap = net.latest;
       if (!snap) {
-        ctx.fillStyle = '#0b0f1a';
+        ctx.fillStyle = '#0b0d17';
         ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
         return;
       }

@@ -45,3 +45,6 @@ logs/
 Thumbs.db
 *.suo
 ntuser.dat
+
+# TS incremental build info
+*.tsbuildinfo

@@ -1,0 +1,308 @@
+/* 인게임 UI 스타일 (HUD / 카드 / 채팅 / 오버레이 / 아바타 편집기) */
+
+/* ---------- 레이아웃 ---------- */
+.game-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 12px;
+}
+.game-topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.game-room { display: flex; align-items: baseline; gap: 8px; }
+.game-room-code { font-weight: 700; letter-spacing: 0.08em; color: var(--accent-2); }
+.game-room-mode {
+  font-size: 0.78rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.game-controls {
+  flex: 1;
+  min-width: 220px;
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.game-body { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.game-stage {
+  flex: 1 1 640px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.game-canvas-wrap { position: relative; width: 100%; max-width: 800px; margin: 0 auto; }
+.game-canvas {
+  display: block;
+  width: 100%;
+  max-width: 800px;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  cursor: crosshair;
+  touch-action: none;
+}
+.game-banner {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  padding: 10px 22px;
+  border-radius: var(--radius);
+  background: rgba(11, 13, 23, 0.78);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+
+/* ---------- HUD ---------- */
+.hud-root {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.hud-side {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.hud-side.dead { opacity: 0.5; }
+.hud-side.right { text-align: right; }
+.hud-side.right .hud-name,
+.hud-side.right .hud-hp,
+.hud-side.right .hud-bottom { flex-direction: row-reverse; }
+.hud-side.waiting {
+  color: var(--muted);
+  font-size: 0.85rem;
+  align-items: center;
+  justify-content: center;
+}
+.hud-name { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; min-width: 0; }
+.hud-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hud-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  flex: none;
+}
+.hud-tag {
+  font-style: normal;
+  font-size: 0.65rem;
+  color: var(--bg);
+  background: var(--accent-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.hud-hp { display: flex; align-items: center; gap: 8px; }
+.hud-hp-text {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.hud-meter {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  min-width: 40px;
+}
+.hud-meter span { display: block; height: 100%; border-radius: 999px; transition: width 0.1s linear; }
+.hud-sub { display: flex; flex-direction: column; gap: 3px; }
+.hud-sub .hud-meter { height: 4px; }
+.hud-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hud-dots { display: flex; gap: 5px; }
+.hud-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--line);
+}
+.hud-dot.won { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.hud-cards { display: flex; gap: 3px; flex-wrap: wrap; }
+.hud-card {
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 2px 3px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-2);
+}
+.hud-score {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 6px 10px;
+}
+.hud-score-num {
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.hud-vs { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.1em; }
+.hud-score-hint { width: 100%; text-align: center; font-size: 0.65rem; color: var(--muted); }
+
+/* ---------- 오버레이 (카드 선택 / 게임 종료) ---------- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: rgba(8, 11, 20, 0.86);
+  backdrop-filter: blur(8px);
+  z-index: 30;
+  text-align: center;
+}
+.overlay-title { margin: 0; font-size: 1.6rem; letter-spacing: 0.08em; }
+.overlay-desc { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.overlay-actions { display: flex; gap: 10px; margin-top: 8px; }
+.card-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.card-item {
+  width: 132px;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 10px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.16s ease, background 0.16s ease;
+  animation: card-in 0.24s ease both;
+}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.card-item:hover:enabled { transform: translateY(-8px) scale(1.04); background: var(--panel-2); }
+.card-item:disabled { cursor: default; opacity: 0.45; }
+.card-item.picked { opacity: 1; outline: 2px solid var(--accent-2); }
+.card-category { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; }
+.card-emoji { font-size: 2rem; line-height: 1; margin: 4px 0; }
+.card-name { font-weight: 700; font-size: 0.95rem; }
+.card-desc { font-size: 0.74rem; color: var(--muted); line-height: 1.35; }
+.result-title { margin: 0; font-size: 2.4rem; letter-spacing: 0.1em; }
+.result-title.win { color: var(--accent-2); text-shadow: 0 0 24px rgba(0, 229, 255, 0.5); }
+.result-title.lose { color: var(--accent); }
+.result-winner { margin: 0; font-size: 1rem; }
+.result-score {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* ---------- 채팅 ---------- */
+.chat-box {
+  flex: 0 1 280px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  height: 420px;
+}
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.chat-line { word-break: break-word; }
+.chat-sender { color: var(--accent); font-weight: 700; margin-right: 5px; }
+.chat-text { color: var(--text); }
+.chat-empty { color: var(--muted); font-size: 0.78rem; }
+.chat-quick { display: flex; gap: 4px; flex-wrap: wrap; }
+.chat-quick-btn { font-size: 0.7rem; padding: 4px 7px; }
+.chat-emote { font-size: 1rem; padding: 2px 8px; line-height: 1.2; }
+.chat-input { width: 100%; }
+
+/* ---------- 아바타 편집기 ---------- */
+.avatar-editor { display: flex; gap: 12px; padding: 12px; align-items: stretch; flex-wrap: wrap; }
+.ae-preview {
+  display: grid;
+  place-items: center;
+  width: 170px;
+  height: 170px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  flex: none;
+}
+.ae-side { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.ae-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.ae-tab {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 9px;
+  border-radius: 6px;
+}
+.ae-tab.active { color: var(--accent-2); background: rgba(0, 229, 255, 0.12); }
+.ae-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+.ae-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.ae-item.selected {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.35);
+  color: var(--text);
+}
+.ae-item-label { font-size: 0.62rem; }
+.ae-color { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+.ae-color.selected { border-color: #fff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.5); }
+
+@media (max-width: 860px) {
+  .chat-box { flex: 1 1 100%; height: 220px; }
+  .game-controls { order: 3; }
+}

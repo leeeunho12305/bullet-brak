@@ -1,6 +1,7 @@
 // 로비에서 쓰는 아바타 편집기. props 시그니처는 LobbyScreen 과의 계약이므로 바꾸지 않는다.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
+import { useGameStore } from '@/store/gameStore';
 import { COLORS, PART_TABLE, drawAvatar, drawPartThumbnail } from '@/game/avatars';
 import type { PartCategory } from '@/game/avatars';
 import type { PartOption } from '@/game/avatarParts';
@@ -17,9 +18,16 @@ const TABS: { key: PartCategory | 'color'; label: string }[] = [
   { key: 'color', label: '색상' },
 ];
 
-interface AvatarEditorProps {
-  value: Customization;
-  onChange: (c: Customization) => void;
+interface StoreSlice {
+  customization: Customization;
+  setCustomization: (c: Customization) => void;
+}
+
+export interface AvatarEditorProps {
+  /** 생략하면 store 의 customization 을 사용한다. */
+  value?: Customization;
+  /** 생략하면 store 의 setCustomization 을 호출한다. */
+  onChange?: (c: Customization) => void;
 }
 
 interface ThumbProps {
@@ -56,7 +64,11 @@ function PartThumb({ part, color, selected, onSelect }: ThumbProps): JSX.Element
 
 const Thumb = memo(PartThumb);
 
-function AvatarEditorInner({ value, onChange }: AvatarEditorProps): JSX.Element {
+function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
+  const storeValue = useGameStore((s: StoreSlice) => s.customization);
+  const storeSet = useGameStore((s: StoreSlice) => s.setCustomization);
+  const value = props.value ?? storeValue;
+  const onChange = props.onChange ?? storeSet;
   const [tab, setTab] = useState<PartCategory | 'color'>('eye');
   const previewRef = useRef<HTMLCanvasElement | null>(null);
 

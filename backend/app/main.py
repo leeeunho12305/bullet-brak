@@ -37,7 +37,8 @@ async def _tick_once(code: str) -> None:
     room = room_manager.get(code)
     if room is None:
         return
-    prev_phase = _last_phase.get(code, room.phase)
+    # 첫 틱 이전에 phase 가 바뀌었을 수 있으므로 기본값은 "waiting"
+    prev_phase = _last_phase.get(code, "waiting")
     engine.tick_room(room)
     _last_phase[code] = room.phase
 
