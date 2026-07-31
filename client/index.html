@@ -65,22 +65,22 @@
 
       .lobby-card {
         background: linear-gradient(160deg, var(--card-main), var(--card-deep));
-        border-radius: 24px;
-        padding: 32px 36px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        border-radius: 20px;
+        padding: 22px 24px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
         border: 1px solid rgba(255, 255, 255, 0.08);
       }
 
       .nickname-input {
-        width: min(520px, 100%);
+        width: min(460px, 100%);
         background: #12192b;
         border: 1px solid rgba(255, 255, 255, 0.08);
         color: var(--text-main);
-        border-radius: 14px;
-        padding: 14px 16px;
-        font-size: 1rem;
+        border-radius: 12px;
+        padding: 11px 14px;
+        font-size: 0.95rem;
         text-align: center;
-        margin-bottom: 18px;
+        margin-bottom: 14px;
       }
 
       .label {
@@ -91,8 +91,8 @@
 
       .customize-layout {
         display: flex;
-        gap: 24px;
-        margin-bottom: 24px;
+        gap: 16px;
+        margin-bottom: 16px;
         align-items: flex-start;
         justify-content: center;
       }
@@ -100,9 +100,9 @@
       .preview-box {
         background: #0e1524;
         border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 16px;
-        width: 200px;
-        height: 200px;
+        border-radius: 14px;
+        width: 160px;
+        height: 160px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -111,37 +111,37 @@
       }
 
       #previewCanvas {
-        width: 150px;
-        height: 150px;
+        width: 120px;
+        height: 120px;
       }
 
       .options-box {
         flex: 1;
-        max-width: 400px;
+        max-width: 360px;
         background: #0e1524;
         border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 16px;
-        padding: 16px;
+        border-radius: 14px;
+        padding: 12px;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 8px;
       }
 
       .option-tabs {
         display: flex;
-        gap: 8px;
+        gap: 6px;
         border-bottom: 1px solid rgba(255,255,255,0.1);
-        padding-bottom: 8px;
+        padding-bottom: 6px;
       }
 
       .tab-btn {
         background: transparent;
         border: none;
         color: var(--text-muted);
-        font-size: 0.8rem;
+        font-size: 0.72rem;
         font-weight: 600;
         cursor: pointer;
-        padding: 4px 8px;
+        padding: 3px 6px;
         border-radius: 4px;
       }
 
@@ -153,21 +153,21 @@
       .option-grid {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
-        gap: 8px;
-        max-height: 240px;
+        gap: 6px;
+        max-height: 190px;
         overflow-y: auto;
-        padding-right: 4px;
+        padding-right: 2px;
       }
 
       .grid-item {
         aspect-ratio: 1/1;
         background: rgba(255,255,255,0.05);
         border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 8px;
+        border-radius: 7px;
         cursor: pointer;
         display: grid;
         place-items: center;
-        font-size: 1.2rem;
+        font-size: 1rem;
         transition: background 0.2s, border-color 0.2s;
       }
 
@@ -193,10 +193,10 @@
 
       .actions {
         display: flex;
-        gap: 14px;
+        gap: 10px;
         justify-content: center;
         flex-wrap: wrap;
-        margin-bottom: 20px;
+        margin-bottom: 14px;
       }
 
       .actions.vertical {
@@ -208,10 +208,10 @@
       .btn {
         border: none;
         color: #0b0f1a;
-        padding: 12px 22px;
-        border-radius: 14px;
+        padding: 10px 18px;
+        border-radius: 12px;
         font-weight: 600;
-        font-size: 1rem;
+        font-size: 0.95rem;
         cursor: pointer;
         transition: transform 0.18s ease, box-shadow 0.18s ease;
         text-decoration: none;
