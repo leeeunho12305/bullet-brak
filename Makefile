@@ -8,7 +8,8 @@
 
 API_DIR  := apps/api
 WEB_DIR  := apps/web
-PNPM     ?= pnpm
+# pnpm 이 PATH 에 없으면 corepack 으로 대신 부른다(`corepack enable pnpm` 을 안 한 환경).
+PNPM     ?= $(shell command -v pnpm >/dev/null 2>&1 && echo pnpm || echo corepack pnpm)
 COMPOSE  ?= docker compose
 PROD     := $(COMPOSE) -f docker-compose.prod.yml
 
@@ -22,10 +23,13 @@ SHELL := $(GIT_BASH)
 endif
 VENV_BIN := $(API_DIR)/.venv/Scripts
 PY       ?= python
+# Windows PATH 에서는 System32\find.exe 가 먼저 잡힌다(문법이 전혀 다르다). Git 쪽을 쓴다.
+FIND     := /usr/bin/find
 else
 SHELL := /bin/sh
 VENV_BIN := $(API_DIR)/.venv/bin
 PY       ?= python3
+FIND     := find
 endif
 VENV_PY  := $(VENV_BIN)/python
 
@@ -110,5 +114,5 @@ prod-down: ## 운영 스택 종료
 
 clean: ## 빌드 산출물/캐시 삭제 (의존성은 남긴다)
 	rm -rf $(WEB_DIR)/dist $(WEB_DIR)/*.tsbuildinfo
-	find $(API_DIR) -name __pycache__ -type d -prune -exec rm -rf {} +
+	$(FIND) $(API_DIR) -name __pycache__ -type d -prune -exec rm -rf {} +
 	rm -rf $(API_DIR)/.pytest_cache

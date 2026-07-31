@@ -1,0 +1,19 @@
+# Windows 에서 작업하고 WSL/컨테이너(리눅스)에서 실행하는 저장소다.
+# CRLF 로 체크아웃되면 make 가 "\r" 때문에 깨지고, 컨테이너 안의 셸도 마찬가지다.
+# 그래서 텍스트 파일은 전부 LF 로 고정한다.
+* text=auto eol=lf
+
+# Windows 전용 스크립트만 CRLF 유지
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# 바이너리
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+
+# 린터/diff 노이즈 줄이기
+pnpm-lock.yaml -diff linguist-generated
