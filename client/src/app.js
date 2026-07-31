@@ -438,7 +438,7 @@ window.addEventListener('keydown', (event) => {
     if (event.code === 'ShiftLeft' || event.code === 'KeyS') inputs.block = true;
     if (event.code === 'KeyX' && !event.repeat) {
         event.preventDefault();
-        socket.emit('strongAttack');
+        socket.emit('strongAttackStart');
     }
     socket.emit('input', inputs);
 });
@@ -449,6 +449,10 @@ window.addEventListener('keyup', (event) => {
     if (event.code === 'KeyD') inputs.right = false;
     if (event.code === 'Space' || event.code === 'KeyW') inputs.jump = false;
     if (event.code === 'ShiftLeft' || event.code === 'KeyS') inputs.block = false;
+    if (event.code === 'KeyX') {
+        event.preventDefault();
+        socket.emit('strongAttackRelease');
+    }
     socket.emit('input', inputs);
 });
 
@@ -804,7 +808,7 @@ function drawState(state) {
             ctx.strokeStyle = 'rgba(77, 171, 247, 0.5)';
             ctx.strokeRect(bx, by - 6, bw, 4);
 
-            const attackReadyRatio = Math.max(0, Math.min(1, player.cooldown <= 0 ? 1 : 1 - (player.cooldown || 0) / 180));
+            const attackReadyRatio = Math.max(0, Math.min(1, (player.strongAttackCharge || 0) / 60));
             ctx.fillStyle = 'rgba(255,255,255,0.12)';
             ctx.fillRect(bx, by - 1, bw, 4);
             ctx.fillStyle = '#f5c542';

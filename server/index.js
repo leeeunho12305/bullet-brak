@@ -251,6 +251,8 @@ function createPlayer(id, customization, room = null, initialCoins = 0) {
         inputs: { left: false, right: false, jump: false, block: false },
         cooldown: 0,
         maxCooldown: 15,
+        strongAttackCharging: false,
+        strongAttackCharge: 0,
         maxHp: MAX_HP,
         damageMult: 1.0,
         bulletSize: 5,
@@ -718,7 +720,7 @@ io.on('connection', (socket) => {
         const code = socketRoom.get(socket.id);
         const room = rooms.get(code);
         const player = room?.players.get(socket.id);
-        if (!player || player.hp <= 0 || player.cooldown > 0 || player.silencedTimer > 0) return;
+        if (!player || player.hp <= 0 || player.silencedTimer > 0) return;
 
         const cx = player.x + player.width / 2;
         const cy = player.y + player.height / 2;
@@ -734,30 +736,42 @@ io.on('connection', (socket) => {
 
         if (player.demonicPactCard) player.hp = Math.max(1, player.hp - 2);
         if (player.ritualCountdownCard) player.windupCharge = clamp((player.windupCharge || 0) + 8, 0, 60);
-        player.cooldown = 180;
     });
 
-    socket.on('strongAttack', () => {
+    socket.on('strongAttackStart', () => {
         const code = socketRoom.get(socket.id);
         const room = rooms.get(code);
         const player = room?.players.get(socket.id);
         if (!player || player.hp <= 0 || player.cooldown > 0 || player.silencedTimer > 0) return;
+        player.strongAttackCharging = true;
+        player.strongAttackCharge = 0;
+    });
+
+    socket.on('strongAttackRelease', () => {
+        const code = socketRoom.get(socket.id);
+        const room = rooms.get(code);
+        const player = room?.players.get(socket.id);
+        if (!player || player.hp <= 0 || player.silencedTimer > 0) return;
+        if (!player.strongAttackCharging) return;
 
         const cx = player.x + player.width / 2;
         const cy = player.y + player.height / 2;
         const angle = Math.atan2(player.mouseTarget.y - cy, player.mouseTarget.x - cx);
+        const chargeRatio = clamp(player.strongAttackCharge || 0, 0, 60) / 60;
         room.bullets.push(spawnBullet(room, player, angle, {
-            damageMult: 2.2,
-            sizeBonus: 4,
-            damage: 40,
-            knockback: 18,
-            life: 100,
-            speedMult: 0.9
+            damageMult: 1.4 + chargeRatio * 1.8,
+            sizeBonus: 2 + chargeRatio * 5,
+            damage: 28 + chargeRatio * 32,
+            knockback: 14 + chargeRatio * 10,
+            life: 90,
+            speedMult: 0.85 + chargeRatio * 0.15
         }));
 
         if (player.demonicPactCard) player.hp = Math.max(1, player.hp - 2);
         if (player.ritualCountdownCard) player.windupCharge = clamp((player.windupCharge || 0) + 8, 0, 60);
         player.cooldown = 180;
+        player.strongAttackCharging = false;
+        player.strongAttackCharge = 0;
     });
 
     socket.on('leaveRoom', () => {
@@ -800,6 +814,7 @@ setInterval(() => {
                 }
 
                 if (player.cooldown > 0) player.cooldown -= 1;
+                if (player.strongAttackCharging) player.strongAttackCharge = clamp((player.strongAttackCharge || 0) + 2, 0, 60);
 
                 if (player.bloodTimer > 0) player.bloodTimer -= 1;
                 if (player.coldTimer > 0) player.coldTimer -= 1;
@@ -1266,6 +1281,8 @@ function resetRound(room) {
         p.vx = 0;
         p.vy = 0;
         p.cooldown = 0;
+        p.strongAttackCharging = false;
+        p.strongAttackCharge = 0;
         p.blockMeter = p.blockMeterMax || 600;
         p.blockActiveTime = 0;
     });
@@ -1287,6 +1304,8 @@ function resetMatch(room) {
         p.speed = 5;
         p.jumpPower = -16;
         p.maxCooldown = 15;
+        p.strongAttackCharging = false;
+        p.strongAttackCharge = 0;
         p.damageMult = 1.0;
         p.bulletSize = 5;
         p.knockbackMult = 1.0;
