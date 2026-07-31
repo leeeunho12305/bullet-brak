@@ -446,6 +446,58 @@
         margin-top: 12px;
         text-align: center;
       }
+
+      .strong-attack-guide {
+        position: absolute;
+        left: 16px;
+        bottom: 16px;
+        width: min(310px, calc(100% - 32px));
+        background: rgba(10, 15, 26, 0.84);
+        border: 1px solid rgba(255, 212, 59, 0.22);
+        border-radius: 14px;
+        padding: 12px 14px;
+        z-index: 25;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(8px);
+      }
+
+      .strong-attack-guide .guide-title {
+        color: #ffd43b;
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin-bottom: 6px;
+      }
+
+      .strong-attack-guide .guide-text {
+        color: var(--text-main);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        margin-bottom: 10px;
+      }
+
+      .damage-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.76rem;
+        color: var(--text-main);
+      }
+
+      .damage-table th,
+      .damage-table td {
+        padding: 4px 6px;
+        text-align: left;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+      }
+
+      .damage-table th {
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+
+      .damage-table td:last-child,
+      .damage-table th:last-child {
+        text-align: right;
+      }
     </style>
   </head>
   <body>
@@ -547,6 +599,28 @@
         </div>
         
         <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div class="strong-attack-guide">
+          <div class="guide-title">거리별 데미지</div>
+          <div class="guide-text">일반 탄환은 날아간 거리만큼 데미지가 줄어듭니다. 아래 표는 실제 거리 감쇠 수치입니다.</div>
+          <table class="damage-table">
+            <thead>
+              <tr>
+                <th>거리</th>
+                <th>상태</th>
+                <th>데미지</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>0</td><td>최대 근접</td><td>30</td></tr>
+              <tr><td>150</td><td>근거리</td><td>25</td></tr>
+              <tr><td>300</td><td>중거리</td><td>19</td></tr>
+              <tr><td>450</td><td>원거리</td><td>14</td></tr>
+              <tr><td>600+</td><td>최대 감쇠</td><td>8</td></tr>
+            </tbody>
+          </table>
+          <div class="guide-text" style="margin-top:8px; margin-bottom:0;">참고: X 강공격은 거리 감쇠 대신 차지 후 떼는 방식으로 발사됩니다.</div>
+        </div>
         
         <div id="cardOverlay" class="overlay">
           <h1 class="picking-title">PICK A CARD</h1>
@@ -568,7 +642,7 @@
           <input id="chatInput" placeholder="메시지 입력..." maxlength="50" />
         </div>
       </div>
-      <p class="intro">조작: A/D 이동, 스페이스 점프, 마우스 조준, 좌클릭 사격, 우클릭/Shift 가드 | Enter: 채팅</p>
+      <p class="intro">조작: A/D 이동, 스페이스 점프, 마우스 조준, 좌클릭 일반 사격, X 꾹 누르기 강공격 차지 후 떼기, 우클릭/Shift 가드 | Enter: 채팅</p>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

@@ -799,6 +799,10 @@ function drawState(state) {
             ctx.fillRect(bx, by - 14, bw, 6);
             ctx.fillStyle = player.id === myId ? '#5de2dd' : '#f03e3e';
             ctx.fillRect(bx, by - 14, bw * (player.hp / player.maxHp), 6);
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.font = '10px Outfit';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${Math.max(0, Math.ceil(player.hp))}/${player.maxHp}`, bx + bw / 2, by - 17);
 
             const blockRatio = Math.max(0, Math.min(1, (player.blockMeter || 0) / Math.max(1, player.blockMeterMax || 1)));
             ctx.fillStyle = 'rgba(255,255,255,0.12)';
@@ -870,6 +874,11 @@ function drawState(state) {
             ctx.fillRect(bot.x, bot.y - 12, bot.width, 5);
             ctx.fillStyle = '#37b24d';
             ctx.fillRect(bot.x, bot.y - 12, bot.width * (bot.hp / MAX_HP), 5);
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.font = '9px Outfit';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${Math.max(0, Math.ceil(bot.hp))}/${MAX_HP}`, bot.x + bot.width / 2, bot.y - 15);
+            ctx.textAlign = 'left';
         }
     });
 

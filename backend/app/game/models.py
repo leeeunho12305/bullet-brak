@@ -1,0 +1,213 @@
+"""게임 도메인 모델.
+
+카드 효과가 붙이는 불리언 플래그는 개별 필드로 두지 않고 `flags: dict[str, float|bool]`
+하나로 모은다(기존 JS 의 `player.xxxCard = true` 를 대체). 플래그 키는 카드 id 를 따른다.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from app.game import constants as C
+
+Phase = Literal["waiting", "playing", "round_over", "picking", "finished"]
+Mode = Literal["pvp", "training"]
+
+
+@dataclass
+class Vec:
+    x: float = 0.0
+    y: float = 0.0
+
+
+@dataclass
+class Inputs:
+    left: bool = False
+    right: bool = False
+    jump: bool = False
+    block: bool = False
+    jump_consumed: bool = False
+
+
+@dataclass
+class Player:
+    id: str
+    nickname: str = "익명"
+    customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
+    coins: int = 0
+
+    # 물리
+    x: float = 100.0
+    y: float = 150.0
+    vx: float = 0.0
+    vy: float = 0.0
+    width: float = C.PLAYER_SIZE
+    height: float = C.PLAYER_SIZE
+    grounded: bool = False
+    jumps: int = 0
+    max_jumps: int = 1
+
+    # 스탯
+    hp: float = C.MAX_HP
+    max_hp: float = C.MAX_HP
+    speed: float = C.PLAYER_SPEED
+    jump_power: float = C.JUMP_POWER
+    damage_mult: float = 1.0
+    knockback_mult: float = 1.0
+    bullet_size: float = C.BASE_BULLET_SIZE
+    bullet_speed_mult: float = 1.0
+    max_bounces: int = 0
+    cooldown: float = 0.0
+    max_cooldown: float = C.BASE_COOLDOWN
+    revives: int = 0
+    lifesteal: float = 0.0
+    buckshot: int = 0
+    burst: int = 0
+
+    # 가드 / 강공격
+    block_meter: float = C.BLOCK_METER_MAX
+    block_meter_max: float = C.BLOCK_METER_MAX
+    blocking: bool = False
+    charging: bool = False
+    charge: float = 0.0
+    windup: float = 0.0
+    still_ticks: int = 0
+
+    # 상태이상 타이머(틱)
+    poison: int = 0
+    cold_timer: int = 0
+    dazzle_timer: int = 0
+    silence_timer: int = 0
+    echo_cooldown: int = 0
+    blood_timer: int = 0
+
+    aim: Vec = field(default_factory=Vec)
+    inputs: Inputs = field(default_factory=Inputs)
+    cards: list[str] = field(default_factory=list)
+    flags: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def alive(self) -> bool:
+        return self.hp > 0
+
+    @property
+    def cx(self) -> float:
+        return self.x + self.width / 2
+
+    @property
+    def cy(self) -> float:
+        return self.y + self.height / 2
+
+    def has(self, flag: str) -> bool:
+        return bool(self.flags.get(flag))
+
+
+@dataclass
+class Bot:
+    id: str
+    x: float = 100.0
+    y: float = 150.0
+    vx: float = 0.0
+    vy: float = 0.0
+    width: float = C.PLAYER_SIZE
+    height: float = C.PLAYER_SIZE
+    hp: float = C.MAX_HP
+    max_hp: float = C.MAX_HP
+    speed: float = 3.5
+    jump_power: float = -14.0
+    grounded: bool = False
+    cooldown: float = 0.0
+    customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
+    # AI
+    dir: int = 0
+    ai_timer: int = 0
+    jump_cooldown: int = 0
+
+    @property
+    def alive(self) -> bool:
+        return self.hp > 0
+
+    @property
+    def cx(self) -> float:
+        return self.x + self.width / 2
+
+    @property
+    def cy(self) -> float:
+        return self.y + self.height / 2
+
+
+@dataclass
+class Bullet:
+    id: int
+    owner: str
+    x: float
+    y: float
+    vx: float
+    vy: float
+    size: float = C.BASE_BULLET_SIZE
+    color: str = "#ffd43b"
+    damage: float = C.BASE_BULLET_DAMAGE
+    knockback: float = C.BASE_KNOCKBACK
+    life: int = C.BASE_BULLET_LIFE
+    bounces: int = 0
+    max_bounces: int = 0
+    pierce: int = 0
+    explode_radius: float = 85.0
+    start_x: float = 0.0
+    start_y: float = 0.0
+    owner_aim: Vec = field(default_factory=Vec)
+    active: bool = True
+    flags: dict[str, Any] = field(default_factory=dict)
+
+    def has(self, flag: str) -> bool:
+        return bool(self.flags.get(flag))
+
+
+@dataclass
+class Zone:
+    type: str
+    x: float
+    y: float
+    radius: float
+    duration: int
+    owner: str
+
+
+@dataclass
+class ChatMessage:
+    sender: str
+    text: str
+    time: int
+
+
+@dataclass
+class Room:
+    code: str
+    mode: Mode = "pvp"
+    max_players: int = 2
+    phase: Phase = "waiting"
+    players: dict[str, Player] = field(default_factory=dict)
+    bots: dict[str, Bot] = field(default_factory=dict)
+    bullets: list[Bullet] = field(default_factory=list)
+    zones: list[Zone] = field(default_factory=list)
+    platforms: list[dict[str, float]] = field(default_factory=lambda: [dict(p) for p in C.PLATFORMS])
+    messages: list[ChatMessage] = field(default_factory=list)
+
+    scores: dict[str, int] = field(default_factory=dict)
+    round_wins: dict[str, int] = field(default_factory=dict)
+    loser_to_pick: str | None = None
+    available_cards: list[str] = field(default_factory=list)
+    winner_id: str | None = None
+
+    tick: int = 0
+    bullet_seq: int = 0
+    bot_seq: int = 0
+    round_end_timer: int = 0  # >0 이면 라운드 종료 연출 카운트다운
+
+    def next_bullet_id(self) -> int:
+        self.bullet_seq += 1
+        return self.bullet_seq
+
+    def entities(self) -> list[Player | Bot]:
+        return [*self.players.values(), *self.bots.values()]

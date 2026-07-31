@@ -163,6 +163,27 @@ function randomSpawn() {
     };
 }
 
+function randomTopBotSpawn() {
+    return {
+        x: 100 + Math.random() * 600,
+        y: 0,
+    };
+}
+
+function respawnBot(bot) {
+    const spawn = randomTopBotSpawn();
+    bot.x = spawn.x;
+    bot.y = spawn.y;
+    bot.vx = 0;
+    bot.vy = 0;
+    bot.hp = MAX_HP;
+    bot.grounded = false;
+    bot.cooldown = 0;
+    bot.mouseTarget = { x: 0, y: 0 };
+    bot.inputs = { left: false, right: false, jump: false };
+    bot.ai = { dir: 0, timer: 0, jumpCooldown: 0 };
+}
+
 function applyCardState(player) {
     player.blockMeterMax = 600;
     player.blockMeter = player.blockMeterMax;
@@ -515,6 +536,7 @@ function applyExplosion(room, x, y, ownerId, damage, radius = 90, knockback = 14
         target.hp -= damage * power;
         target.vx += (dx / distance) * knockback * power;
         target.vy += (dy / distance) * knockback * power;
+        if (target.hp <= 0) respawnBot(target);
     });
 }
 
@@ -759,12 +781,12 @@ io.on('connection', (socket) => {
         const angle = Math.atan2(player.mouseTarget.y - cy, player.mouseTarget.x - cx);
         const chargeRatio = clamp(player.strongAttackCharge || 0, 0, 60) / 60;
         room.bullets.push(spawnBullet(room, player, angle, {
-            damageMult: 1.4 + chargeRatio * 1.8,
-            sizeBonus: 2 + chargeRatio * 5,
-            damage: 28 + chargeRatio * 32,
-            knockback: 14 + chargeRatio * 10,
+            damageMult: 1.0 + chargeRatio * 0.6,
+            sizeBonus: 2 + chargeRatio * 4,
+            damage: 26 + chargeRatio * 24,
+            knockback: 12 + chargeRatio * 8,
             life: 90,
-            speedMult: 0.85 + chargeRatio * 0.15
+            speedMult: 0.88 + chargeRatio * 0.12
         }));
 
         if (player.demonicPactCard) player.hp = Math.max(1, player.hp - 2);
@@ -910,26 +932,7 @@ setInterval(() => {
 
             room.bots.forEach((bot) => {
                 if (bot.hp <= 0) {
-                    bot.vy += gravity;
-                    bot.x += bot.vx;
-                    bot.y += bot.vy;
-                    if (bot.x < 0) { bot.x = 0; bot.vx *= -0.5; }
-                    if (bot.x > WIDTH) { bot.x = WIDTH; bot.vx *= -0.5; }
-                    room.platforms.forEach((plat) => {
-                        const overlapLeft = (bot.x + bot.width) - plat.x;
-                        const overlapRight = (plat.x + plat.width) - bot.x;
-                        const overlapTop = (bot.y + bot.height) - plat.y;
-                        const overlapBottom = (plat.y + plat.height) - bot.y;
-
-                        if (overlapLeft > 0 && overlapRight > 0 && overlapTop > 0 && overlapBottom > 0) {
-                            const min = Math.min(overlapBottom, Math.max(0, overlapTop), Math.max(0, overlapRight), Math.max(0, overlapLeft));
-                            if (min === overlapBottom && bot.vy > 0) {
-                                bot.y = plat.y - bot.height;
-                                bot.vy = 0;
-                                bot.vx *= 0.8;
-                            }
-                        }
-                    });
+                    respawnBot(bot);
                     return;
                 }
                 updateBot(bot, room.platforms);
@@ -1128,6 +1131,9 @@ setInterval(() => {
                     bot.hp -= hitDamage;
                     bot.vx += bullet.vx * 0.4;
                     bot.vy -= 4;
+                    if (bot.hp <= 0) {
+                        respawnBot(bot);
+                    }
                     if (bullet.toxicCloudCard) createZone(room, { type: 'toxic', x: bullet.x, y: bullet.y, radius: 75, duration: 35, owner: bullet.owner });
                     if (bullet.explosiveCard || bullet.supernovaCard) applyExplosion(room, bullet.x, bullet.y, bullet.owner, hitDamage * 0.55, bullet.explodeRadius, 16);
                     if (bullet.drillAmmoCard && (bullet.pierce || 0) > 0) {
