@@ -1,0 +1,51 @@
+# 개발용 스택: 소스 마운트 + 핫 리로드.
+#   make up   (또는 docker compose up -d --build)
+# 브라우저는 http://localhost:5173 하나만 보면 된다 (vite 가 /api, /ws 를 api 로 프록시).
+name: bullet-brak
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      target: dev
+    environment:
+      DEBUG: ${DEBUG:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+    volumes:
+      - ./apps/api:/app
+      # 호스트의 .venv 가 컨테이너를 오염시키지 않도록 가린다.
+      - /app/.venv
+    ports:
+      - '${API_PORT:-8000}:8000'
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2).status == 200 else 1)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    environment:
+      # vite dev 서버가 프록시할 대상 (컨테이너 네트워크 내부 이름)
+      API_PROXY_TARGET: http://api:8000
+      VITE_HOST: 0.0.0.0
+    volumes:
+      - ./apps/web:/repo/apps/web
+      # node_modules 는 이미지 안의 것을 쓴다(호스트 OS 바이너리 혼입 방지).
+      - /repo/apps/web/node_modules
+      - /repo/node_modules
+    ports:
+      - '${WEB_PORT:-5173}:5173'
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

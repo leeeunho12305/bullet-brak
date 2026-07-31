@@ -48,3 +48,10 @@ ntuser.dat
 
 # TS incremental build info
 *.tsbuildinfo
+
+# pnpm
+.pnpm-store/
+.pnpm-debug.log*
+
+# Docker
+docker-compose.override.yml

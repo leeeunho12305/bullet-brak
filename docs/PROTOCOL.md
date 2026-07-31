@@ -81,10 +81,11 @@ PlayerSnap = {
   "score": int, "round_wins": int, "coins": int,
   "cards": ["glass_cannon", ...],
   "silenced": bool, "poison": int, "cold": bool,
-  // Tab 오버레이용
+  // Tab 오버레이용 — 아래 두 필드는 대전 중 0.5초(30틱)에 한 번만 실린다.
+  // 없는 틱에는 클라이언트가 마지막으로 받은 값을 그대로 유지한다.
   "stats": { "damage_mult","max_hp","speed","cooldown","bullet_speed","bullet_size",
-             "bounces","knockback","block_meter_max","shots_per_fire" },   // 전부 number
-  "damage_table": [ { "distance": 0, "damage": 30.0 }, ... ]  // 0,100,200,400,600,800px
+             "bounces","knockback","block_meter_max","shots_per_fire" },   // 전부 number, optional
+  "damage_table": [ { "distance": 0, "damage": 30.0 }, ... ]  // 0,100,200,400,600,800px, optional
 }
 
 BotSnap = { "id","x","y","width","height","hp","max_hp","customization" }

@@ -1,0 +1,22 @@
+{
+  "name": "bullet-brak",
+  "private": true,
+  "version": "0.3.0",
+  "description": "ROUNDS 스타일 2D PvP 물리 슈팅 게임 — React + FastAPI 모노레포",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @bullet-brak/web dev",
+    "build": "pnpm --filter @bullet-brak/web build",
+    "preview": "pnpm --filter @bullet-brak/web preview",
+    "typecheck": "pnpm -r typecheck",
+    "test:api": "pnpm --dir apps/api exec pytest tests -q",
+    "up": "docker compose up -d --build",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f",
+    "prod:up": "docker compose -f docker-compose.prod.yml up -d --build",
+    "prod:down": "docker compose -f docker-compose.prod.yml down"
+  }
+}
