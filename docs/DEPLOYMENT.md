@@ -106,16 +106,35 @@ Fly.io / Render / Railway. 선택 기준은 딱 세 가지다.
 | `bullet-brak-api` | Docker web service | `apps/api/Dockerfile` (runtime 스테이지) | `PORT=8000`, 헬스체크 `/api/health` |
 | `bullet-brak-web` | Static site | `./scripts/render-build.sh` → `apps/web/dist` | SPA rewrite + 캐시 헤더 |
 
-**빌드가 `yarn` 으로 돌면 100% 실패한다.** Render 의 Node 기본 Build Command 가 `yarn` 인데,
-yarn 1 은 루트 `package.json` 의 `"packageManager": "pnpm@9.15.4"` 를 보고 Corepack 검사에서 죽는다:
+##### 기본 Build Command 가 `yarn` 인 문제
+
+Render 의 Node 기본 Build Command 는 `yarn` 이다. 그리고 **이 값은 `render.yaml` 로 덮어쓸 수 없다** —
+`render.yaml` 은 Blueprint 로 만든 서비스에만 적용되고, 대시보드에서 손으로 만든 서비스는 자기 설정을 쓴다.
+(`.node-version` 은 저장소 파일이라 무조건 읽히므로, 로그에 Node 버전만 반영되고 빌드 커맨드는 그대로인 상황이 나온다.)
+
+원래 이 저장소는 `"packageManager": "pnpm@9.15.4"` 때문에 yarn 1 이 실행 즉시 죽었다:
 
 ```
 error This project's package.json defines "packageManager": "yarn@pnpm@9.15.4".
 However the current global version of Yarn is 1.22.22.
 ```
 
-Blueprint 로 만들면 `render.yaml` 이 알아서 `./scripts/render-build.sh` 를 쓴다.
-대시보드에서 손으로 만든 서비스라면 **Settings > Build Command 를 직접 바꿔야 한다** (파일만 커밋해선 안 고쳐진다).
+그래서 대시보드를 못 건드리는 상황에서도 뜨도록 **`yarn` 이 그대로 돌아도 정상 빌드되게** 해뒀다.
+
+1. 루트 `package.json` 에서 `packageManager` 필드를 뺐다 → yarn 1 이 죽지 않는다.
+   pnpm 버전은 `engines.pnpm`(`>=9 <10`) + `scripts/render-build.sh` + `apps/web/Dockerfile` + CI 에서 고정한다.
+   **이 필드를 다시 넣으면 배포가 도로 깨진다.** package.json 의 `//packageManager` 주석이 그 경고다.
+2. `yarn` 이 하는 일은 `yarn install` 하나뿐인데, install 은 `postinstall` 훅을 부른다.
+   그 훅([scripts/render-postinstall.mjs](../scripts/render-postinstall.mjs))이 Render 환경일 때만
+   실제 빌드(`scripts/render-build.sh`)로 넘긴다. 로컬·CI·도커에서는 즉시 종료한다.
+   `render-build.sh` 안의 `pnpm install` 이 같은 훅을 다시 부르므로 `BULLET_BRAK_RENDER_BUILD` 로 재귀를 막는다.
+3. Publish Directory 값이 대시보드에 뭘로 잡혀 있는지 알 수 없어서, Render 에서 빌드할 때만
+   `apps/web/dist` 를 `dist`, `build`, `apps/web/build` 에도 복사한다(임시 체크아웃에만 생긴다).
+4. 서비스가 Static Site 가 아니라 Node Web Service 로 만들어진 경우를 위해 루트에 `start` 스크립트를 뒀다.
+   Start Command 기본값 `yarn start` → [scripts/serve-static.mjs](../scripts/serve-static.mjs)(의존성 0,
+   SPA 폴백 + `/healthz` + 캐시 헤더)가 `$PORT` 로 `apps/web/dist` 를 서빙한다.
+
+Blueprint 로 만들면 `render.yaml` 이 `./scripts/render-build.sh` 를 직접 부르므로 위 1~4 는 놀게 된다. 그쪽이 정석이다.
 Node 버전은 `.node-version`(22.14.0)으로 고정했다 — CI·Dockerfile 과 같은 메이저다.
 
 정적 사이트와 API 는 서로 다른 오리진이라 아래 두 쌍을 맞춰야 한다. `render.yaml` 에서는

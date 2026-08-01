@@ -4,7 +4,9 @@
 # ── 의존성 설치 ──────────────────────────────────────────────
 FROM node:22-alpine AS deps
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
-RUN corepack enable
+# 루트 package.json 에 packageManager 필드가 없으므로(이유는 그 파일 주석 참고)
+# 버전을 여기서 직접 고정한다. scripts/render-build.sh·CI 와 같은 값이어야 한다.
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /repo
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY apps/web/package.json apps/web/

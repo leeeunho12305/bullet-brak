@@ -9,7 +9,8 @@
 API_DIR  := apps/api
 WEB_DIR  := apps/web
 # pnpm 이 PATH 에 없으면 corepack 으로 대신 부른다(`corepack enable pnpm` 을 안 한 환경).
-PNPM     ?= $(shell command -v pnpm >/dev/null 2>&1 && echo pnpm || echo corepack pnpm)
+# package.json 에 packageManager 필드가 없어서 corepack 에 버전을 직접 준다.
+PNPM     ?= $(shell command -v pnpm >/dev/null 2>&1 && echo pnpm || echo corepack pnpm@9.15.4)
 COMPOSE  ?= docker compose
 PROD     := $(COMPOSE) -f docker-compose.prod.yml
 

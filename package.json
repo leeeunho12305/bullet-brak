@@ -3,11 +3,14 @@
   "private": true,
   "version": "0.3.0",
   "description": "ROUNDS 스타일 2D PvP 물리 슈팅 게임 — React + FastAPI 모노레포",
-  "packageManager": "pnpm@9.15.4",
+  "//packageManager": "일부러 뺐다. 이 필드가 있으면 yarn 1 이 Corepack 검사에서 즉시 죽는데(error This project's package.json defines \"packageManager\"...), Render 대시보드로 만든 서비스의 기본 Build Command 가 `yarn` 이고 그 값은 render.yaml 로 덮어쓸 수 없다. pnpm 버전은 engines.pnpm + scripts/render-build.sh + apps/web/Dockerfile + CI 에서 고정한다.",
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "pnpm": ">=9 <10"
   },
   "scripts": {
+    "postinstall": "node scripts/render-postinstall.mjs",
+    "start": "node scripts/serve-static.mjs",
     "dev": "pnpm --filter @bullet-brak/web dev",
     "build": "pnpm --filter @bullet-brak/web build",
     "preview": "pnpm --filter @bullet-brak/web preview",

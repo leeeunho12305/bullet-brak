@@ -1,8 +1,11 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
 # 적용: Render 대시보드 > New > Blueprint > 이 저장소 선택.
-# 이미 손으로 만든 서비스가 있다면 Settings 에서 아래 값과 똑같이 고쳐야 한다.
-# 특히 Build Command 를 그대로 두면(기본값 `yarn`) pnpm 워크스페이스라서 무조건 실패한다.
+#
+# ⚠ 이 파일은 Blueprint 로 만든 서비스에만 적용된다. 대시보드에서 손으로 만든 서비스는
+#   자기 Build Command(기본값 `yarn`)를 계속 쓴다 — 커밋으로는 못 바꾼다.
+#   그 경우를 위해 `yarn` 이 그대로 돌아도 빌드되도록 루트 package.json 의 postinstall 훅을
+#   걸어 뒀다(scripts/render-postinstall.mjs). 자세한 내용은 docs/DEPLOYMENT.md Phase 2.
 #
 # 정적 프런트와 API 가 서로 다른 오리진에 뜨므로 두 가지를 반드시 맞춰야 한다.
 #   1) web 의 VITE_API_BASE / VITE_WS_BASE  -> api 서비스 URL
