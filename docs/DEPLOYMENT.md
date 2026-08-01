@@ -134,6 +134,34 @@ However the current global version of Yarn is 1.22.22.
    Start Command 기본값 `yarn start` → [scripts/serve-static.mjs](../scripts/serve-static.mjs)(의존성 0,
    SPA 폴백 + `/healthz` + 캐시 헤더)가 `$PORT` 로 `apps/web/dist` 를 서빙한다.
 
+##### corepack 이 필드를 되살려 넣는 함정
+
+1번을 해놓고도 런타임에서 이 에러로 죽었다:
+
+```
+==> Running 'yarn start'
+This project is configured to use pnpm because /opt/render/project/src/package.json has a "packageManager" field
+```
+
+**corepack 은 프로젝트에 spec 이 없으면 자기가 하나 써 넣는다(auto-pin).** 소스 그대로다:
+
+```js
+console.error(`! The local project doesn't define a 'packageManager' field. Corepack will now add one referencing ...`);
+await setLocalPackageManager(path.dirname(result.target), installSpec);
+```
+
+빌드 스크립트가 `corepack enable` 을 하니 pnpm 이 corepack shim 으로 잡혔고, 그 shim 이 빌드 도중
+`"packageManager": "pnpm@9.15.4"` 를 되살려 넣었다. 그게 산출물과 함께 업로드돼서 런타임의 `yarn start`
+가 막힌 것이다. 지운 필드를 우리 빌드가 다시 만든 셈이다. 세 겹으로 막는다.
+
+- **corepack 을 안 쓴다.** `scripts/render-build.sh` 는 pnpm 을 `npm install -g` 로 받고,
+  PATH 의 shim 을 피하려고 `$(npm prefix -g)/bin/pnpm` 을 직접 부른다.
+- **[.corepack.env](../.corepack.env)** — corepack 이 프로젝트 루트에서 자동으로 읽는다.
+  `COREPACK_ENABLE_AUTO_PIN=0`(필드 써넣기 금지) + `COREPACK_ENABLE_STRICT=0`(다른 매니저를 불러도
+  예외 대신 실행). 대시보드 환경변수와 달리 **런타임에도 적용된다**.
+- **[scripts/strip-package-manager.mjs](../scripts/strip-package-manager.mjs)** — 빌드 마지막에
+  혹시 들어온 `packageManager` / `devEngines.packageManager` 를 업로드 전에 지운다.
+
 Blueprint 로 만들면 `render.yaml` 이 `./scripts/render-build.sh` 를 직접 부르므로 위 1~4 는 놀게 된다. 그쪽이 정석이다.
 Node 버전은 `.node-version`(22.14.0)으로 고정했다 — CI·Dockerfile 과 같은 메이저다.
 

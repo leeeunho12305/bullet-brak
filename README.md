@@ -92,9 +92,11 @@ make build       # 프론트 프로덕션 번들
 ├─ docker-compose.yml        개발 스택 (소스 마운트 + 리로드)
 ├─ docker-compose.prod.yml   운영 스택 (nginx + uvicorn)
 ├─ render.yaml               Render 배포 정의 (api=Docker, web=정적)
-├─ scripts/                  render-build.sh(pnpm 활성화 → web 번들)
+├─ .corepack.env             corepack auto-pin 차단 (런타임까지 적용)
+├─ scripts/                  render-build.sh(pnpm 준비 → web 번들)
 │                            render-postinstall.mjs(기본 `yarn` 빌드 커맨드 우회)
 │                            serve-static.mjs(의존성 0 정적 서버)
+│                            strip-package-manager.mjs(packageManager 필드 제거)
 ├─ apps/
 │  ├─ api/                   FastAPI
 │  │  ├─ app/

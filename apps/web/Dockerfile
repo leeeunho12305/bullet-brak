@@ -8,7 +8,7 @@ ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 # 버전을 여기서 직접 고정한다. scripts/render-build.sh·CI 와 같은 값이어야 한다.
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /repo
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc .corepack.env ./
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile
 

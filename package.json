@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.3.0",
   "description": "ROUNDS 스타일 2D PvP 물리 슈팅 게임 — React + FastAPI 모노레포",
-  "//packageManager": "일부러 뺐다. 이 필드가 있으면 yarn 1 이 Corepack 검사에서 즉시 죽는데(error This project's package.json defines \"packageManager\"...), Render 대시보드로 만든 서비스의 기본 Build Command 가 `yarn` 이고 그 값은 render.yaml 로 덮어쓸 수 없다. pnpm 버전은 engines.pnpm + scripts/render-build.sh + apps/web/Dockerfile + CI 에서 고정한다.",
+  "//packageManager": "일부러 뺐다. 이 필드가 있으면 Render 가 기본 Build Command 인 `yarn` 으로 빌드할 때 yarn/corepack 이 즉시 죽는다(빌드: This project's package.json defines packageManager / 런타임: This project is configured to use pnpm because ...). 그 값은 render.yaml 로 못 바꾼다. corepack 이 auto-pin 으로 이 필드를 되살려 넣는 것은 .corepack.env 와 scripts/strip-package-manager.mjs 로 막는다. pnpm 버전은 engines.pnpm + scripts/render-build.sh + apps/web/Dockerfile + CI 에서 고정한다. 다시 넣지 말 것.",
   "engines": {
     "node": ">=20",
     "pnpm": ">=9 <10"

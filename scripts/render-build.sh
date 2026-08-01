@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Render 빌드 — pnpm 활성화 → 의존성 설치 → 정적 번들(apps/web/dist) 생성.
+# Render 빌드 — pnpm 준비 → 의존성 설치 → 정적 번들(apps/web/dist) 생성.
 #
 # 두 경로로 들어온다.
 #   1) render.yaml 의 buildCommand          (Blueprint 로 만든 서비스 — 권장)
@@ -22,15 +22,24 @@ ON_RENDER="${RENDER:-}${RENDER_SERVICE_ID:-}"
 BULLET_BRAK_RENDER_BUILD=1
 export BULLET_BRAK_RENDER_BUILD
 
-# 최신 Node 배포판은 corepack 이 빠져 있을 수 있어서 npm 전역 설치를 대비책으로 둔다.
-if corepack enable >/dev/null 2>&1 && corepack prepare "pnpm@${PNPM_VERSION}" --activate >/dev/null 2>&1; then
-  echo "==> corepack 으로 pnpm ${PNPM_VERSION} 활성화"
-else
-  echo "==> corepack 사용 불가, npm 으로 pnpm ${PNPM_VERSION} 설치"
-  npm install -g --force "pnpm@${PNPM_VERSION}"
-fi
+# corepack 방어선. 직접 부르지는 않지만 PATH 에 shim 이 깔려 있을 수 있다.
+#   AUTO_PIN=0 : spec 이 없을 때 package.json 에 packageManager 를 써 넣지 못하게 막는다.
+#                (이게 켜져 있어서 런타임 `yarn start` 가 "configured to use pnpm" 으로 죽었다)
+#   STRICT=0   : 프로젝트 spec 과 다른 매니저를 불러도 예외 대신 그냥 실행한다.
+COREPACK_ENABLE_AUTO_PIN=0
+COREPACK_ENABLE_STRICT=0
+export COREPACK_ENABLE_AUTO_PIN COREPACK_ENABLE_STRICT
 
-echo "==> pnpm $(pnpm --version) / node $(node --version)"
+# pnpm 은 npm 전역 설치로 받는다. corepack shim 은 위 auto-pin 부작용이 있고,
+# Windows 등 일부 환경에선 shim 설치 자체가 권한 문제로 실패한다.
+echo "==> pnpm ${PNPM_VERSION} 설치 (npm 전역)"
+npm install -g --force "pnpm@${PNPM_VERSION}"
+
+# PATH 앞쪽에 corepack shim 이 있을 수 있으니 설치된 실제 바이너리를 직접 가리킨다.
+PNPM="$(npm prefix -g)/bin/pnpm"
+[ -x "$PNPM" ] || PNPM="pnpm"
+
+echo "==> pnpm $("$PNPM" --version) / node $(node --version)"
 
 if [ -n "$ON_RENDER" ]; then
   # yarn 이 먼저 만들어 둔 node_modules 가 남아 있으면 pnpm 이 "다른 패키지 매니저가 만든
@@ -38,8 +47,8 @@ if [ -n "$ON_RENDER" ]; then
   rm -rf node_modules apps/web/node_modules
 fi
 
-pnpm install --frozen-lockfile
-pnpm --filter @bullet-brak/web build
+"$PNPM" install --frozen-lockfile
+"$PNPM" --filter @bullet-brak/web build
 
 DIST="apps/web/dist"
 echo "==> 빌드 완료: ${DIST}"
@@ -56,3 +65,7 @@ if [ -n "$ON_RENDER" ]; then
   done
   echo "==> Publish Directory 는 apps/web/dist 권장 (dist, build, apps/web/build 도 동일 내용)"
 fi
+
+# 마지막 방어선: 빌드 도중 누가 packageManager 를 써 넣었다면 업로드 전에 지운다.
+# 이게 남아 있으면 런타임 `yarn start` 가 corepack 에 막혀 죽는다.
+node scripts/strip-package-manager.mjs
