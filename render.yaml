@@ -25,9 +25,9 @@ services:
     envVars:
       # Dockerfile 의 CMD 가 8000 에 바인딩하므로 Render 에도 같은 포트를 알려준다.
       - key: PORT
-        value: 8000
+        value: "8000"
       - key: DEBUG
-        value: false
+        value: "false"
       # 예) https://bullet-brak-web.onrender.com  (쉼표로 여러 개, 끝에 / 붙이지 말 것)
       - key: CORS_ORIGINS
         sync: false
@@ -50,7 +50,8 @@ services:
       - key: VITE_WS_BASE
         sync: false
     routes:
-      # SPA 폴백. /room/ABC123 새로고침이 404 나지 않게.
+      # SPA 폴백. 지금은 라우터가 없어 화면이 스토어 상태로만 갈리지만,
+      # 나중에 딥링크(/room/ABC123)를 붙여도 새로고침이 404 나지 않는다.
       - type: rewrite
         source: /*
         destination: /index.html

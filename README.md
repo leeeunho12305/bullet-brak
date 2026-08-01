@@ -91,6 +91,8 @@ make build       # 프론트 프로덕션 번들
 ├─ pnpm-workspace.yaml       apps/*, packages/*
 ├─ docker-compose.yml        개발 스택 (소스 마운트 + 리로드)
 ├─ docker-compose.prod.yml   운영 스택 (nginx + uvicorn)
+├─ render.yaml               Render 배포 정의 (api=Docker, web=정적)
+├─ scripts/render-build.sh   Render 빌드 (pnpm 활성화 → web 번들)
 ├─ apps/
 │  ├─ api/                   FastAPI
 │  │  ├─ app/

@@ -97,6 +97,46 @@ Fly.io / Render / Railway. 선택 기준은 딱 세 가지다.
 2. **세션 어피니티** — 인스턴스가 2개 이상이면 반드시 필요. 없으면 Phase 3 전까지 인스턴스 1개 고정
 3. **egress 요금** — 위 계산 참고. Fly.io 는 지역별 무료 할당이 있어 이 워크로드에 유리하다
 
+#### Render (`render.yaml` 로 정의해 둠)
+
+서비스 2개로 나뉜다. 정적 프런트는 CDN 에서 공짜로 뜨고, API 만 컨테이너로 돈다.
+
+| 서비스 | 타입 | 빌드 | 비고 |
+|---|---|---|---|
+| `bullet-brak-api` | Docker web service | `apps/api/Dockerfile` (runtime 스테이지) | `PORT=8000`, 헬스체크 `/api/health` |
+| `bullet-brak-web` | Static site | `./scripts/render-build.sh` → `apps/web/dist` | SPA rewrite + 캐시 헤더 |
+
+**빌드가 `yarn` 으로 돌면 100% 실패한다.** Render 의 Node 기본 Build Command 가 `yarn` 인데,
+yarn 1 은 루트 `package.json` 의 `"packageManager": "pnpm@9.15.4"` 를 보고 Corepack 검사에서 죽는다:
+
+```
+error This project's package.json defines "packageManager": "yarn@pnpm@9.15.4".
+However the current global version of Yarn is 1.22.22.
+```
+
+Blueprint 로 만들면 `render.yaml` 이 알아서 `./scripts/render-build.sh` 를 쓴다.
+대시보드에서 손으로 만든 서비스라면 **Settings > Build Command 를 직접 바꿔야 한다** (파일만 커밋해선 안 고쳐진다).
+Node 버전은 `.node-version`(22.14.0)으로 고정했다 — CI·Dockerfile 과 같은 메이저다.
+
+정적 사이트와 API 는 서로 다른 오리진이라 아래 두 쌍을 맞춰야 한다. `render.yaml` 에서는
+서비스 URL 이 생성 시점에 정해지므로 `sync: false` 로 두고 첫 배포 때 입력한다.
+
+| 서비스 | 환경변수 | 값 |
+|---|---|---|
+| web | `VITE_API_BASE` | `https://bullet-brak-api.onrender.com` |
+| web | `VITE_WS_BASE` | `wss://bullet-brak-api.onrender.com` (https 사이트에서 `ws://` 는 브라우저가 막는다) |
+| api | `CORS_ORIGINS` | `https://bullet-brak-web.onrender.com` (끝에 `/` 없이) |
+
+`VITE_*` 는 빌드 타임에 번들에 박히므로, 값을 바꾸면 web 을 **재배포**해야 반영된다.
+
+주의할 점:
+
+- **free 플랜은 15분 유휴 시 슬립한다.** 컨테이너가 내려가면 메모리에 있던 방과 WebSocket 이 전부 사라지고,
+  다음 접속은 콜드 스타트를 기다린다. 사람을 붙일 거면 `plan: starter` 이상.
+- 정적 사이트의 rewrite 규칙으로 `/api`·`/ws` 를 프록시하지 말 것. WebSocket 업그레이드가 통과하지 않는다.
+  그래서 nginx 방식(`apps/web/nginx.conf`) 대신 오리진을 분리했다.
+- 인스턴스 수는 1개 고정. 이유는 §2.
+
 ### Phase 3 — 가로 확장 (동접 300명 이상)
 
 방을 여러 게임 노드에 나눠 붙이는 단계. 상태를 공유하지 말고 **방을 노드에 고정**하는 것이 정석이다.
