@@ -1,0 +1,63 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# 적용: Render 대시보드 > New > Blueprint > 이 저장소 선택.
+# 이미 손으로 만든 서비스가 있다면 Settings 에서 아래 값과 똑같이 고쳐야 한다.
+# 특히 Build Command 를 그대로 두면(기본값 `yarn`) pnpm 워크스페이스라서 무조건 실패한다.
+#
+# 정적 프런트와 API 가 서로 다른 오리진에 뜨므로 두 가지를 반드시 맞춰야 한다.
+#   1) web 의 VITE_API_BASE / VITE_WS_BASE  -> api 서비스 URL
+#   2) api 의 CORS_ORIGINS                  -> web 서비스 URL
+# 값이 서비스 URL 에 의존해서 자동 주입이 안 된다(sync: false). 첫 배포 때 입력한다.
+
+services:
+  # ── FastAPI: 게임 서버(REST + WebSocket) ─────────────────────
+  - type: web
+    name: bullet-brak-api
+    runtime: docker
+    region: singapore
+    # free 는 15분 유휴 시 슬립한다 = 진행 중이던 방과 WebSocket 이 전부 끊긴다.
+    # 실제로 사람을 붙일 거면 starter 이상으로 올릴 것.
+    plan: free
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Dockerfile 의 CMD 가 8000 에 바인딩하므로 Render 에도 같은 포트를 알려준다.
+      - key: PORT
+        value: 8000
+      - key: DEBUG
+        value: false
+      # 예) https://bullet-brak-web.onrender.com  (쉼표로 여러 개, 끝에 / 붙이지 말 것)
+      - key: CORS_ORIGINS
+        sync: false
+    # ⚠ 인스턴스를 2개 이상으로 올리지 말 것. 방 상태가 프로세스 메모리에 있어서
+    #   같은 방 플레이어가 다른 인스턴스에 붙으면 게임이 갈라진다. docs/DEPLOYMENT.md §2
+
+  # ── React 정적 번들 ──────────────────────────────────────────
+  - type: web
+    name: bullet-brak-web
+    runtime: static
+    # 기본값 `yarn` 대신 pnpm 스크립트를 쓴다. 이게 이 파일의 핵심이다.
+    buildCommand: ./scripts/render-build.sh
+    staticPublishPath: ./apps/web/dist
+    autoDeploy: true
+    envVars:
+      # 예) https://bullet-brak-api.onrender.com
+      - key: VITE_API_BASE
+        sync: false
+      # 예) wss://bullet-brak-api.onrender.com   (https 사이트에서는 반드시 wss)
+      - key: VITE_WS_BASE
+        sync: false
+    routes:
+      # SPA 폴백. /room/ABC123 새로고침이 404 나지 않게.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, immutable, max-age=31536000
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
