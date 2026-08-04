@@ -8,6 +8,7 @@
 // /api 와 /ws 는 게임 서버(FastAPI)로 그대로 넘긴다. 프런트 입장에서는 같은 오리진이라
 // VITE_API_BASE / VITE_WS_BASE 도, CORS 설정도 필요 없다.
 // 게임 서버 주소는 API_ORIGIN 환경변수로 바꾼다(기본값은 render.yaml 이 만드는 이름).
+import { spawn, spawnSync } from 'node:child_process';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import http, { createServer } from 'node:http';
 import https from 'node:https';
@@ -20,9 +21,22 @@ const API_ORIGIN = (process.env.API_ORIGIN ?? 'https://bullet-brak-api.onrender.
   /\/+$/,
   '',
 );
-const API = new URL(API_ORIGIN);
-const UPSTREAM = API.protocol === 'https:' ? https : http;
-const UPSTREAM_PORT = API.port || (API.protocol === 'https:' ? 443 : 80);
+
+/** 프록시 대상. 내장 API 가 뜨는 데 성공하면 그쪽으로 갈아탄다. */
+let target = parseTarget(API_ORIGIN);
+
+function parseTarget(origin) {
+  const url = new URL(origin);
+  const secure = url.protocol === 'https:';
+  return {
+    origin,
+    hostname: url.hostname,
+    host: url.host,
+    port: url.port || (secure ? 443 : 80),
+    lib: secure ? https : http,
+    secure,
+  };
+}
 
 /** 게임 서버로 넘겨야 하는 경로인가 */
 function isApiPath(url) {
@@ -30,20 +44,20 @@ function isApiPath(url) {
 }
 
 function upstreamOptions(req) {
-  return {
-    protocol: API.protocol,
-    host: API.hostname,
-    port: UPSTREAM_PORT,
+  const options = {
+    host: target.hostname,
+    port: target.port,
     path: req.url,
     method: req.method,
-    headers: { ...req.headers, host: API.host },
-    servername: API.hostname, // https 업스트림 SNI
+    headers: { ...req.headers, host: target.host },
   };
+  if (target.secure) options.servername = target.hostname; // https 업스트림 SNI
+  return options;
 }
 
 /** /api/* HTTP 프록시. 실패하면 프런트가 그대로 읽을 수 있는 detail 을 돌려준다. */
 function proxyHttp(req, res) {
-  const proxyReq = UPSTREAM.request(upstreamOptions(req), (proxyRes) => {
+  const proxyReq = target.lib.request(upstreamOptions(req), (proxyRes) => {
     const status = proxyRes.statusCode ?? 502;
     const type = String(proxyRes.headers['content-type'] ?? '');
 
@@ -55,7 +69,7 @@ function proxyHttp(req, res) {
       res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(
         JSON.stringify({
-          detail: `게임 서버(${API_ORIGIN})가 응답하지 않습니다(${status}). API 서비스가 배포돼 있는지 확인해 주세요.`,
+          detail: `게임 서버(${target.origin})가 응답하지 않습니다(${status}). API 서비스가 배포돼 있는지 확인해 주세요.`,
         }),
       );
       return;
@@ -72,7 +86,7 @@ function proxyHttp(req, res) {
     }
     res.end(
       JSON.stringify({
-        detail: `게임 서버(${API_ORIGIN})에 연결할 수 없습니다. API 서비스가 떠 있는지 확인해 주세요.`,
+        detail: `게임 서버(${target.origin})에 연결할 수 없습니다. API 서비스가 떠 있는지 확인해 주세요.`,
       }),
     );
   });
@@ -160,7 +174,7 @@ server.on('upgrade', (req, socket, head) => {
     return;
   }
 
-  const proxyReq = UPSTREAM.request({ ...upstreamOptions(req), method: 'GET' });
+  const proxyReq = target.lib.request({ ...upstreamOptions(req), method: 'GET' });
 
   proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
     const headers = Object.entries(proxyRes.headers)
@@ -196,7 +210,85 @@ server.on('upgrade', (req, socket, head) => {
   proxyReq.end();
 });
 
+// --------------------------------------------------------------------------
+// 내장 게임 서버
+//
+// Render 대시보드로 만든 Node 서비스 하나에 프런트와 API 를 같이 태운다.
+// (서비스를 추가로 만들려면 대시보드를 거쳐야 하는데 그게 불가능한 상황을 위한 길이다.)
+// python3 나 의존성이 없으면 조용히 포기하고 외부 API_ORIGIN 프록시로 남는다 —
+// 즉 실패해도 지금 동작에서 나빠지지 않는다. EMBED_API=0 으로 끌 수 있다.
+// --------------------------------------------------------------------------
+
+const EMBED_PORT = Number(process.env.EMBEDDED_API_PORT ?? 8001);
+
+function findPython() {
+  if (process.env.PYTHON_BIN) return process.env.PYTHON_BIN;
+  for (const candidate of ['python3', 'python']) {
+    const probe = spawnSync(candidate, ['--version'], { stdio: 'ignore' });
+    if (!probe.error && probe.status === 0) return candidate;
+  }
+  return null;
+}
+
+function healthy(port) {
+  return new Promise((done) => {
+    const req = http.get(
+      { host: '127.0.0.1', port, path: '/api/health', timeout: 1500 },
+      (res) => {
+        res.resume();
+        done(res.statusCode === 200);
+      },
+    );
+    req.on('error', () => done(false));
+    req.on('timeout', () => {
+      req.destroy();
+      done(false);
+    });
+  });
+}
+
+async function startEmbeddedApi() {
+  if (process.env.EMBED_API === '0') return;
+
+  const python = findPython();
+  if (!python) {
+    console.log('내장 API: python 이 없어 건너뛴다. 프록시는 외부 API_ORIGIN 을 쓴다.');
+    return;
+  }
+
+  const apiDir = resolve(process.cwd(), 'apps/api');
+  if (!existsSync(join(apiDir, 'app', 'main.py'))) {
+    console.log('내장 API: apps/api 가 없어 건너뛴다.');
+    return;
+  }
+
+  console.log(`내장 API 시작 시도: ${python} -m uvicorn (127.0.0.1:${EMBED_PORT})`);
+  const child = spawn(
+    python,
+    ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', String(EMBED_PORT),
+      '--workers', '1', '--no-access-log'],
+    { cwd: apiDir, stdio: 'inherit', env: { ...process.env, PYTHONUNBUFFERED: '1' } },
+  );
+  child.on('error', (err) => console.error(`내장 API 실행 실패: ${err.message}`));
+  child.on('exit', (code) => console.error(`내장 API 종료(code=${code}).`));
+  process.on('exit', () => child.kill());
+
+  // 최대 20초까지 헬스체크를 기다린다(콜드 스타트에서 import 가 느릴 수 있다).
+  for (let i = 0; i < 40; i += 1) {
+    await new Promise((r) => setTimeout(r, 500));
+    if (child.exitCode !== null) break;
+    if (await healthy(EMBED_PORT)) {
+      target = parseTarget(`http://127.0.0.1:${EMBED_PORT}`);
+      console.log(`내장 API 준비 완료. /api, /ws -> ${target.origin}`);
+      return;
+    }
+  }
+  console.error(`내장 API 가 뜨지 않았다. 외부 ${API_ORIGIN} 로 계속 간다.`);
+}
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`정적 서버 http://0.0.0.0:${PORT} -> ${ROOT}`);
-  console.log(`  /api, /ws -> ${API_ORIGIN}`);
+  console.log(`  /api, /ws -> ${target.origin}`);
+  // 정적 서빙을 막지 않도록 기다리지 않는다.
+  void startEmbeddedApi();
 });

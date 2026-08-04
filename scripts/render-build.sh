@@ -69,3 +69,35 @@ fi
 # 마지막 방어선: 빌드 도중 누가 packageManager 를 써 넣었다면 업로드 전에 지운다.
 # 이게 남아 있으면 런타임 `yarn start` 가 corepack 에 막혀 죽는다.
 node scripts/strip-package-manager.mjs
+
+# 게임 서버(FastAPI)를 같은 서비스에서 같이 띄우기 위한 의존성 설치 — 되면 좋고 아니면 만다.
+# Render 의 Node 런타임 이미지에 python3 가 있는지 보장되지 않으므로 실패해도 빌드는 계속한다.
+# 실패하면 정적 사이트로만 뜨고, 프록시는 외부 API_ORIGIN 을 바라본다(지금과 동일).
+install_api_deps() {
+  PY=""
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      PY="$candidate"
+      break
+    fi
+  done
+  if [ -z "$PY" ]; then
+    echo "==> python 없음. API 를 같이 띄울 수 없다(정적 사이트로만 동작)."
+    return 0
+  fi
+
+  echo "==> $PY $("$PY" --version 2>&1) 감지. API 의존성 설치 시도"
+  if ! "$PY" -m pip --version >/dev/null 2>&1; then
+    echo "==> pip 없음. ensurepip 로 부트스트랩"
+    "$PY" -m ensurepip --upgrade >/dev/null 2>&1 || true
+  fi
+
+  if "$PY" -m pip install --user --no-cache-dir -r apps/api/requirements.txt; then
+    echo "==> API 의존성 설치 완료. 런타임에 uvicorn 을 같이 띄운다."
+  else
+    echo "==> API 의존성 설치 실패. 정적 사이트로만 동작한다."
+  fi
+  return 0
+}
+
+install_api_deps || true
