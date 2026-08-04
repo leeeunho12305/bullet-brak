@@ -25,6 +25,9 @@ const API_ORIGIN = (process.env.API_ORIGIN ?? 'https://bullet-brak-api.onrender.
 /** 프록시 대상. 내장 API 가 뜨는 데 성공하면 그쪽으로 갈아탄다. */
 let target = parseTarget(API_ORIGIN);
 
+/** 내장 API 시도 결과. /healthz 로 노출해서 배포 로그 없이도 원인을 알 수 있게 한다. */
+let embedState = 'pending';
+
 function parseTarget(origin) {
   const url = new URL(origin);
   const secure = url.protocol === 'https:';
@@ -142,8 +145,11 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // 정적 서버 자체의 상태 + 내장 API 를 띄웠는지. 배포 로그를 못 볼 때 밖에서 진단하는 창구다.
   if (url === '/healthz') {
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }).end('ok\n');
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }).end(
+      `${JSON.stringify({ static: 'ok', api_target: target.origin, embedded: embedState })}\n`,
+    );
     return;
   }
 
@@ -248,16 +254,21 @@ function healthy(port) {
 }
 
 async function startEmbeddedApi() {
-  if (process.env.EMBED_API === '0') return;
+  if (process.env.EMBED_API === '0') {
+    embedState = 'disabled';
+    return;
+  }
 
   const python = findPython();
   if (!python) {
+    embedState = 'no-python';
     console.log('내장 API: python 이 없어 건너뛴다. 프록시는 외부 API_ORIGIN 을 쓴다.');
     return;
   }
 
   const apiDir = resolve(process.cwd(), 'apps/api');
   if (!existsSync(join(apiDir, 'app', 'main.py'))) {
+    embedState = 'no-source';
     console.log('내장 API: apps/api 가 없어 건너뛴다.');
     return;
   }
@@ -269,8 +280,14 @@ async function startEmbeddedApi() {
       '--workers', '1', '--no-access-log'],
     { cwd: apiDir, stdio: 'inherit', env: { ...process.env, PYTHONUNBUFFERED: '1' } },
   );
-  child.on('error', (err) => console.error(`내장 API 실행 실패: ${err.message}`));
-  child.on('exit', (code) => console.error(`내장 API 종료(code=${code}).`));
+  child.on('error', (err) => {
+    embedState = `spawn-failed: ${err.message}`;
+    console.error(`내장 API 실행 실패: ${err.message}`);
+  });
+  child.on('exit', (code) => {
+    if (embedState !== 'ok') embedState = `exited(${code})`;
+    console.error(`내장 API 종료(code=${code}).`);
+  });
   process.on('exit', () => child.kill());
 
   // 최대 20초까지 헬스체크를 기다린다(콜드 스타트에서 import 가 느릴 수 있다).
@@ -279,10 +296,12 @@ async function startEmbeddedApi() {
     if (child.exitCode !== null) break;
     if (await healthy(EMBED_PORT)) {
       target = parseTarget(`http://127.0.0.1:${EMBED_PORT}`);
+      embedState = 'ok';
       console.log(`내장 API 준비 완료. /api, /ws -> ${target.origin}`);
       return;
     }
   }
+  if (embedState === 'pending') embedState = 'timeout';
   console.error(`내장 API 가 뜨지 않았다. 외부 ${API_ORIGIN} 로 계속 간다.`);
 }
 
