@@ -44,7 +44,24 @@ function upstreamOptions(req) {
 /** /api/* HTTP 프록시. 실패하면 프런트가 그대로 읽을 수 있는 detail 을 돌려준다. */
 function proxyHttp(req, res) {
   const proxyReq = UPSTREAM.request(upstreamOptions(req), (proxyRes) => {
-    res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+    const status = proxyRes.statusCode ?? 502;
+    const type = String(proxyRes.headers['content-type'] ?? '');
+
+    // 우리 API 는 에러도 JSON({"detail": ...}) 으로 준다. 에러인데 JSON 이 아니면
+    // 게임 서버가 아니라 그 앞단이 답한 것이다(예: 서비스가 없는 호스트에 Render 엣지가
+    // 돌려주는 404 HTML). 그대로 흘리면 화면에 "요청에 실패했습니다. (404)" 만 뜬다.
+    if (status >= 400 && !type.includes('application/json')) {
+      proxyRes.resume(); // 본문은 버린다
+      res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(
+        JSON.stringify({
+          detail: `게임 서버(${API_ORIGIN})가 응답하지 않습니다(${status}). API 서비스가 배포돼 있는지 확인해 주세요.`,
+        }),
+      );
+      return;
+    }
+
+    res.writeHead(status, proxyRes.headers);
     proxyRes.pipe(res);
   });
 

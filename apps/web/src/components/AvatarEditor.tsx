@@ -11,6 +11,8 @@ import '@/styles/game.css';
 
 const THUMB = 44;
 const PREVIEW = 150;
+/** 구매 안내 문구가 떠 있는 시간(ms) */
+const NOTICE_MS = 2000;
 
 const TABS: { key: PartCategory | 'color'; label: string }[] = [
   { key: 'eye', label: '눈' },
@@ -81,9 +83,17 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
   const value = props.value ?? storeValue;
   const onChange = props.onChange ?? storeSet;
   const [tab, setTab] = useState<PartCategory | 'color'>('eye');
-  const [notice, setNotice] = useState<string | null>(null);
+  // 객체로 담는 이유: 같은 문구를 다시 띄워도 참조가 바뀌어야 2초 타이머가 다시 시작된다.
+  const [notice, setNotice] = useState<{ text: string } | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
   const { coins, isOwned, buyItem } = useLocalProfile();
+
+  /** 안내 문구는 2초 뒤 저절로 사라진다. */
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     const canvas = previewRef.current;
@@ -101,10 +111,12 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
       const shopKey = SHOP_CATEGORY[category] ?? category;
       if (!isOwned(shopKey, index)) {
         if (!buyItem(shopKey, index, ITEM_PRICE)) {
-          setNotice(`코인이 부족합니다. ${ITEM_PRICE}코인이 필요해요. (보유 ${coins})`);
+          setNotice({ text: `코인이 부족합니다. ${ITEM_PRICE}코인이 필요해요. (보유 ${coins})` });
           return;
         }
-        setNotice(`${PART_TABLE[category][index]?.label ?? '아이템'} 구매 완료! -${ITEM_PRICE}코인`);
+        setNotice({
+          text: `${PART_TABLE[category][index]?.label ?? '아이템'} 구매 완료! -${ITEM_PRICE}코인`,
+        });
       } else {
         setNotice(null);
       }
@@ -146,7 +158,10 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
               type="button"
               key={t.key}
               className={`ae-tab${tab === t.key ? ' active' : ''}`}
-              onClick={() => setTab(t.key)}
+              onClick={() => {
+                setTab(t.key);
+                setNotice(null); // 안내는 파츠 목록에 딸린 문구다. 탭을 옮기면 지운다.
+              }}
             >
               {t.label}
             </button>
@@ -158,7 +173,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
             잠긴 항목은 <b>{ITEM_PRICE}코인</b>입니다. 보유 💰 {coins}
           </p>
         ) : null}
-        {notice ? <p className="ae-notice">{notice}</p> : null}
+        {notice ? <p className="ae-notice">{notice.text}</p> : null}
 
         <div className="ae-grid">
           {parts
