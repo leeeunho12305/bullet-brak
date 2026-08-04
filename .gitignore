@@ -21,6 +21,8 @@ __pycache__/
 .venv/
 venv/
 env/
+# Render 빌드가 게임 서버 의존성을 여기에 심는다(scripts/render-build.sh)
+.pydeps/
 .eggs/
 *.egg-info/
 build/

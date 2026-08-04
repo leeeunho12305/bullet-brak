@@ -12,7 +12,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import http, { createServer } from 'node:http';
 import https from 'node:https';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { delimiter as pathDelimiter, extname, join, normalize, resolve, sep } from 'node:path';
 
 const ROOT = resolve(process.cwd(), 'apps/web/dist');
 const PORT = Number(process.env.PORT ?? 8080);
@@ -273,19 +273,42 @@ async function startEmbeddedApi() {
     return;
   }
 
+  // 빌드가 --target 으로 여기에 의존성을 심는다. --user 는 런타임에 HOME/버전이
+  // 달라지면 못 찾아서 uvicorn 이 exited(1) 로 죽었다.
+  const pydeps = join(apiDir, '.pydeps');
+  const pythonPath = [pydeps, process.env.PYTHONPATH].filter(Boolean).join(pathDelimiter);
+
   console.log(`내장 API 시작 시도: ${python} -m uvicorn (127.0.0.1:${EMBED_PORT})`);
+  console.log(`  PYTHONPATH=${pythonPath} (.pydeps ${existsSync(pydeps) ? '있음' : '없음'})`);
+
   const child = spawn(
     python,
     ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', String(EMBED_PORT),
       '--workers', '1', '--no-access-log'],
-    { cwd: apiDir, stdio: 'inherit', env: { ...process.env, PYTHONUNBUFFERED: '1' } },
+    {
+      cwd: apiDir,
+      stdio: ['ignore', 'inherit', 'pipe'],
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONPATH: pythonPath },
+    },
   );
+
+  // 죽은 이유를 밖(/healthz)에서도 볼 수 있게 stderr 끝부분을 들고 있는다.
+  let stderrTail = '';
+  child.stderr?.on('data', (chunk) => {
+    const text = String(chunk);
+    process.stderr.write(text);
+    stderrTail = (stderrTail + text).slice(-600);
+  });
+
+  const lastLine = () =>
+    stderrTail.split('\n').map((l) => l.trim()).filter(Boolean).pop() ?? '(stderr 없음)';
+
   child.on('error', (err) => {
     embedState = `spawn-failed: ${err.message}`;
     console.error(`내장 API 실행 실패: ${err.message}`);
   });
   child.on('exit', (code) => {
-    if (embedState !== 'ok') embedState = `exited(${code})`;
+    if (embedState !== 'ok') embedState = `exited(${code}): ${lastLine()}`;
     console.error(`내장 API 종료(code=${code}).`);
   });
   process.on('exit', () => child.kill());

@@ -73,6 +73,9 @@ node scripts/strip-package-manager.mjs
 # 게임 서버(FastAPI)를 같은 서비스에서 같이 띄우기 위한 의존성 설치 — 되면 좋고 아니면 만다.
 # Render 의 Node 런타임 이미지에 python3 가 있는지 보장되지 않으므로 실패해도 빌드는 계속한다.
 # 실패하면 정적 사이트로만 뜨고, 프록시는 외부 API_ORIGIN 을 바라본다(지금과 동일).
+#: 게임 서버 의존성을 심는 곳. serve-static.mjs 가 같은 경로를 PYTHONPATH 로 준다.
+PYDEPS="$(pwd)/apps/api/.pydeps"
+
 install_api_deps() {
   PY=""
   for candidate in python3 python; do
@@ -86,14 +89,18 @@ install_api_deps() {
     return 0
   fi
 
-  echo "==> $PY $("$PY" --version 2>&1) 감지. API 의존성 설치 시도"
+  echo "==> $("$PY" --version 2>&1) 감지. API 의존성 설치 시도"
   if ! "$PY" -m pip --version >/dev/null 2>&1; then
     echo "==> pip 없음. ensurepip 로 부트스트랩"
     "$PY" -m ensurepip --upgrade >/dev/null 2>&1 || true
   fi
 
-  if "$PY" -m pip install --user --no-cache-dir -r apps/api/requirements.txt; then
-    echo "==> API 의존성 설치 완료. 런타임에 uvicorn 을 같이 띄운다."
+  # --user 는 런타임에 HOME/파이썬 버전이 달라지면 못 찾는다(실제로 uvicorn 이
+  # exited(1) 로 죽었다). 프로젝트 안에 --target 으로 박고 런타임에 PYTHONPATH 로 준다.
+  if "$PY" -m pip install --target "$PYDEPS" --no-cache-dir -r apps/api/requirements.txt; then
+    echo "==> API 의존성 설치 완료 -> ${PYDEPS}"
+    "$PY" -c "import sys; sys.path.insert(0, '${PYDEPS}'); import uvicorn, fastapi; print('==> 검증 OK: uvicorn', uvicorn.__version__)" \
+      || echo "==> 설치는 됐는데 import 가 안 된다. 런타임에서 폴백할 것이다."
   else
     echo "==> API 의존성 설치 실패. 정적 사이트로만 동작한다."
   fi
