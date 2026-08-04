@@ -6,6 +6,7 @@ import { COLORS, PART_TABLE, drawAvatar, drawPartThumbnail } from '@/game/avatar
 import type { PartCategory } from '@/game/avatars';
 import type { PartOption } from '@/game/avatarParts';
 import type { Customization } from '@/types/game';
+import { ITEM_PRICE, SHOP_CATEGORY, useLocalProfile } from '@/hooks/useLocalProfile';
 import '@/styles/game.css';
 
 const THUMB = 44;
@@ -34,11 +35,16 @@ interface ThumbProps {
   part: PartOption;
   color: string;
   selected: boolean;
+  /** 잠긴 항목이면 가격(코인). 이미 보유했거나 무료면 null */
+  price: number | null;
+  /** 잠겼는데 코인이 모자라는가(구매 버튼을 흐리게 표시) */
+  tooPoor: boolean;
   onSelect: () => void;
 }
 
-function PartThumb({ part, color, selected, onSelect }: ThumbProps): JSX.Element {
+function PartThumb({ part, color, selected, price, tooPoor, onSelect }: ThumbProps): JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const locked = price !== null;
 
   useEffect(() => {
     const canvas = ref.current;
@@ -49,15 +55,20 @@ function PartThumb({ part, color, selected, onSelect }: ThumbProps): JSX.Element
     drawPartThumbnail(ctx, part, THUMB, color);
   }, [part, color]);
 
+  const className =
+    `ae-item${selected ? ' selected' : ''}${locked ? ' locked' : ''}` +
+    `${locked && tooPoor ? ' too-poor' : ''}`;
+
   return (
     <button
       type="button"
-      className={`ae-item${selected ? ' selected' : ''}`}
+      className={className}
       onClick={onSelect}
-      title={part.label}
+      title={locked ? `${part.label} — ${price}코인` : part.label}
     >
       <canvas ref={ref} width={THUMB * 2} height={THUMB * 2} style={{ width: THUMB, height: THUMB }} />
       <span className="ae-item-label">{part.label}</span>
+      {locked ? <span className="ae-price">🔒 {price}</span> : null}
     </button>
   );
 }
@@ -70,7 +81,9 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
   const value = props.value ?? storeValue;
   const onChange = props.onChange ?? storeSet;
   const [tab, setTab] = useState<PartCategory | 'color'>('eye');
+  const [notice, setNotice] = useState<string | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
+  const { coins, isOwned, buyItem } = useLocalProfile();
 
   useEffect(() => {
     const canvas = previewRef.current;
@@ -82,15 +95,27 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
     drawAvatar(ctx, value, 15, 15, PREVIEW - 30, PREVIEW - 30, { shadow: false });
   }, [value]);
 
-  const setPart = useCallback(
+  /** 잠긴 파츠는 먼저 산다. 코인이 모자라면 선택하지 않고 안내만 남긴다. */
+  const selectPart = useCallback(
     (category: PartCategory, index: number) => {
+      const shopKey = SHOP_CATEGORY[category] ?? category;
+      if (!isOwned(shopKey, index)) {
+        if (!buyItem(shopKey, index, ITEM_PRICE)) {
+          setNotice(`코인이 부족합니다. ${ITEM_PRICE}코인이 필요해요. (보유 ${coins})`);
+          return;
+        }
+        setNotice(`${PART_TABLE[category][index]?.label ?? '아이템'} 구매 완료! -${ITEM_PRICE}코인`);
+      } else {
+        setNotice(null);
+      }
+
       const next: Customization = { ...value };
       if (category === 'eye') next.eye = index;
       else if (category === 'mouth') next.mouth = index;
       else next.detail = index;
       onChange(next);
     },
-    [onChange, value],
+    [buyItem, coins, isOwned, onChange, value],
   );
 
   const setColor = useCallback(
@@ -128,17 +153,30 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
           ))}
         </div>
 
+        {parts ? (
+          <p className="ae-shop-hint">
+            잠긴 항목은 <b>{ITEM_PRICE}코인</b>입니다. 보유 💰 {coins}
+          </p>
+        ) : null}
+        {notice ? <p className="ae-notice">{notice}</p> : null}
+
         <div className="ae-grid">
           {parts
-            ? parts.map((part, i) => (
-                <Thumb
-                  key={part.name}
-                  part={part}
-                  color={value.color}
-                  selected={value[tab as PartCategory] === i}
-                  onSelect={() => setPart(tab as PartCategory, i)}
-                />
-              ))
+            ? parts.map((part, i) => {
+                const shopKey = SHOP_CATEGORY[tab] ?? tab;
+                const owned = isOwned(shopKey, i);
+                return (
+                  <Thumb
+                    key={part.name}
+                    part={part}
+                    color={value.color}
+                    selected={value[tab as PartCategory] === i}
+                    price={owned ? null : ITEM_PRICE}
+                    tooPoor={!owned && coins < ITEM_PRICE}
+                    onSelect={() => selectPart(tab as PartCategory, i)}
+                  />
+                );
+              })
             : COLORS.map((c) => (
                 <button
                   type="button"

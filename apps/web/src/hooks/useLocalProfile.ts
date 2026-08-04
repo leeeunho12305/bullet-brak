@@ -13,10 +13,21 @@ export const OWNED_ITEMS_KEY = 'bulletBrakOwnedItems';
 export const NICKNAME_KEY = 'bulletBrakNickname';
 export const CUSTOMIZATION_KEY = 'bulletBrakCustomization';
 
-/** 잠금 없이 기본 제공되는 아이템 개수(레거시와 동일하게 index 0~2) */
-export const FREE_ITEM_COUNT = 3;
-/** 잠금 아이템 가격 */
+/**
+ * 잠금 없이 기본 제공되는 아이템 개수(index 0~1).
+ * 즉 각 카테고리의 뒤쪽 3종이 유료다 —
+ *   눈: 귀염 / X눈 / 선글, 입: 동그라미 / 고양이 / 이빨, 디테일: 리본 / 모자 / 콧수염
+ */
+export const FREE_ITEM_COUNT = 2;
+/** 잠금 아이템 가격(코인) */
 export const ITEM_PRICE = 50;
+
+/** 편집기의 파츠 카테고리 → localStorage 아이템 키 접두사(레거시 포맷 유지) */
+export const SHOP_CATEGORY: Record<string, string> = {
+  eye: 'eyes',
+  mouth: 'mouths',
+  detail: 'details',
+};
 
 export type OwnedItems = Record<string, boolean>;
 

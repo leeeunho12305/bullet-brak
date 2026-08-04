@@ -311,6 +311,26 @@
   color: var(--text);
 }
 .ae-item-label { font-size: 0.62rem; }
+/* 아직 안 산 파츠: 흐리게 + 가격표 */
+.ae-item.locked { opacity: 0.55; }
+.ae-item.locked:hover { opacity: 0.85; }
+.ae-item.locked.too-poor { cursor: not-allowed; }
+.ae-price {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--accent-3, #ffd43b);
+  letter-spacing: -0.02em;
+}
+.ae-shop-hint { font-size: 0.68rem; color: var(--muted); margin: 0; }
+.ae-shop-hint b { color: var(--accent-3, #ffd43b); }
+.ae-notice {
+  font-size: 0.7rem;
+  margin: 0;
+  color: var(--accent-2);
+  background: rgba(0, 229, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
 .ae-color { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
 .ae-color.selected { border-color: #fff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.5); }
 
