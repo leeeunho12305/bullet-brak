@@ -7,7 +7,7 @@ import random
 from typing import Any
 
 from app.game import constants as C
-from app.game.models import Bullet, Player, Room, Vec, Zone
+from app.game.models import Bot, Bullet, Player, Room, Vec, Zone
 from app.game.physics import (
     apply_explosion,
     bullet_hits_rect,
@@ -99,6 +99,30 @@ def spawn_bullet(room: Room, player: Player, angle: float, **extra: Any) -> Bull
     )
 
 
+def spawn_bot_bullet(room: Room, bot: Bot, angle: float) -> Bullet:
+    """훈련장 봇 탄환. 플레이어 카드 효과가 하나도 섞이지 않는 순수 탄환이다.
+
+    플레이어 탄환보다 느리고(BOT_BULLET_SPEED) 약하다 — 보고 피할 수 있어야 훈련이 된다.
+    """
+    speed = C.BOT_BULLET_SPEED
+    return Bullet(
+        id=room.next_bullet_id(),
+        owner=bot.id,
+        x=bot.cx,
+        y=bot.cy,
+        vx=math.cos(angle) * speed,
+        vy=math.sin(angle) * speed,
+        size=C.BOT_BULLET_SIZE,
+        color=str(bot.customization.get("color", "#ff8787")),
+        damage=bot.trait("damage"),
+        knockback=C.BOT_KNOCKBACK,
+        life=C.BOT_BULLET_LIFE,
+        start_x=bot.cx,
+        start_y=bot.cy,
+        owner_aim=Vec(bot.aim.x, bot.aim.y),
+    )
+
+
 def _aim_angle(player: Player) -> float:
     return math.atan2(player.aim.y - player.cy, player.aim.x - player.cx)
 
@@ -124,6 +148,7 @@ def fire(room: Room, player: Player) -> None:
         spread = (i - (total - 1) / 2) * 0.08 if total > 1 else 0.0
         room.bullets.append(spawn_bullet(room, player, angle, spread=spread))
 
+    _record(room, "shots", total)
     _pay_shot_costs(player)
     player.cooldown = player.max_cooldown
 
@@ -148,10 +173,18 @@ def fire_strong(room: Room, player: Player) -> None:
         )
     )
 
+    _record(room, "shots", 1)
     _pay_shot_costs(player)
     player.cooldown = C.STRONG_COOLDOWN
     player.charging = False
     player.charge = 0.0
+
+
+def _record(room: Room, key: str, amount: float = 1) -> None:
+    """훈련장 성적 집계. pvp 방에서는 no-op 이다."""
+    from app.game import training  # 지연 import (순환 방지)
+
+    training.record(room, key, amount)
 
 
 # --- 틱 처리 ---------------------------------------------------------------
@@ -317,6 +350,7 @@ def _damage_player(room: Room, bullet: Bullet, player: Player) -> None:
         if owner.has("radiance"):
             room.zones.append(Zone("radiance", bullet.x, bullet.y, 70.0, 8, bullet.owner))
 
+    _record(room, "damage_taken", hit_damage)
     _spawn_hit_zones(room, bullet, hit_damage)
     if player.hp <= 0:
         handle_lethal(player)
@@ -345,6 +379,10 @@ def _hit_players(room: Room, bullet: Bullet) -> None:
 def _hit_bots(room: Room, bullet: Bullet) -> None:
     from app.game import bots as bots_mod
 
+    # 봇끼리는 서로 쏘지 않는다. 셋이 난사하다 자기들끼리 정리되면 훈련이 안 된다.
+    if bullet.owner in room.bots:
+        return
+
     for bot in list(room.bots.values()):
         if not bullet.active or bot.hp <= 0 or bullet.owner == bot.id:
             continue
@@ -354,8 +392,15 @@ def _hit_bots(room: Room, bullet: Bullet) -> None:
         bot.hp -= hit_damage
         bot.vx += bullet.vx * 0.4
         bot.vy -= 4
+
+        _record(room, "damage_dealt", hit_damage)
+        # 명중률은 탄환 1발당 한 번만 센다(관통탄이 여러 번 세지 않도록).
+        if not bullet.has("counted_hit"):
+            bullet.flags["counted_hit"] = True
+            _record(room, "hits", 1)
+
         if bot.hp <= 0:
-            bots_mod.respawn_bot(bot)
+            bots_mod.kill_bot(bot)
         _spawn_hit_zones(room, bullet, hit_damage)
         _consume(bullet)
 

@@ -136,6 +136,6 @@ def apply_explosion(
         if target.hp > 0:
             continue
         if target.id in room.bots:
-            bots_mod.respawn_bot(target)  # type: ignore[arg-type]
+            bots_mod.kill_bot(target)  # type: ignore[arg-type]
         else:
             handle_lethal(target)  # type: ignore[arg-type]

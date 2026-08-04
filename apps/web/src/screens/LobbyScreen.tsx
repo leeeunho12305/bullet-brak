@@ -183,7 +183,7 @@ export default function LobbyScreen() {
             disabled={connecting}
             onClick={() => void openRoom('training')}
           >
-            🤖 훈련 모드 (봇 3마리)
+            🤖 훈련장 (웨이브 · 봇이 반격합니다)
           </button>
         </section>
       </div>

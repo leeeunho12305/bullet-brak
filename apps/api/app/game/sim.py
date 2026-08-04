@@ -10,7 +10,8 @@ import math
 
 from app.game import bullets as _bullets
 from app.game import constants as C
-from app.game.bots import create_bot, respawn_bot, update_bot
+from app.game.bots import fall_check as bot_fall_check
+from app.game.bots import update_bot
 from app.game.models import Bot, Player, Room, Zone
 from app.game.physics import clamp, handle_lethal, resolve_platform_collision
 
@@ -213,28 +214,12 @@ def check_fall_death(room: Room) -> None:
 
 
 def update_bots(room: Room) -> None:
+    """살아있는 봇만 굴린다. 죽은 봇을 치우고 다음 웨이브를 여는 것은 training 담당."""
     for bot in list(room.bots.values()):
         if not bot.alive:
-            respawn_bot(bot)
             continue
-        update_bot(bot, room.platforms)
-
-
-def maintain_training(room: Room) -> None:
-    """training 모드는 봇을 항상 3마리 유지한다."""
-    if room.mode != "training":
-        return
-    for bot_id, bot in list(room.bots.items()):
-        if not bot.alive and bot.y > C.HEIGHT + 200:
-            room.bots.pop(bot_id, None)
-    if room.phase != "playing":
-        return
-    guard = 0
-    while len(room.bots) < C.TRAINING_BOT_COUNT and guard < C.TRAINING_BOT_COUNT + 2:
-        guard += 1
-        bot = create_bot(room)
-        if bot is not None:
-            room.bots.setdefault(bot.id, bot)
+        update_bot(room, bot)
+    bot_fall_check(room)
 
 
 # --------------------------------------------------------------------------

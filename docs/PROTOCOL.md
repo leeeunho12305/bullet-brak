@@ -88,7 +88,9 @@ PlayerSnap = {
   "damage_table": [ { "distance": 0, "damage": 30.0 }, ... ]  // 0,100,200,400,600,800px, optional
 }
 
-BotSnap = { "id","x","y","width","height","hp","max_hp","customization" }
+BotSnap = { "id","x","y","width","height","hp","max_hp","customization",
+            "tier": "dummy"|"rookie"|"veteran",   // 난이도. 클라가 이름표/테두리로 구분
+            "aim": {"x": f, "y": f} }             // 봇이 겨누는 지점(허수아비는 자기 위치)
 
 BulletSnap = { "id": int, "x": f, "y": f, "size": f, "owner": str, "color": str }
 
@@ -102,13 +104,25 @@ CardInfo = { "id","name","desc","category","color","emoji" }
 
 ChatMessage = { "sender": str, "text": str, "time": int }   // time = epoch ms
 
+TrainingSnap = {              // mode=="training" 일 때만. pvp 면 null
+  "wave": int,                // 현재 웨이브(1부터)
+  "bots_left": int, "wave_bots": int,
+  "state": "fighting" | "wave_clear" | "respawning",
+  "timer": int,               // 다음 전환까지 남은 틱(0이면 카운트다운 없음)
+  "kills": int, "deaths": int, "best_wave": int,
+  "shots": int, "hits": int,  // 명중률 = hits/shots (클라가 계산)
+  "damage_dealt": f, "damage_taken": f,
+  "survived_ticks": int       // 현재 목숨의 생존 틱
+}
+
 Snapshot = {
   "type": "state", "tick": int, "phase": str, "mode": str,
   "players": [PlayerSnap], "bots": [BotSnap], "bullets": [BulletSnap],
   "zones": [ZoneSnap], "platforms": [Platform],
   "loser_to_pick": str | null,
   "available_cards": [CardInfo],
-  "winner_id": str | null
+  "winner_id": str | null,
+  "training": TrainingSnap | null
 }
 ```
 
@@ -126,7 +140,15 @@ Snapshot = {
 - 낙사: `y > HEIGHT + 100` 이면 즉사.
 - 가드: `block_meter` 소모, 총알 반사(×-1.35, 소유권 이전).
 - 강공격: `strong_start`~`strong_release` 차징(0~60), 발사 후 쿨다운 180틱.
-- training 모드: 봇 3마리 유지, 플레이어 사망 시 카드 선택 페이즈.
+- **training 모드(훈련장)**: 웨이브 방식. 라운드/점수/매치 승리가 없다.
+  - 웨이브마다 정해진 구성의 봇이 스폰된다. 봇 티어는 3종:
+    `dummy`(움직이기만 하는 허수아비) / `rookie`(느리게 조준해 사격) / `veteran`(선도 사격 + 회피).
+  - 봇은 서로를 쏘지 않는다(같은 봇 소유 탄환은 봇에게 명중 판정하지 않는다).
+    봇은 시야가 막히면(플랫폼이 가로막으면) 쏘지 않는다.
+  - 웨이브 전멸 → `wave_clear`(1.5초) → `picking`(카드 5장 중 1장) → 다음 웨이브.
+  - 플레이어 사망 → `respawning`(3초) → 같은 웨이브를 처음부터. 카드와 스탯은 유지한다.
+    `deaths` 만 올라가고 매치는 끝나지 않는다.
+  - 통계(킬/사망/명중률/누적 대미지/최고 웨이브/생존 시간)는 `Snapshot.training` 으로 내려간다.
 
 ---
 
@@ -154,10 +176,17 @@ def clamp(v, lo, hi) -> float
 def spawn_bullet(player: Player, angle: float, **extra) -> Bullet
 def update_bullets(room: Room) -> None      # 이동/도탄/명중/폭발 전부 처리
 
-# app/game/bots.py
-def create_bot(room: Room) -> Bot
-def update_bot(bot: Bot, platforms: list[Platform]) -> None
-def respawn_bot(bot: Bot) -> None
+# app/game/bots.py   (훈련장 전투 AI)
+def create_bot(room: Room, tier: str = "rookie") -> Bot
+def update_bot(room: Room, bot: Bot) -> None    # 조준/사격/회피/이동 1틱
+def kill_bot(bot: Bot) -> None                  # hp=0 (제거는 training 이 담당)
+
+# app/game/training.py   (훈련장 진행/통계. training 모드에서만 동작)
+def ensure(room: Room) -> TrainingState | None  # 훈련방이면 상태를 만들어 돌려준다
+def tick(room: Room) -> None                    # 웨이브 전멸/사망 판정 + 카운트다운
+def start_wave(room: Room, wave: int) -> None
+def record(room: Room, key: str, amount: float = 1) -> None   # 통계 집계(no-op 가능)
+def snap(room: Room) -> dict | None             # PROTOCOL 3장 TrainingSnap
 
 # app/game/rooms.py  (RoomManager)
 class RoomManager:

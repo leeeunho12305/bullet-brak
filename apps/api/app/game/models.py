@@ -120,13 +120,25 @@ class Bot:
     cooldown: float = 0.0
     customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
     # AI
+    tier: str = "rookie"
     dir: int = 0
     ai_timer: int = 0
     jump_cooldown: int = 0
+    #: 다시 조준하기까지 남은 지연(틱). 티어의 reaction 으로 채워진다.
+    reaction_timer: float = 0.0
+    #: 겨누는 지점. 사격뿐 아니라 클라이언트가 시선을 그리는 데도 쓴다.
+    aim: Vec = field(default_factory=Vec)
+    #: 회피 중 남은 틱(>0 이면 목표 거리와 반대로 움직인다)
+    evade_timer: int = 0
+    #: 티어 파라미터 사본(constants.BOT_TIERS[tier])
+    traits: dict[str, float] = field(default_factory=dict)
 
     @property
     def alive(self) -> bool:
         return self.hp > 0
+
+    def trait(self, key: str, default: float = 0.0) -> float:
+        return float(self.traits.get(key, default))
 
     @property
     def cx(self) -> float:
@@ -182,6 +194,26 @@ class ChatMessage:
 
 
 @dataclass
+class TrainingState:
+    """훈련장 진행 상황과 성적. training 모드 방에만 붙는다(PROTOCOL §3 TrainingSnap)."""
+
+    wave: int = 0
+    #: 이번 웨이브에 스폰된 봇 총 수(남은 수는 room.bots 로 센다)
+    wave_bots: int = 0
+    state: str = "fighting"  # fighting | wave_clear | respawning
+    timer: int = 0  # 다음 전환까지 남은 틱
+
+    kills: int = 0
+    deaths: int = 0
+    best_wave: int = 0
+    shots: int = 0  # 플레이어가 발사한 탄환 수
+    hits: int = 0  # 그중 봇에 맞은 수
+    damage_dealt: float = 0.0
+    damage_taken: float = 0.0
+    survived_ticks: int = 0  # 현재 목숨 기준
+
+
+@dataclass
 class Room:
     code: str
     mode: Mode = "pvp"
@@ -204,6 +236,8 @@ class Room:
     bullet_seq: int = 0
     bot_seq: int = 0
     round_end_timer: int = 0  # >0 이면 라운드 종료 연출 카운트다운
+    #: 훈련장 진행 상태. pvp 방에서는 None 이다.
+    training: TrainingState | None = None
 
     def next_bullet_id(self) -> int:
         self.bullet_seq += 1

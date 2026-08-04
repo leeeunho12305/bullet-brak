@@ -4,11 +4,13 @@ import type { JSX } from 'react';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
 import { MAX_CHARGE } from '@/types/game';
-import type { CardInfo, PlayerSnap } from '@/types/game';
+import type { CardInfo, PlayerSnap, TrainingSnap } from '@/types/game';
 
 const SAMPLE_MS = 100;
 const SCORE_TO_WIN = 5;
 const ROUNDS_TO_SCORE = 2;
+/** 서버 틱레이트. 훈련장 카운트다운(틱)을 초로 바꾸는 데만 쓴다. */
+const TICK_RATE = 60;
 
 /** 카드 아이콘을 보여주기 위해 지나간 available_cards 를 기억해 둔다. */
 const cardCache = new Map<string, CardInfo>();
@@ -83,6 +85,20 @@ function useHudSample(myId: string | null): HudPlayer[] {
   }, [myId]);
 
   return players;
+}
+
+/** 훈련장 상태도 같은 주기로 표본만 뜬다(60Hz 스냅샷을 state 로 넣지 않는다). */
+function useTrainingSample(): TrainingSnap | null {
+  const [training, setTraining] = useState<TrainingSnap | null>(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setTraining(net.latest?.training ?? null);
+    }, SAMPLE_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return training;
 }
 
 interface MeterProps {
@@ -167,9 +183,33 @@ function PlayerSide({ p, mine, side }: SideProps): JSX.Element {
   );
 }
 
+/** 훈련장 전용 중앙 패널. 대전의 점수판 자리를 대신한다. */
+function TrainingCenter({ t }: { t: TrainingSnap }): JSX.Element {
+  const accuracy = t.shots > 0 ? Math.round((t.hits / t.shots) * 100) : 0;
+  const seconds = (t.timer / TICK_RATE).toFixed(1);
+
+  let banner: string | null = null;
+  if (t.state === 'wave_clear') banner = `웨이브 ${t.wave} 클리어! 카드 선택 ${seconds}초`;
+  else if (t.state === 'respawning') banner = `부활까지 ${seconds}초`;
+
+  return (
+    <div className="hud-score hud-training">
+      <span className="hud-score-num">W{t.wave}</span>
+      <div className="hud-training-row">
+        <span title="남은 봇">🤖 {t.bots_left}/{t.wave_bots}</span>
+        <span title="처치">💀 {t.kills}</span>
+        <span title="명중률">🎯 {accuracy}%</span>
+        <span title="사망">☠ {t.deaths}</span>
+      </div>
+      <div className="hud-score-hint">{banner ?? `최고 W${t.best_wave}`}</div>
+    </div>
+  );
+}
+
 function HudInner(): JSX.Element | null {
   const myId = useGameStore((s: StoreSlice) => s.playerId);
   const players = useHudSample(myId);
+  const training = useTrainingSample();
   const [left, right] = useMemo(() => [players[0], players[1]], [players]);
 
   if (!left) return null;
@@ -177,13 +217,17 @@ function HudInner(): JSX.Element | null {
   return (
     <div className="hud-root">
       <PlayerSide p={left} mine={left.id === myId} side="left" />
-      <div className="hud-score">
-        <span className="hud-score-num">{left.score}</span>
-        <span className="hud-vs">VS</span>
-        <span className="hud-score-num">{right ? right.score : 0}</span>
-        <div className="hud-score-hint">{SCORE_TO_WIN}점 선취</div>
-      </div>
-      {right ? (
+      {training ? (
+        <TrainingCenter t={training} />
+      ) : (
+        <div className="hud-score">
+          <span className="hud-score-num">{left.score}</span>
+          <span className="hud-vs">VS</span>
+          <span className="hud-score-num">{right ? right.score : 0}</span>
+          <div className="hud-score-hint">{SCORE_TO_WIN}점 선취</div>
+        </div>
+      )}
+      {training ? null : right ? (
         <PlayerSide p={right} mine={right.id === myId} side="right" />
       ) : (
         <div className="hud-side right waiting">상대 대기 중…</div>

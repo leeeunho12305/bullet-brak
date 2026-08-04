@@ -173,23 +173,102 @@ def test_reset_match_clears_scores(manager: RoomManager) -> None:
     assert a.hp == C.MAX_HP
 
 
-def test_training_death_moves_to_picking(manager: RoomManager) -> None:
+def test_training_first_wave_spawns_from_table(manager: RoomManager) -> None:
     room = manager.create("training", 1)
-    p = _add_player(room, "solo")
-    p.hp = 0.0
+    _add_player(room, "solo")
     engine.tick_room(room)
-    assert room.phase == "round_over"
-    for _ in range(C.ROUND_END_DELAY_TICKS):
+    assert room.training is not None
+    assert room.training.wave == 1
+    assert [b.tier for b in room.bots.values()] == list(C.TRAINING_WAVES[0])
+
+
+def test_training_wave_clear_opens_card_pick(manager: RoomManager) -> None:
+    room = manager.create("training", 1)
+    _add_player(room, "solo")
+    engine.tick_room(room)
+    for bot in room.bots.values():
+        bot.hp = 0.0
+
+    engine.tick_room(room)  # 죽은 봇 정리 + wave_clear 진입
+    assert room.training is not None
+    assert room.training.state == "wave_clear"
+    assert room.training.kills == len(C.TRAINING_WAVES[0])
+
+    for _ in range(C.TRAINING_WAVE_BREAK_TICKS):
         engine.tick_room(room)
     assert room.phase == "picking"
     assert room.loser_to_pick == "solo"
 
 
-def test_training_keeps_three_bots(manager: RoomManager) -> None:
+def test_training_card_pick_starts_next_wave(manager: RoomManager) -> None:
     room = manager.create("training", 1)
     _add_player(room, "solo")
     engine.tick_room(room)
-    assert len(room.bots) == C.TRAINING_BOT_COUNT
+    for bot in room.bots.values():
+        bot.hp = 0.0
+    for _ in range(C.TRAINING_WAVE_BREAK_TICKS + 2):
+        engine.tick_room(room)
+    assert room.phase == "picking"
+
+    assert engine.pick_card(room, "solo", room.available_cards[0]) is True
+    assert room.phase == "playing"
+    assert room.training is not None
+    assert room.training.wave == 2
+    assert [b.tier for b in room.bots.values()] == list(C.TRAINING_WAVES[1])
+
+
+def test_training_death_respawns_and_keeps_wave(manager: RoomManager) -> None:
+    room = manager.create("training", 1)
+    p = _add_player(room, "solo")
+    engine.tick_room(room)
+    p.cards.append("glass_cannon")  # 카드는 죽어도 유지돼야 한다
+    p.hp = 0.0
+
+    engine.tick_room(room)
+    assert room.training is not None
+    assert room.training.state == "respawning"
+    assert room.training.deaths == 1
+    assert room.phase == "playing"  # 훈련장은 매치가 끝나지 않는다
+
+    for _ in range(C.TRAINING_RESPAWN_TICKS):
+        engine.tick_room(room)
+    assert p.alive and p.hp == p.max_hp
+    assert p.cards == ["glass_cannon"]
+    assert room.training.wave == 1
+    assert room.training.state == "fighting"
+
+
+def test_training_bots_do_not_shoot_each_other(manager: RoomManager) -> None:
+    from app.game.bullets import spawn_bot_bullet, update_bullets
+
+    room = manager.create("training", 1)
+    _add_player(room, "solo", x=700.0)
+    engine.tick_room(room)
+
+    shooter, victim = list(room.bots.values())[:2]
+    victim.x, victim.y = 300.0, 300.0
+    shooter.x, shooter.y = 260.0, 300.0
+    bullet = spawn_bot_bullet(room, shooter, 0.0)
+    bullet.x, bullet.y = victim.cx, victim.cy
+    room.bullets.append(bullet)
+    before = victim.hp
+
+    update_bullets(room)
+    assert victim.hp == before
+
+
+def test_training_stats_track_accuracy(manager: RoomManager) -> None:
+    from app.game.bullets import fire
+
+    room = manager.create("training", 1)
+    p = _add_player(room, "solo")
+    engine.tick_room(room)
+    p.aim.x, p.aim.y = p.cx + 100.0, p.cy
+
+    fire(room, p)
+    assert room.training is not None
+    assert room.training.shots == 1
+    assert room.training.hits == 0
 
 
 # --------------------------------------------------------------------------
@@ -209,6 +288,7 @@ SNAPSHOT_KEYS = {
     "loser_to_pick",
     "available_cards",
     "winner_id",
+    "training",
 }
 
 PLAYER_KEYS = {

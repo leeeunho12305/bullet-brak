@@ -85,6 +85,9 @@ export interface PlayerSnap {
   damage_table?: DamageRow[];
 }
 
+/** 훈련장 봇 난이도 (PROTOCOL §3 BotSnap.tier) */
+export type BotTier = 'dummy' | 'rookie' | 'veteran';
+
 export interface BotSnap {
   id: string;
   x: number;
@@ -94,6 +97,9 @@ export interface BotSnap {
   hp: number;
   max_hp: number;
   customization: Customization;
+  tier: BotTier;
+  /** 봇이 겨누는 지점. 허수아비는 자기 위치라 시선이 안 그려진다. */
+  aim: Vec;
 }
 
 export interface BulletSnap {
@@ -147,6 +153,27 @@ export interface Snapshot {
   loser_to_pick: string | null;
   available_cards: CardInfo[];
   winner_id: string | null;
+  /** 훈련장 진행 상황. pvp 방이면 null (PROTOCOL §3 TrainingSnap) */
+  training: TrainingSnap | null;
+}
+
+export type TrainingPhase = 'fighting' | 'wave_clear' | 'respawning';
+
+export interface TrainingSnap {
+  wave: number;
+  bots_left: number;
+  wave_bots: number;
+  state: TrainingPhase;
+  /** 다음 전환까지 남은 틱(0이면 카운트다운 없음) */
+  timer: number;
+  kills: number;
+  deaths: number;
+  best_wave: number;
+  shots: number;
+  hits: number;
+  damage_dealt: number;
+  damage_taken: number;
+  survived_ticks: number;
 }
 
 export interface InputState {

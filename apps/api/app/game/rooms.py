@@ -39,9 +39,12 @@ class RoomManager:
             max_players=max(1, min(8, int(max_players))),
         )
         if room.mode == "training":
-            # 연습 모드는 입장 즉시 시작
+            # 훈련장은 입장 즉시 시작. 웨이브 스폰은 첫 틱에 training 이 처리한다.
+            from app.game import training
+
             room.max_players = 1
             room.phase = "playing"
+            training.ensure(room)
         self.rooms[room.code] = room
         self.created_at[room.code] = time.monotonic()
         return room

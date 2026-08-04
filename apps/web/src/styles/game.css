@@ -166,6 +166,18 @@
 }
 .hud-vs { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.1em; }
 .hud-score-hint { width: 100%; text-align: center; font-size: 0.65rem; color: var(--muted); }
+/* 훈련장: 점수판 자리에 웨이브/성적을 보여준다 */
+.hud-training { min-width: 220px; }
+.hud-training-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
 
 /* ---------- 오버레이 (카드 선택 / 게임 종료) ---------- */
 .overlay {

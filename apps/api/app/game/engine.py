@@ -11,7 +11,7 @@ import random
 from typing import Any
 
 from app.game import constants as C
-from app.game import sim
+from app.game import sim, training
 from app.game.bullets import update_bullets
 from app.game.cards import apply_card, random_cards, reset_card_state
 from app.game.models import Room
@@ -46,7 +46,9 @@ def tick_room(room: Room) -> None:
             sim.check_fall_death(room)
         _judge(room)
 
-    sim.maintain_training(room)
+    # 훈련장은 라운드/점수가 없다. 웨이브 진행과 부활은 training 이 따로 판정한다.
+    if room.mode == "training" and room.phase == "playing":
+        training.tick(room)
 
 
 # ==========================================================================
@@ -67,39 +69,34 @@ def _judge(room: Room) -> None:
 
 
 def _check_round_over(room: Room) -> None:
-    if room.mode == "pvp":
-        if len(room.players) < 2:
-            return
-        alive = [p for p in room.players.values() if p.alive]
-        if len(alive) > 1:
-            return
-        winner = alive[0] if alive else None
-        room.phase = "round_over"
-        room.round_end_timer = C.ROUND_END_DELAY_TICKS
-        _ROUND_WINNER[room.code] = winner.id if winner else None
-        if winner:
-            room.round_wins[winner.id] = room.round_wins.get(winner.id, 0) + 1
-            winner.coins += 10
-    else:  # training
-        player = next(iter(room.players.values()), None)
-        if player is None or player.alive:
-            return
-        room.phase = "round_over"
-        room.round_end_timer = C.ROUND_END_DELAY_TICKS
-        _ROUND_WINNER[room.code] = None
+    # 훈련장은 라운드가 없다(training.tick 이 웨이브/부활로 대신한다).
+    if room.mode != "pvp":
+        return
+    if len(room.players) < 2:
+        return
+    alive = [p for p in room.players.values() if p.alive]
+    if len(alive) > 1:
+        return
+    winner = alive[0] if alive else None
+    room.phase = "round_over"
+    room.round_end_timer = C.ROUND_END_DELAY_TICKS
+    _ROUND_WINNER[room.code] = winner.id if winner else None
+    if winner:
+        room.round_wins[winner.id] = room.round_wins.get(winner.id, 0) + 1
+        winner.coins += 10
+
+
+def open_card_pick(room: Room) -> None:
+    """훈련장 웨이브 클리어 보상. 카드 5장을 열어 준다(training 이 호출)."""
+    player = next(iter(room.players.values()), None)
+    if player is None:
+        return
+    room.phase = "picking"
+    room.loser_to_pick = player.id
+    room.available_cards = _pick_card_ids(C.CARD_CHOICES)
 
 
 def _resolve_round_over(room: Room) -> None:
-    if room.mode == "training":
-        player = next(iter(room.players.values()), None)
-        if player is None:
-            room.phase = "waiting"
-            return
-        room.phase = "picking"
-        room.loser_to_pick = player.id
-        room.available_cards = _pick_card_ids(C.CARD_CHOICES)
-        return
-
     winner_id = _ROUND_WINNER.pop(room.code, None)
     winner = room.players.get(winner_id) if winner_id else None
     if winner is None:
@@ -197,8 +194,12 @@ def reset_round(room: Room) -> None:
         p.inputs.jump_consumed = False
 
     if room.mode == "training":
+        # 훈련장을 처음부터 다시 시작한다(다음 틱에 1웨이브가 스폰된다).
         room.bots.clear()
         room.bot_seq = 0
+        if room.training is not None:
+            room.training.wave = 0
+            room.training.survived_ticks = 0
 
 
 def reset_match(room: Room) -> None:
@@ -260,5 +261,10 @@ def pick_card(room: Room, player_id: str, card_id: str) -> bool:
         return False
     room.loser_to_pick = None
     room.available_cards = []
-    reset_round(room)
+    if room.mode == "training":
+        # 훈련장은 라운드를 리셋하지 않는다. 카드를 챙기고 다음 웨이브로 넘어간다.
+        room.phase = "playing"
+        training.next_wave(room)
+    else:
+        reset_round(room)
     return True

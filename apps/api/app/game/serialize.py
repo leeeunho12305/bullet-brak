@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.game import training
 from app.game.cards import card_info
 from app.game.models import Bot, Bullet, Player, Room, Zone
 from app.game.stats import damage_table, stat_summary
@@ -71,6 +72,8 @@ def bot_snap(b: Bot) -> dict[str, Any]:
         "hp": b.hp,
         "max_hp": b.max_hp,
         "customization": _customization(b.customization),
+        "tier": b.tier,
+        "aim": {"x": b.aim.x, "y": b.aim.y},
     }
 
 
@@ -119,6 +122,7 @@ def snapshot(room: Room) -> dict[str, Any]:
         "loser_to_pick": room.loser_to_pick,
         "available_cards": _available_cards(room),
         "winner_id": room.winner_id,
+        "training": training.snap(room),
     }
 
 
