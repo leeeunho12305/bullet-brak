@@ -134,6 +134,22 @@ However the current global version of Yarn is 1.22.22.
    Start Command 기본값 `yarn start` → [scripts/serve-static.mjs](../scripts/serve-static.mjs)(의존성 0,
    SPA 폴백 + `/healthz` + 캐시 헤더)가 `$PORT` 로 `apps/web/dist` 를 서빙한다.
 
+##### 서비스 하나에 프런트와 API 를 같이 태우기
+
+서비스를 새로 만들려면 대시보드를 거쳐야 한다. 그게 불가능할 때를 위해
+**Node 서비스 하나에서 FastAPI 를 자식 프로세스로 같이 띄우는** 길을 열어 뒀다.
+
+- 빌드: `scripts/render-build.sh` 가 `python3 -m pip install --user -r apps/api/requirements.txt`
+  를 시도한다. python 이나 pip 이 없으면 **빌드를 실패시키지 않고 그냥 넘어간다.**
+- 런타임: `scripts/serve-static.mjs` 가 `uvicorn` 을 `127.0.0.1:8001` 에 띄우고
+  `/api/health` 가 200 이 될 때까지 최대 20초 기다린 뒤 프록시 대상을 그쪽으로 바꾼다.
+- 실패하면 조용히 포기하고 외부 `API_ORIGIN` 프록시로 남는다 —
+  즉 **되면 게임이 돌고, 안 되면 지금과 똑같다.** `EMBED_API=0` 으로 끌 수 있다.
+
+Render 의 Node 런타임 이미지에 python3 가 있는지는 보장되지 않으므로 이건 어디까지나
+차선책이다. 정석은 아래 Blueprint 로 api 서비스를 따로 만드는 것이다
+(방 상태가 프로세스 메모리에 있어 API 를 분리해야 나중에 세로 확장도 쉽다).
+
 ##### corepack 이 필드를 되살려 넣는 함정
 
 1번을 해놓고도 런타임에서 이 에러로 죽었다:
