@@ -5,13 +5,63 @@
 // 도커/단일 VM 운영 경로는 여전히 nginx(apps/web/nginx.conf) 다. 이 파일은 그 대체재가 아니라
 // "대시보드를 못 건드리는 상황"의 안전망이다.
 //
-// API(/api, /ws)는 프록시하지 않는다. 프런트가 VITE_API_BASE / VITE_WS_BASE 로 직접 붙는다.
+// /api 와 /ws 는 게임 서버(FastAPI)로 그대로 넘긴다. 프런트 입장에서는 같은 오리진이라
+// VITE_API_BASE / VITE_WS_BASE 도, CORS 설정도 필요 없다.
+// 게임 서버 주소는 API_ORIGIN 환경변수로 바꾼다(기본값은 render.yaml 이 만드는 이름).
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { createServer } from 'node:http';
+import http, { createServer } from 'node:http';
+import https from 'node:https';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
 const ROOT = resolve(process.cwd(), 'apps/web/dist');
 const PORT = Number(process.env.PORT ?? 8080);
+
+const API_ORIGIN = (process.env.API_ORIGIN ?? 'https://bullet-brak-api.onrender.com').replace(
+  /\/+$/,
+  '',
+);
+const API = new URL(API_ORIGIN);
+const UPSTREAM = API.protocol === 'https:' ? https : http;
+const UPSTREAM_PORT = API.port || (API.protocol === 'https:' ? 443 : 80);
+
+/** 게임 서버로 넘겨야 하는 경로인가 */
+function isApiPath(url) {
+  return url.startsWith('/api/') || url === '/api' || url.startsWith('/ws/');
+}
+
+function upstreamOptions(req) {
+  return {
+    protocol: API.protocol,
+    host: API.hostname,
+    port: UPSTREAM_PORT,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: API.host },
+    servername: API.hostname, // https 업스트림 SNI
+  };
+}
+
+/** /api/* HTTP 프록시. 실패하면 프런트가 그대로 읽을 수 있는 detail 을 돌려준다. */
+function proxyHttp(req, res) {
+  const proxyReq = UPSTREAM.request(upstreamOptions(req), (proxyRes) => {
+    res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error(`API 프록시 실패 ${req.method} ${req.url}: ${err.message}`);
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+    }
+    res.end(
+      JSON.stringify({
+        detail: `게임 서버(${API_ORIGIN})에 연결할 수 없습니다. API 서비스가 떠 있는지 확인해 주세요.`,
+      }),
+    );
+  });
+
+  req.pipe(proxyReq);
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -47,13 +97,20 @@ function resolveFile(rawUrl) {
   return existsSync(candidate) && statSync(candidate).isFile() ? candidate : null;
 }
 
-createServer((req, res) => {
+const server = createServer((req, res) => {
+  const url = req.url ?? '/';
+
+  // 게임 서버로 넘길 요청이 먼저다. (이 분기가 없어서 POST /api/rooms 가 405 로 튕겼다)
+  if (isApiPath(url)) {
+    proxyHttp(req, res);
+    return;
+  }
+
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' }).end();
     return;
   }
 
-  const url = req.url ?? '/';
   if (url === '/healthz') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }).end('ok\n');
     return;
@@ -77,6 +134,52 @@ createServer((req, res) => {
   createReadStream(file)
     .on('error', () => res.end())
     .pipe(res);
-}).listen(PORT, '0.0.0.0', () => {
+});
+
+/** /ws/* WebSocket 업그레이드 프록시. 60Hz 스냅샷이 흐르므로 Nagle 을 끈다. */
+server.on('upgrade', (req, socket, head) => {
+  if (!isApiPath(req.url ?? '')) {
+    socket.destroy();
+    return;
+  }
+
+  const proxyReq = UPSTREAM.request({ ...upstreamOptions(req), method: 'GET' });
+
+  proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+    const headers = Object.entries(proxyRes.headers)
+      .flatMap(([k, v]) => (Array.isArray(v) ? v.map((one) => `${k}: ${one}`) : [`${k}: ${v}`]))
+      .join('\r\n');
+    socket.write(`HTTP/1.1 101 ${proxyRes.statusMessage ?? 'Switching Protocols'}\r\n${headers}\r\n\r\n`);
+
+    if (proxyHead?.length) proxySocket.unshift(proxyHead);
+    if (head?.length) proxySocket.write(head);
+
+    socket.setNoDelay(true);
+    proxySocket.setNoDelay(true);
+
+    const close = () => {
+      proxySocket.destroy();
+      socket.destroy();
+    };
+    socket.on('error', close);
+    proxySocket.on('error', close);
+    proxySocket.pipe(socket);
+    socket.pipe(proxySocket);
+  });
+
+  // 업그레이드가 아니라 일반 응답이면(방 없음 등) 상태줄만 전달하고 끊는다.
+  proxyReq.on('response', (proxyRes) => {
+    socket.write(`HTTP/1.1 ${proxyRes.statusCode} ${proxyRes.statusMessage ?? ''}\r\n\r\n`);
+    socket.destroy();
+  });
+  proxyReq.on('error', (err) => {
+    console.error(`WS 프록시 실패 ${req.url}: ${err.message}`);
+    socket.destroy();
+  });
+  proxyReq.end();
+});
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`정적 서버 http://0.0.0.0:${PORT} -> ${ROOT}`);
+  console.log(`  /api, /ws -> ${API_ORIGIN}`);
 });
