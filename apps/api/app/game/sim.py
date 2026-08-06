@@ -108,6 +108,10 @@ def update_player(room: Room, p: Player) -> None:
         p.x, p.vx = 0.0, 0.0
     elif p.x + p.width > C.WIDTH:
         p.x, p.vx = C.WIDTH - p.width, 0.0
+    # 천장은 막혀 있다(점프 강화 카드나 폭발 넉백으로 화면 위로 새지 않게).
+    # 바닥은 일부러 뚫려 있다 — 낙사가 협곡/부유섬 맵의 규칙이다.
+    if p.y < 0:
+        p.y, p.vy = 0.0, 0.0
 
     for plat in room.platforms:
         resolve_platform_collision(p, plat)
@@ -173,6 +177,9 @@ def _corpse_physics(room: Room, p: Player) -> None:
         p.x, p.vx = 0.0, p.vx * -0.5
     elif p.x > C.WIDTH:
         p.x, p.vx = C.WIDTH, p.vx * -0.5
+    # 시체도 천장에 부딪힌다(옆 벽처럼 튕겨서 다시 떨어진다)
+    if p.y < 0:
+        p.y, p.vy = 0.0, p.vy * -0.5
     if p.vy <= 0:
         return
     for plat in room.platforms:

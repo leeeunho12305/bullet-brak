@@ -245,6 +245,10 @@ def _physics(bot: Bot, platforms: list[dict[str, float]]) -> None:
     elif bot.x + bot.width > C.WIDTH:
         bot.x = C.WIDTH - bot.width
         bot.vx = 0.0
+    # 플레이어와 같은 천장(sim.update_player). 바닥은 뚫려 있다(낙사).
+    if bot.y < 0:
+        bot.y = 0.0
+        bot.vy = 0.0
 
     for plat in platforms:
         resolve_platform_collision(bot, plat)
