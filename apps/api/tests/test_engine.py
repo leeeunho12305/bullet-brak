@@ -483,16 +483,15 @@ def test_room_state_shape(manager: RoomManager) -> None:
 
 
 # --------------------------------------------------------------------------
-# 채팅 필터
+# 채팅
 # --------------------------------------------------------------------------
 
 
-def test_chat_filter_masks_bad_words(manager: RoomManager) -> None:
+def test_chat_text_is_not_filtered(manager: RoomManager) -> None:
     room = manager.create("pvp", 2)
     payload = chat_service.push(room, "닉", "야 이 바보야")
     assert payload is not None
-    assert "바보" not in payload["message"]["text"]
-    assert "***" in payload["message"]["text"]
+    assert payload["message"]["text"] == "야 이 바보야"
     assert len(room.messages) == 1
 
 

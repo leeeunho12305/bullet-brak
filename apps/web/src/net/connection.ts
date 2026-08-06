@@ -20,13 +20,13 @@ let ws: WebSocket | null = null;
 /** store 갱신을 최소화하기 위한 마지막 phase */
 let lastPhase: string | null = null;
 
-/** 서버가 지정한 close code -> 사용자 안내 문구 */
+/** 서버가 지정한 close code -> 한국어 안내 */
 function closeMessage(code: number): string | null {
   switch (code) {
     case 4404:
-      return 'Room not found. Check the code and try again.';
+      return '방을 찾을 수 없습니다. 코드를 확인해 주세요.';
     case 4409:
-      return 'That room is full.';
+      return '방이 가득 찼습니다.';
     default:
       return null;
   }
@@ -86,7 +86,7 @@ function handleClose(event: CloseEvent): void {
     return;
   }
 
-  const message = mapped ?? serverError ?? 'Lost connection to the server.';
+  const message = mapped ?? serverError ?? '서버와의 연결이 끊어졌습니다.';
   store.reset();
   useGameStore.getState().setStatus('error', message);
 }
@@ -124,7 +124,7 @@ export const net = {
     try {
       socket = new WebSocket(url);
     } catch {
-      useGameStore.getState().setStatus('error', 'Could not reach the server.');
+      useGameStore.getState().setStatus('error', '서버에 연결할 수 없습니다.');
       return;
     }
     ws = socket;

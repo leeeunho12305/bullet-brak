@@ -22,7 +22,7 @@ export function ScoreOrb({ wins, color, size = 18 }: ScoreOrbProps): JSX.Element
 
   return (
     <svg className={`score-orb${won > 0 ? ' lit' : ''}`} style={style} viewBox="0 0 100 100">
-      <title>{`${won}/${ROUNDS_TO_SCORE} rounds won`}</title>
+      <title>{`라운드 ${won}/${ROUNDS_TO_SCORE}승`}</title>
       {won >= ROUNDS_TO_SCORE && <circle cx="50" cy="50" r="44" fill={color} />}
       {won > 0 && won < ROUNDS_TO_SCORE && <path d={LEFT_HALF} fill={color} />}
       <circle cx="50" cy="50" r="44" fill="none" stroke={color} strokeWidth="7" />

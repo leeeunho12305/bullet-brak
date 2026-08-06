@@ -144,7 +144,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
         set({
           playerLeft: {
             id: msg.player_id,
-            nickname: msg.nickname || 'Guest',
+            nickname: msg.nickname || '익명',
             playersLeft: msg.players_left,
           },
         });

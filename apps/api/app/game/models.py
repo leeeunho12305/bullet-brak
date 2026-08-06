@@ -34,7 +34,7 @@ class Inputs:
 @dataclass
 class Player:
     id: str
-    nickname: str = "Guest"
+    nickname: str = "익명"
     customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
     coins: int = 0
 

@@ -1,43 +1,19 @@
-"""채팅 욕설 필터 + 메시지 생성. 레거시 BAD_WORDS 정규식을 이식했다."""
+"""채팅 메시지 생성."""
 
 from __future__ import annotations
 
-import re
 import time
 from typing import Any
 
 from app.game.models import ChatMessage, Room
-
-#: 레거시 server/index.js 의 BAD_WORDS 와 동일한 목록
-BAD_WORDS = re.compile(
-    "|".join(
-        [
-            "바보",
-            "멍청이",
-            "정치",
-            "섹스",
-            "성미",
-            "노무",
-            "문재",
-            "윤석",
-            "이재",
-            "정당",
-            "공산",
-            "친일",
-            "선정",
-        ]
-    ),
-    re.IGNORECASE,
-)
 
 MAX_TEXT_LEN = 200
 MAX_HISTORY = 20
 
 
 def sanitize(text: str) -> str:
-    """욕설/금지어를 `***` 로 마스킹하고 길이를 자른다."""
-    cleaned = (text or "").replace("\x00", "").strip()[:MAX_TEXT_LEN]
-    return BAD_WORDS.sub("***", cleaned)
+    """널 문자를 제거하고 길이를 자른다."""
+    return (text or "").replace("\x00", "").strip()[:MAX_TEXT_LEN]
 
 
 def make_message(sender: str, text: str) -> ChatMessage:

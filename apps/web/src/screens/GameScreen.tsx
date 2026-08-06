@@ -31,7 +31,7 @@ interface BannerState {
   text: string;
 }
 
-const CONTROLS = 'Hold Tab to see your damage, stats and cards';
+const CONTROLS = 'Tab 을 누르고 있으면 내 대미지·스탯·카드를 볼 수 있습니다';
 
 export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -52,7 +52,7 @@ export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.El
     const timer = window.setInterval(() => {
       const snap = net.latest;
       const phase: Phase = snap ? snap.phase : storePhase;
-      const text = phase === 'waiting' ? 'Waiting for another player…' : '';
+      const text = phase === 'waiting' ? '상대 플레이어를 기다리는 중…' : '';
       setBanner((prev) => (prev.phase === phase && prev.text === text ? prev : { phase, text }));
     }, SAMPLE_MS);
     return () => window.clearInterval(timer);
@@ -67,8 +67,8 @@ export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.El
     <div ref={rootRef} className={`game-screen${fullscreen.active ? ' is-fullscreen' : ''}`}>
       <header className="game-topbar">
         <div className="game-room">
-          <span className="game-room-code">{room ? `ROOM ${room.code}` : 'Connecting…'}</span>
-          <span className="game-room-mode">{room?.mode === 'training' ? 'TRAINING' : 'VERSUS'}</span>
+          <span className="game-room-code">{room ? `방 ${room.code}` : '연결 중…'}</span>
+          <span className="game-room-mode">{room?.mode === 'training' ? '훈련장' : '대전'}</span>
           {room?.map ? (
             <span className="game-room-map" title={room.map.desc}>
               {room.map.emoji} {room.map.name}
@@ -77,7 +77,7 @@ export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.El
         </div>
         <p className="game-controls">{CONTROLS}</p>
         <button type="button" className="btn btn-ghost" onClick={handleLeave}>
-          LEAVE
+          나가기
         </button>
       </header>
 

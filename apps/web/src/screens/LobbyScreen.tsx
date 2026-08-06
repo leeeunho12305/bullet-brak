@@ -15,7 +15,7 @@ const CODE_LENGTH = 6;
 function errorText(e: unknown): string {
   if (e instanceof ApiError) return e.message;
   if (e instanceof Error) return e.message;
-  return 'Something went wrong.';
+  return '알 수 없는 오류가 발생했습니다.';
 }
 
 export default function LobbyScreen() {
@@ -51,7 +51,7 @@ export default function LobbyScreen() {
 
   const profile = useCallback(
     () => ({
-      nickname: nickname.trim() || 'Guest',
+      nickname: nickname.trim() || '익명',
       customization,
       coins,
     }),
@@ -83,7 +83,7 @@ export default function LobbyScreen() {
     async (event?: FormEvent) => {
       event?.preventDefault();
       if (code.length !== CODE_LENGTH) {
-        setLocalError(`Enter the ${CODE_LENGTH}-digit room code.`);
+        setLocalError(`${CODE_LENGTH}자리 숫자 코드를 입력해 주세요.`);
         return;
       }
       setLocalError(null);
@@ -93,7 +93,7 @@ export default function LobbyScreen() {
         await api.getRoom(code);
         net.connect(code, profile());
       } catch (e) {
-        setLocalError(e instanceof ApiError && e.status === 404 ? 'Room not found.' : errorText(e));
+        setLocalError(e instanceof ApiError && e.status === 404 ? '방을 찾을 수 없습니다.' : errorText(e));
       } finally {
         setBusy(false);
       }
@@ -116,18 +116,18 @@ export default function LobbyScreen() {
 
       <div className="lobby-grid">
         <section className="panel">
-          <h2 className="section-title">PLAYER</h2>
+          <h2 className="section-title">플레이어</h2>
 
           <div className="field">
             <label className="label" htmlFor="nickname">
-              Nickname
+              닉네임
             </label>
             <input
               id="nickname"
               className="input"
               value={nickname}
               maxLength={NICKNAME_MAX}
-              placeholder="Guest"
+              placeholder="익명"
               autoComplete="off"
               onChange={(e) => setNickname(e.target.value.slice(0, NICKNAME_MAX))}
             />
@@ -138,11 +138,11 @@ export default function LobbyScreen() {
         </section>
 
         <section className="panel">
-          <h2 className="section-title">PLAY</h2>
+          <h2 className="section-title">게임 시작</h2>
 
           <div className="field">
             <label className="label" htmlFor="maxPlayers">
-              Room size
+              방 인원
             </label>
             <select
               id="maxPlayers"
@@ -150,15 +150,15 @@ export default function LobbyScreen() {
               value={maxPlayers}
               onChange={(e) => setMaxPlayers(Number(e.target.value))}
             >
-              <option value={2}>2 players</option>
-              <option value={3}>3 players</option>
-              <option value={4}>4 players</option>
+              <option value={2}>2명</option>
+              <option value={3}>3명</option>
+              <option value={4}>4명</option>
             </select>
           </div>
 
           <div className="field">
             <label className="label" htmlFor="mapId">
-              Map
+              맵
             </label>
             <select
               id="mapId"
@@ -166,14 +166,14 @@ export default function LobbyScreen() {
               value={mapId}
               onChange={(e) => setMapId(e.target.value)}
             >
-              <option value={RANDOM_MAP_ID}>🎲 Random (new map each round)</option>
+              <option value={RANDOM_MAP_ID}>🎲 무작위 (라운드마다 변경)</option>
               {maps.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.emoji} {m.name}
                 </option>
               ))}
             </select>
-            <p className="hint">The host can change this in the room.</p>
+            <p className="hint">대기실에서 방장이 다시 고를 수 있어요.</p>
           </div>
 
           <button
@@ -183,14 +183,14 @@ export default function LobbyScreen() {
             onClick={() => void openRoom('pvp')}
           >
             {connecting ? <span className="spinner" aria-hidden /> : null}
-            CREATE ROOM
+            방 만들기
           </button>
 
           <div className="divider" />
 
           <form onSubmit={(e) => void joinRoom(e)}>
             <label className="label" htmlFor="roomCode">
-              Join with code
+              코드로 참가
             </label>
             <div className="row">
               <input
@@ -200,7 +200,7 @@ export default function LobbyScreen() {
                 inputMode="numeric"
                 autoComplete="off"
                 placeholder="000000"
-                aria-label="Room code, 6 digits"
+                aria-label="방 코드 6자리"
                 onChange={(e) =>
                   setCode(e.target.value.toUpperCase().replace(/[^0-9]/g, '').slice(0, CODE_LENGTH))
                 }
@@ -210,10 +210,10 @@ export default function LobbyScreen() {
                 className="btn"
                 disabled={connecting || code.length !== CODE_LENGTH}
               >
-                JOIN
+                참가
               </button>
             </div>
-            <p className="hint">Press Enter to join right away.</p>
+            <p className="hint">Enter 로 바로 참가할 수 있어요.</p>
           </form>
 
           <div className="divider" />
@@ -224,7 +224,7 @@ export default function LobbyScreen() {
             disabled={connecting}
             onClick={() => void openRoom('training')}
           >
-            🤖 TRAINING (waves · bots shoot back)
+            🤖 훈련장 (웨이브 · 봇이 반격합니다)
           </button>
         </section>
       </div>

@@ -49,11 +49,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     });
   } catch {
-    throw new ApiError(0, 'Could not reach the server.');
+    throw new ApiError(0, '서버에 연결할 수 없습니다.');
   }
 
   if (!res.ok) {
-    let detail = `Request failed. (${res.status})`;
+    let detail = `요청에 실패했습니다. (${res.status})`;
     try {
       // FastAPI 는 { "detail": "..." } 형태로 에러를 준다.
       const body: unknown = await res.json();

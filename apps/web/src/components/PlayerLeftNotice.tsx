@@ -32,13 +32,13 @@ function PlayerLeftNoticeInner({ variant = 'room' }: Props): JSX.Element | null 
         👋
       </span>
       <span className="left-notice-body">
-        <strong>Your opponent left</strong>
+        <strong>상대방이 나갔습니다</strong>
         <span className="left-notice-sub">
-          {left.nickname} left the room.
-          {left.playersLeft < 2 ? ' You can start again once someone else joins.' : ''}
+          {left.nickname} 님이 방을 떠났어요.
+          {left.playersLeft < 2 ? ' 새 상대가 들어오면 다시 시작할 수 있어요.' : ''}
         </span>
       </span>
-      <button type="button" className="left-notice-close" aria-label="Dismiss" onClick={clear}>
+      <button type="button" className="left-notice-close" aria-label="알림 닫기" onClick={clear}>
         ✕
       </button>
     </div>

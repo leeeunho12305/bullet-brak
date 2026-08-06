@@ -330,10 +330,12 @@
 .card-item.picked .card-front { outline: 2px solid var(--accent-2); }
 .card-item.faded { opacity: 0.28; transform: scale(0.96); }
 
+/* 카드는 기본적으로 엎어져 있다(rotateY(180deg) = 뒷면). 마우스를 올린 한 장만 뒤집힌다. */
 .card-inner {
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
+  transform: rotateY(180deg);
   transition: transform 0.42s cubic-bezier(0.2, 0.75, 0.3, 1);
 }
 .card-face {
@@ -368,20 +370,17 @@
   opacity: 0.65;
 }
 
-/* 마우스를 카드 줄에 올리면, 가리키지 않은 카드는 뒷면으로 돌아간다.
-   키보드(Tab)로 훑을 때도 같게 동작한다. */
-.card-row:not(.locked):hover .card-item:not(:hover) .card-inner,
-.card-row:not(.locked):focus-within .card-item:not(:hover):not(:focus-visible) .card-inner {
-  transform: rotateY(180deg);
+/* 가리킨 카드 한 장만 앞면으로. 키보드(Tab)로 훑을 때도 같게 동작한다. */
+.card-row:not(.locked) .card-item:hover .card-inner,
+.card-row:not(.locked) .card-item:focus-visible .card-inner {
+  transform: rotateY(0deg);
 }
-.card-row:not(.locked):hover .card-item:not(:hover),
-.card-row:not(.locked):focus-within .card-item:not(:hover):not(:focus-visible) {
-  transform: scale(0.95);
-}
-.card-row:not(.locked):hover .card-item:not(:hover) .card-face,
-.card-row:not(.locked):focus-within .card-item:not(:hover):not(:focus-visible) .card-face {
-  filter: brightness(0.78);
-}
+/* 고르고 나면 내가 집은 카드만 앞면으로 남는다(무엇을 얻었는지 보여야 한다). */
+.card-row.locked .card-item.picked .card-inner { transform: rotateY(0deg); }
+
+/* 한 장을 가리키는 동안 나머지는 뒤로 물러난다. 아무것도 안 가리킬 때는 다 같은 크기다. */
+.card-row:not(.locked):hover .card-item:not(:hover) { transform: scale(0.95); }
+.card-row:not(.locked):hover .card-item:not(:hover) .card-face { filter: brightness(0.78); }
 
 .card-stripe { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
 .card-key {

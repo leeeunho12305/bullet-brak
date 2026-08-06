@@ -101,8 +101,8 @@ function PartThumb({ part, slot, color, selected, price, tooPoor, onSelect }: Th
       type="button"
       className={className}
       onClick={onSelect}
-      title={locked ? `${part.label} — ${price} coins` : part.label}
-      aria-label={locked ? `${part.label} (${price} coins)` : part.label}
+      title={locked ? `${part.label} — ${price}코인` : part.label}
+      aria-label={locked ? `${part.label} (${price}코인)` : part.label}
       aria-pressed={selected}
     >
       <canvas ref={ref} width={THUMB * 2} height={THUMB * 2} />
@@ -182,9 +182,9 @@ function DragHandle({ slot, offset, onMove, onReset }: HandleProps): JSX.Element
       role="button"
       tabIndex={0}
       aria-label={
-        `${PART_LABEL[slot]} position — drag it or use the arrow keys ` +
-        `(x ${Math.round((offset.x / MAX_OFFSET) * 100)}%, ` +
-        `y ${Math.round((offset.y / MAX_OFFSET) * 100)}%)`
+        `${PART_LABEL[slot]} 위치 — 드래그하거나 방향키로 옮기세요 ` +
+        `(가로 ${Math.round((offset.x / MAX_OFFSET) * 100)}%, ` +
+        `세로 ${Math.round((offset.y / MAX_OFFSET) * 100)}%)`
       }
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -200,7 +200,7 @@ function DragHandle({ slot, offset, onMove, onReset }: HandleProps): JSX.Element
         <button
           type="button"
           className="ae-handle-reset"
-          title="Reset position"
+          title="위치 되돌리기"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onReset}
         >
@@ -232,7 +232,7 @@ function MiniPreview({ value, size }: { value: Customization; size: number }): J
       width={size * 2}
       height={size * 2}
       style={{ width: size, height: size }}
-      aria-label="Character preview"
+      aria-label="캐릭터 미리보기"
     />
   );
 }
@@ -290,11 +290,11 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
       if (!isOwned(shopKey, index)) {
         const price = partPrice(category, index);
         if (!buyItem(shopKey, index, price)) {
-          setNotice({ text: `Not enough coins — ${price} needed. (you have ${coins})` });
+          setNotice({ text: `코인이 부족합니다. ${price}코인이 필요해요. (보유 ${coins})` });
           return;
         }
         setNotice({
-          text: `${PART_TABLE[category][index]?.label ?? 'Item'} unlocked! -${price} coins`,
+          text: `${PART_TABLE[category][index]?.label ?? '아이템'} 구매 완료! -${price}코인`,
         });
       } else {
         setNotice(null);
@@ -336,18 +336,18 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
       <div className="ae-launcher">
         <MiniPreview value={value} size={MINI} />
         <div className="ae-launcher-text">
-          <b>My character</b>
-          <span>Pick eyes, mouth, details and accessories — and drag them where you want.</span>
+          <b>내 캐릭터</b>
+          <span>눈 · 입 · 디테일 · 액세서리를 고르고 파츠 위치까지 옮길 수 있어요.</span>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
-          CUSTOMIZE
+          꾸미기
         </button>
       </div>
     );
   }
 
   return (
-    <div className="ae-modal" role="dialog" aria-modal="true" aria-label="Customize character">
+    <div className="ae-modal" role="dialog" aria-modal="true" aria-label="캐릭터 꾸미기">
       <div className="ae-modal-body">
         {/* ── 왼쪽: 캐릭터 스테이지 ─────────────────────────── */}
         <div className="ae-stage-col">
@@ -355,9 +355,9 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
             <span className="ae-move-icon">🖱</span>
             <span className="ae-move-arrow">↕</span>
             <span className="ae-move-text">
-              Drag to
+              드래그해서
               <br />
-              move a part
+              파츠 이동
             </span>
           </div>
 
@@ -367,7 +367,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
               width={STAGE * 2}
               height={STAGE * 2}
               style={{ width: STAGE, height: STAGE }}
-              aria-label="Character preview"
+              aria-label="캐릭터 미리보기"
             />
             {hasPart(tab, activeIndex) ? (
               <DragHandle
@@ -379,7 +379,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
             ) : null}
           </div>
 
-          <div className="ae-colors" role="group" aria-label="Body color">
+          <div className="ae-colors" role="group" aria-label="몸통 색상">
             {COLORS.map((c) => (
               <button
                 type="button"
@@ -401,7 +401,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
 
         {/* ── 오른쪽: 탭 + 파츠 그리드 ──────────────────────── */}
         <div className="ae-picker">
-          <div className="ae-tabs" role="tablist" aria-label="Part type">
+          <div className="ae-tabs" role="tablist" aria-label="파츠 종류">
             {PART_CATEGORIES.map((key) => (
               <button
                 type="button"

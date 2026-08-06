@@ -41,7 +41,7 @@ interface HudPlayer {
 function toHudPlayer(p: PlayerSnap): HudPlayer {
   return {
     id: p.id,
-    nickname: p.nickname || 'Guest',
+    nickname: p.nickname || '익명',
     color: p.customization?.color ?? '#ff6b6b',
     hp: Math.max(0, Math.ceil(p.hp)),
     maxHp: Math.max(1, p.max_hp),
@@ -128,24 +128,24 @@ function PlayerSide({ p, mine, side }: SideProps): JSX.Element {
       <div className="hud-name">
         <span className="hud-swatch" style={{ background: p.color }} />
         <strong>{p.nickname}</strong>
-        {mine && <em className="hud-tag">YOU</em>}
-        {p.silenced && <span title="Silenced">🔇</span>}
-        {p.poison > 0 && <span title="Poisoned">🧪</span>}
-        {p.cold && <span title="Frozen">❄️</span>}
+        {mine && <em className="hud-tag">나</em>}
+        {p.silenced && <span title="침묵">🔇</span>}
+        {p.poison > 0 && <span title="중독">🧪</span>}
+        {p.cold && <span title="빙결">❄️</span>}
       </div>
       <div className="hud-hp">
-        <Meter ratio={p.hp / p.maxHp} color={mine ? 'var(--accent-2)' : 'var(--accent)'} label="Health" />
+        <Meter ratio={p.hp / p.maxHp} color={mine ? 'var(--accent-2)' : 'var(--accent)'} label="체력" />
         <span className="hud-hp-text">
           {p.hp}/{Math.round(p.maxHp)}
         </span>
       </div>
       <div className="hud-sub">
-        <Meter ratio={p.guard} color="#4dabf7" label="Block meter" />
-        <Meter ratio={1 - p.cooldown} color="#adb5bd" label="Shot cooldown" />
+        <Meter ratio={p.guard} color="#4dabf7" label="가드 게이지" />
+        <Meter ratio={1 - p.cooldown} color="#adb5bd" label="사격 쿨다운" />
         <Meter
           ratio={p.charge}
           color={p.charging ? '#ff2e97' : 'rgba(255,212,59,0.55)'}
-          label="Heavy shot charge"
+          label="강공격 차징"
         />
       </div>
       <div className="hud-bottom">
@@ -176,19 +176,19 @@ function TrainingCenter({ t }: { t: TrainingSnap }): JSX.Element {
   const seconds = (t.timer / TICK_RATE).toFixed(1);
 
   let banner: string | null = null;
-  if (t.state === 'wave_clear') banner = `Wave ${t.wave} clear! Card pick in ${seconds}s`;
-  else if (t.state === 'respawning') banner = `Respawning in ${seconds}s`;
+  if (t.state === 'wave_clear') banner = `웨이브 ${t.wave} 클리어! 카드 선택 ${seconds}초`;
+  else if (t.state === 'respawning') banner = `부활까지 ${seconds}초`;
 
   return (
     <div className="hud-score hud-training">
       <span className="hud-score-num">W{t.wave}</span>
       <div className="hud-training-row">
-        <span title="Bots left">🤖 {t.bots_left}/{t.wave_bots}</span>
-        <span title="Kills">💀 {t.kills}</span>
-        <span title="Accuracy">🎯 {accuracy}%</span>
-        <span title="Deaths">☠ {t.deaths}</span>
+        <span title="남은 봇">🤖 {t.bots_left}/{t.wave_bots}</span>
+        <span title="처치">💀 {t.kills}</span>
+        <span title="명중률">🎯 {accuracy}%</span>
+        <span title="사망">☠ {t.deaths}</span>
       </div>
-      <div className="hud-score-hint">{banner ?? `Best W${t.best_wave}`}</div>
+      <div className="hud-score-hint">{banner ?? `최고 W${t.best_wave}`}</div>
     </div>
   );
 }
@@ -211,13 +211,13 @@ function HudInner(): JSX.Element | null {
           <span className="hud-score-num">{left.score}</span>
           <span className="hud-vs">VS</span>
           <span className="hud-score-num">{right ? right.score : 0}</span>
-          <div className="hud-score-hint">FIRST TO {SCORE_TO_WIN}</div>
+          <div className="hud-score-hint">{SCORE_TO_WIN}점 선취</div>
         </div>
       )}
       {training ? null : right ? (
         <PlayerSide p={right} mine={right.id === myId} side="right" />
       ) : (
-        <div className="hud-side right waiting">Waiting for an opponent…</div>
+        <div className="hud-side right waiting">상대 대기 중…</div>
       )}
     </div>
   );

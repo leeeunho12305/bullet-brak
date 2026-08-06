@@ -28,14 +28,14 @@ class RoomManager:
             code = str(random.randint(100000, 999999))
             if code not in self.rooms:
                 return code
-        raise RoomError("Could not allocate a room code.")
+        raise RoomError("방 코드를 발급할 수 없습니다.")
 
     # -- CRUD --------------------------------------------------------------
     def create(
         self, mode: Mode = "pvp", max_players: int = 2, map_id: str = maps.DEFAULT_ID
     ) -> Room:
         if len(self.rooms) >= self.max_rooms:
-            raise RoomError("The server is full.")
+            raise RoomError("서버가 가득 찼습니다.")
         if not maps.is_valid_selection(map_id):
             map_id = maps.DEFAULT_ID
         room = Room(

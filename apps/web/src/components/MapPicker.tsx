@@ -69,12 +69,12 @@ function MapPickerInner({ selected, active, canEdit, onSelect }: Props): JSX.Ele
   return (
     <div className="map-picker">
       <div className="map-picker-head">
-        <h3 className="section-title">MAP</h3>
+        <h3 className="section-title">맵 선택</h3>
         <p className="map-picker-now">
           {isRandom ? (
             <>
-              <strong>🎲 Random</strong>
-              <span className="hint"> — the map changes every round</span>
+              <strong>🎲 무작위</strong>
+              <span className="hint"> — 라운드마다 맵이 바뀝니다</span>
             </>
           ) : current ? (
             <>
@@ -84,21 +84,21 @@ function MapPickerInner({ selected, active, canEdit, onSelect }: Props): JSX.Ele
               <span className="hint"> — {current.desc}</span>
             </>
           ) : (
-            <span className="hint">Loading…</span>
+            <span className="hint">불러오는 중…</span>
           )}
         </p>
       </div>
 
       {failed ? (
-        <p className="hint">Could not load the map list. The default map will be used.</p>
+        <p className="hint">맵 목록을 불러오지 못했습니다. 기본 맵으로 진행됩니다.</p>
       ) : (
         <div className="map-grid">
-          {tile(RANDOM_MAP_ID, 'Random', '🎲', active, true)}
+          {tile(RANDOM_MAP_ID, '무작위', '🎲', active, true)}
           {maps.map((m) => tile(m.id, m.name, m.emoji, m, false))}
         </div>
       )}
 
-      {!canEdit ? <p className="hint">Only the host can change the map.</p> : null}
+      {!canEdit ? <p className="hint">맵은 방장만 바꿀 수 있어요.</p> : null}
     </div>
   );
 }

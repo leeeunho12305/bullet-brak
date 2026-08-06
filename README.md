@@ -107,7 +107,7 @@ make build       # 프론트 프로덕션 번들
 │  │  │  │                   engine·sim(1틱 시뮬레이션)·stats(대미지 감쇠)
 │  │  │  │                   serialize(스냅샷)·rooms(방 매니저)
 │  │  │  ├─ schemas/         클라이언트 메시지 검증(pydantic)
-│  │  │  ├─ services/        chat(욕설 필터), hub(WS 브로드캐스트)
+│  │  │  ├─ services/        chat(메시지 생성), hub(WS 브로드캐스트)
 │  │  │  └─ db/              (비어 있음) 영속화가 필요해지면 여기에
 │  │  ├─ tests/              pytest
 │  │  └─ Dockerfile          dev / runtime 멀티스테이지

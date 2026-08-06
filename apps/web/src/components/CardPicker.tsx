@@ -9,11 +9,11 @@ import type { CardInfo, Phase } from '@/types/game';
 const SAMPLE_MS = 150;
 
 const CATEGORY_LABEL: Record<string, string> = {
-  attack: 'ATTACK',
-  survival: 'SURVIVAL',
-  utility: 'UTILITY',
-  movement: 'MOVEMENT',
-  special: 'SPECIAL',
+  attack: '공격',
+  survival: '생존',
+  utility: '유틸',
+  movement: '이동',
+  special: '특수',
 };
 
 interface StoreSlice {
@@ -52,7 +52,7 @@ function CardPickerInner(): JSX.Element | null {
         next = {
           active: true,
           mine: snap.loser_to_pick === myId,
-          pickerName: picker?.nickname || 'Your opponent',
+          pickerName: picker?.nickname || '상대',
           cards: snap.available_cards,
         };
       }
@@ -94,9 +94,9 @@ function CardPickerInner(): JSX.Element | null {
     return (
       <div className="overlay picking">
         <p className="overlay-kicker">CARD PHASE</p>
-        <h2 className="overlay-title">CARD PICK</h2>
+        <h2 className="overlay-title">카드 선택</h2>
         <p className="overlay-desc">
-          <strong>{state.pickerName}</strong> is choosing
+          <strong>{state.pickerName}</strong> 님이 고르는 중
           <span className="dots" aria-hidden>
             <i />
             <i />
@@ -117,10 +117,10 @@ function CardPickerInner(): JSX.Element | null {
   return (
     <div className="overlay picking">
       <p className="overlay-kicker">CARD PHASE</p>
-      <h2 className="overlay-title">PICK A CARD</h2>
+      <h2 className="overlay-title">카드를 고르세요</h2>
       <p className="overlay-desc">
-        A consolation prize for losing the round. Only one —{' '}
-        <kbd>1</kbd>–<kbd>{state.cards.length}</kbd> work too.
+        진 쪽에게 주어지는 보상입니다. 하나만 고를 수 있어요 —{' '}
+        <kbd>1</kbd>~<kbd>{state.cards.length}</kbd> 키로도 선택됩니다.
       </p>
       {/* locked: 이미 고른 뒤에는 뒤집기를 멈춘다(고른 카드가 계속 보여야 한다) */}
       <div className={`card-row${picked !== null ? ' locked' : ''}`}>
@@ -159,12 +159,14 @@ function CardPickerInner(): JSX.Element | null {
                   <span className="card-name">{card.name}</span>
                   <span className="card-desc">{card.desc}</span>
                 </span>
-                {/* 뒷면 — 다른 카드에 마우스를 올리는 동안 이쪽이 돌아온다 */}
+                {/* 뒷면 — 기본 상태. 마우스를 올린 카드만 앞면으로 돌아온다.
+                    번호를 여기에도 박아 둬야 다 엎어진 상태에서 1~5 키를 쓸 수 있다. */}
                 <span
                   className="card-face card-rear"
                   style={{ borderColor: `${card.color}55` }}
                   aria-hidden
                 >
+                  <span className="card-key">{i + 1}</span>
                   <span className="card-rear-mark">?</span>
                 </span>
               </span>
@@ -172,7 +174,7 @@ function CardPickerInner(): JSX.Element | null {
           );
         })}
       </div>
-      {picked !== null && <p className="overlay-desc">Locked in! Setting up the next round…</p>}
+      {picked !== null && <p className="overlay-desc">선택 완료! 다음 라운드를 준비 중…</p>}
     </div>
   );
 }

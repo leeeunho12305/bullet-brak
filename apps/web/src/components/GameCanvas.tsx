@@ -100,7 +100,7 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
       className="game-canvas"
       width={WORLD_WIDTH}
       height={WORLD_HEIGHT}
-      aria-label="Game view"
+      aria-label="게임 화면"
     />
   );
 }

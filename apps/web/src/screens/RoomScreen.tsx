@@ -51,7 +51,7 @@ export default function RoomScreen({ onLeave }: Props) {
   return (
     <div className="screen">
       <header className="brand">
-        <h1>ROOM</h1>
+        <h1>대기실</h1>
       </header>
 
       {error ? (
@@ -65,13 +65,13 @@ export default function RoomScreen({ onLeave }: Props) {
       <div className="room-grid">
         <section className="panel">
           <div className="room-code">
-            <strong aria-label={`Room code ${room.code.split('').join(' ')}`}>{room.code}</strong>
+            <strong aria-label={`방 코드 ${room.code.split('').join(' ')}`}>{room.code}</strong>
             <button type="button" className="btn" onClick={() => void copyCode()}>
-              {copied ? 'COPIED!' : 'COPY CODE'}
+              {copied ? '복사됨!' : '코드 복사'}
             </button>
           </div>
           <p className="hint" style={{ textAlign: 'center' }}>
-            Share this code with a friend. ({players.length} / {room.max_players})
+            친구에게 코드를 알려주세요. ({players.length} / {room.max_players}명)
           </p>
 
           <div className="divider" />
@@ -80,23 +80,23 @@ export default function RoomScreen({ onLeave }: Props) {
             {players.map((p) => (
               <li key={p.id} className={`player-item${p.id === playerId ? ' is-me' : ''}`}>
                 <span className="player-dot" style={{ background: p.customization.color }} />
-                <span className="player-name">{p.nickname || 'Guest'}</span>
+                <span className="player-name">{p.nickname || '익명'}</span>
                 <span className="player-tag">
-                  {p.id === players[0]?.id ? 'HOST' : ''}
-                  {p.id === playerId ? ' (YOU)' : ''}
+                  {p.id === players[0]?.id ? '방장' : ''}
+                  {p.id === playerId ? ' (나)' : ''}
                 </span>
               </li>
             ))}
             {Array.from({ length: emptySlots }, (_, i) => (
               <li key={`slot-${i}`} className="player-item player-slot">
-                Empty
+                비어 있음
               </li>
             ))}
           </ul>
 
           <div className="room-actions">
             <button type="button" className="btn btn-ghost" onClick={onLeave}>
-              LEAVE
+              나가기
             </button>
             <button
               type="button"
@@ -104,12 +104,12 @@ export default function RoomScreen({ onLeave }: Props) {
               disabled={!canStart}
               onClick={() => net.send({ type: 'start_game' })}
             >
-              START GAME
+              게임 시작
             </button>
           </div>
 
-          {!isHost ? <p className="hint">Waiting for the host to start…</p> : null}
-          {isHost && !canStart ? <p className="hint">You need at least 2 players to start.</p> : null}
+          {!isHost ? <p className="hint">방장이 시작하기를 기다리는 중…</p> : null}
+          {isHost && !canStart ? <p className="hint">2명 이상 모여야 시작할 수 있어요.</p> : null}
         </section>
 
         <section className="panel">

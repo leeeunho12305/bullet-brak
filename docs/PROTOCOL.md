@@ -45,7 +45,7 @@
 | `strong_start` | `{}` | 강공격 차징 시작 |
 | `strong_release` | `{}` | 강공격 발사 |
 | `pick_card` | `{"card_id":str}` | 카드 선택 (패자만 유효) |
-| `chat` | `{"text":str}` | 채팅 (서버에서 욕설 마스킹) |
+| `chat` | `{"text":str}` | 채팅 (서버에서 200자 제한만 적용) |
 | `set_map` | `{"map_id":str}` | 방장이 맵 선택 (`waiting`/`finished` 에서만, 방장 아니면 무시) |
 | `start_game` | `{}` | 방장이 게임 시작 |
 | `restart` | `{}` | 종료 후 대기실로 되돌리기 |

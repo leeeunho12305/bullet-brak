@@ -20,7 +20,7 @@ function MapPreviewInner({ map, showSpawns = true, className }: Props): JSX.Elem
       viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`}
       preserveAspectRatio="xMidYMid meet"
       role="img"
-      aria-label={`${map.name} map preview`}
+      aria-label={`${map.name} 맵 미리보기`}
     >
       <rect x={0} y={0} width={WORLD_WIDTH} height={WORLD_HEIGHT} fill={theme.bg} />
       {platforms.map((p, i) => (
