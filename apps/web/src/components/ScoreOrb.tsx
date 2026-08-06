@@ -11,8 +11,8 @@ interface ScoreOrbProps {
   wins: number;
   /** 플레이어 색(HUD 스와치와 같은 값) */
   color: string;
-  /** 지름(px) */
-  size?: number;
+  /** 지름. 숫자면 px, 문자열이면 CSS 길이 그대로(clamp() 등) 쓴다. */
+  size?: number | string;
 }
 
 export function ScoreOrb({ wins, color, size = 18 }: ScoreOrbProps): JSX.Element {

@@ -263,7 +263,7 @@
 }
 .overlay.picking { overflow-y: auto; }
 .overlay-kicker {
-  margin: 0;
+  margin: 0 -0.32em 0 0; /* 마지막 글자 뒤 letter-spacing 몫을 빼서 가운데를 맞춘다 */
   font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.32em;
@@ -534,10 +534,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: clamp(12px, 3vh, 28px);
   border-radius: var(--radius);
-  background: rgba(8, 11, 20, 0.55);
-  backdrop-filter: blur(2px);
+  background: rgba(8, 11, 20, 0.74);
+  backdrop-filter: blur(5px);
   pointer-events: none;
   animation: round-in 0.18s ease-out;
 }
@@ -545,11 +545,21 @@
   from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: none; }
 }
+.round-result-kicker {
+  margin: 0;
+  font-size: clamp(0.62rem, 1.6vw, 0.82rem);
+  font-weight: 800;
+  letter-spacing: 0.42em;
+  /* letter-spacing 은 마지막 글자 뒤에도 붙는다. 그 몫을 빼야 가운데가 진짜 가운데다. */
+  margin-right: -0.42em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
 .round-result-title {
   margin: 0;
   padding: 0 14px;
   max-width: 100%;
-  font-size: clamp(1.6rem, 6vw, 3rem);
+  font-size: clamp(1.9rem, 7vw, 3.6rem);
   font-weight: 800;
   letter-spacing: 0.06em;
   line-height: 1.1;
@@ -557,17 +567,48 @@
   overflow-wrap: anywhere;
   text-shadow: 0 0 28px currentColor;
 }
-.round-result-orbs { display: flex; gap: clamp(28px, 9vw, 76px); }
-.round-orb { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.round-orb .score-orb { opacity: 0.55; }
-.round-orb .score-orb.lit { opacity: 1; filter: drop-shadow(0 0 14px var(--orb)); }
+
+/* 라운드 승수 원 — 양쪽 화면에 똑같이, 화면을 채울 만큼 크게 */
+.round-result-orbs {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(28px, 10vw, 110px);
+}
+.round-orb { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.round-orb .score-orb {
+  opacity: 0.45;
+  animation: orb-pop 0.4s cubic-bezier(0.2, 0.8, 0.3, 1.35) both;
+}
+.round-orb .score-orb.lit { opacity: 1; filter: drop-shadow(0 0 18px var(--orb)); }
+/* 방금 이겨서 차오른 쪽만 한 번 더 강조한다(팝 뒤에 은은한 맥박) */
+.round-orb.won .score-orb.lit {
+  animation:
+    orb-pop 0.52s cubic-bezier(0.2, 0.8, 0.3, 1.35) both,
+    orb-glow 1.15s ease-in-out 0.52s infinite;
+}
+@keyframes orb-pop {
+  0% { transform: scale(0.55); opacity: 0; }
+  60% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+@keyframes orb-glow {
+  0%, 100% { filter: drop-shadow(0 0 18px var(--orb)); }
+  50% { filter: drop-shadow(0 0 42px var(--orb)); }
+}
 .round-orb-name {
-  max-width: 120px;
+  max-width: clamp(120px, 22vw, 200px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.8rem;
+  font-size: clamp(0.85rem, 2.2vw, 1.15rem);
+  font-weight: 800;
+}
+.round-orb-count {
+  font-size: clamp(0.68rem, 1.7vw, 0.85rem);
   font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
 }
 
 /* ---------- 채팅 ---------- */

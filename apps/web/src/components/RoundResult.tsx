@@ -17,16 +17,22 @@ interface StoreSlice {
   lastEvent: LastEvent | null;
 }
 
+/** 원이 얼마나 커지는지. 캔버스가 작을 땐 vw 에 맞춰 줄어든다. */
+const ORB_SIZE = 'clamp(96px, 21vw, 190px)';
+
 interface OrbView {
   id: string;
   nickname: string;
   color: string;
   wins: number;
+  /** 이번 라운드를 이겨서 방금 차오른 원인가 */
+  won: boolean;
 }
 
 interface RoundView {
   /** 리렌더 판정용 서명 */
   key: string;
+  kicker: string;
   title: string;
   color: string;
   orbs: OrbView[];
@@ -53,21 +59,23 @@ function buildView(players: PlayerSnap[], ev: LastEvent | null, myId: string | n
     const idx = list.findIndex((p) => p.id === myId);
     if (idx > 0) list.unshift(...list.splice(idx, 1));
   }
+  const winnerId = winnerIdOf(players, ev);
   const orbs: OrbView[] = list.map((p) => ({
     id: p.id,
     nickname: p.nickname || '익명',
     color: colorOf(p),
     wins: p.round_wins,
+    won: p.id === winnerId,
   }));
 
   // 1승이면 "하프", 2승째면 그 라운드로 점수가 난다.
-  const winner = players.find((p) => p.id === winnerIdOf(players, ev)) ?? null;
-  const title = winner
-    ? `${winner.nickname || '익명'} ${winner.round_wins >= ROUNDS_TO_SCORE ? '득점!' : '하프!'}`
-    : '라운드 무승부';
+  const winner = players.find((p) => p.id === winnerId) ?? null;
+  const scored = winner !== null && winner.round_wins >= ROUNDS_TO_SCORE;
+  const kicker = winner ? (scored ? '득점' : '라운드 승리') : '무승부';
+  const title = winner ? `${winner.nickname || '익명'} ${scored ? '득점!' : '하프!'}` : '라운드 무승부';
   const color = winner ? colorOf(winner) : 'var(--muted)';
-  const key = `${title}|${orbs.map((o) => `${o.id}:${o.wins}:${o.color}`).join(',')}`;
-  return { key, title, color, orbs };
+  const key = `${title}|${orbs.map((o) => `${o.id}:${o.wins}:${o.color}:${o.won ? 1 : 0}`).join(',')}`;
+  return { key, kicker, title, color, orbs };
 }
 
 function RoundResultInner(): JSX.Element | null {
@@ -94,15 +102,22 @@ function RoundResultInner(): JSX.Element | null {
 
   return (
     <div className="round-result">
+      <p className="round-result-kicker" style={{ color: view.color }}>
+        {view.kicker}
+      </p>
       <h3 className="round-result-title" style={{ color: view.color }}>
         {view.title}
       </h3>
+      {/* 양쪽 화면에 똑같이 뜬다 — 서로 몇 판씩 땄는지 한눈에 보라고 크게 그린다. */}
       <div className="round-result-orbs">
         {view.orbs.map((o) => (
-          <div key={o.id} className="round-orb">
-            <ScoreOrb wins={o.wins} color={o.color} size={64} />
+          <div key={o.id} className={`round-orb${o.won ? ' won' : ''}`}>
+            <ScoreOrb wins={o.wins} color={o.color} size={ORB_SIZE} />
             <span className="round-orb-name" style={{ color: o.color }}>
               {o.nickname}
+            </span>
+            <span className="round-orb-count">
+              {o.wins} / {ROUNDS_TO_SCORE}
             </span>
           </div>
         ))}
