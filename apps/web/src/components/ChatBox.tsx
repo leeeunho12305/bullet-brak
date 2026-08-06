@@ -5,7 +5,7 @@ import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
 import type { ChatMessage } from '@/types/game';
 
-const QUICK_CHATS = ['좋은 판!', '미안!', '한 판 더!', '잘한다!'];
+const QUICK_CHATS = ['Good game!', 'Sorry!', 'One more!', 'Nice shot!'];
 const EMOTES = ['😂', '😎', '💀', '🤯'];
 const MAX_VISIBLE = 30;
 
@@ -72,7 +72,7 @@ function ChatBoxInner(): JSX.Element {
             <span className="chat-text">{m.text}</span>
           </div>
         ))}
-        {visible.length === 0 && <div className="chat-empty">Enter 를 눌러 채팅하세요.</div>}
+        {visible.length === 0 && <div className="chat-empty">Press Enter to chat.</div>}
       </div>
 
       <div className="chat-quick">
@@ -95,7 +95,7 @@ function ChatBoxInner(): JSX.Element {
         className="input chat-input"
         value={text}
         maxLength={80}
-        placeholder="메시지 입력 후 Enter"
+        placeholder="Type a message, then Enter"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
       />

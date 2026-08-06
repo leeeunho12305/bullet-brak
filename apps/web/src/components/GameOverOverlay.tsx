@@ -24,6 +24,10 @@ interface ResultView {
   rivalAccepted: boolean;
   /** 아직 응답이 없는 상대 이름 */
   rivalName: string;
+  /** 다시 하기를 누른 사람 수 */
+  accepted: number;
+  /** 방에 있는 사람 수(=다 눌러야 하는 수) */
+  total: number;
 }
 
 const EMPTY: ResultView = {
@@ -34,6 +38,8 @@ const EMPTY: ResultView = {
   iAccepted: false,
   rivalAccepted: false,
   rivalName: '',
+  accepted: 0,
+  total: 0,
 };
 
 interface GameOverOverlayProps {
@@ -64,11 +70,13 @@ function GameOverOverlayInner({ onLeave }: GameOverOverlayProps): JSX.Element | 
       const next: ResultView = {
         finished: true,
         winnerId: winner ? winner.id : null,
-        winnerName: winner ? winner.nickname || '익명' : '무승부',
+        winnerName: winner ? winner.nickname || 'Guest' : 'Draw',
         score: snap.players.map((p) => p.score).join(' : '),
         iAccepted: myId !== null && accepted.includes(myId),
         rivalAccepted: rival !== null && accepted.includes(rival.id),
-        rivalName: rival ? rival.nickname || '익명' : '상대',
+        rivalName: rival ? rival.nickname || 'Guest' : 'your opponent',
+        accepted: accepted.length,
+        total: snap.players.length,
       };
       setView((prev) => (sameView(prev, next) ? prev : next));
     }, SAMPLE_MS);
@@ -102,6 +110,9 @@ function GameOverOverlayInner({ onLeave }: GameOverOverlayProps): JSX.Element | 
 
   const iWon = view.winnerId !== null && view.winnerId === myId;
   const waiting = view.iAccepted || voted === 'yes';
+  // 서버 왕복(최대 200ms 샘플링) 전에도 내 표는 즉시 세어 준다.
+  const acceptedCount = Math.max(view.accepted, waiting ? 1 : 0);
+  const totalCount = Math.max(view.total, 2);
 
   // 이 오버레이의 문구는 참고 화면대로 영어로 통일한다.
   let status: string;
@@ -118,14 +129,25 @@ function GameOverOverlayInner({ onLeave }: GameOverOverlayProps): JSX.Element | 
 
       <h2 className="rematch-q">REMATCH?</h2>
       <div className="rematch-choices">
-        <button
-          type="button"
-          className={`rematch-btn yes${waiting ? ' on' : ''}`}
-          onClick={() => vote(true)}
-          disabled={waiting}
-        >
-          YES
-        </button>
+        <span className="rematch-yes-wrap">
+          <button
+            type="button"
+            className={`rematch-btn yes${waiting ? ' on' : ''}`}
+            onClick={() => vote(true)}
+            disabled={waiting}
+          >
+            YES
+          </button>
+          {/* 몇 명이 눌렀는지. 누른 사람은 여기를 보고 기다린다. */}
+          {acceptedCount > 0 && (
+            <span
+              className={`rematch-count${acceptedCount >= totalCount ? ' full' : ''}`}
+              aria-label={`${acceptedCount} of ${totalCount} players want a rematch`}
+            >
+              {acceptedCount}/{totalCount}
+            </span>
+          )}
+        </span>
         <button
           type="button"
           className={`rematch-btn no${voted === 'no' ? ' on' : ''}`}
@@ -164,7 +186,9 @@ function sameView(a: ResultView, b: ResultView): boolean {
     a.score === b.score &&
     a.iAccepted === b.iAccepted &&
     a.rivalAccepted === b.rivalAccepted &&
-    a.rivalName === b.rivalName
+    a.rivalName === b.rivalName &&
+    a.accepted === b.accepted &&
+    a.total === b.total
   );
 }
 

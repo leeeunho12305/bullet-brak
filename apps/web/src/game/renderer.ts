@@ -316,7 +316,7 @@ function drawPlayer(
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
   ctx.font = 'bold 11px system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(p.nickname || '익명', cx, barY - 6);
+  ctx.fillText(p.nickname || 'Guest', cx, barY - 6);
   ctx.textAlign = 'left';
 }
 

@@ -10,6 +10,8 @@ import { useGameStore } from '@/store/gameStore';
 import {
   COLORS,
   MAX_OFFSET,
+  MAX_PART_PRICE,
+  MIN_PAID_PRICE,
   PART_ANCHOR,
   PART_CATEGORIES,
   PART_LABEL,
@@ -17,12 +19,13 @@ import {
   drawAvatar,
   drawPartThumbnail,
   offsetOf,
+  partPrice,
   withOffset,
 } from '@/game/avatars';
 import type { PartCategory } from '@/game/avatars';
 import type { PartOption } from '@/game/avatarParts';
 import type { Customization, PartOffset } from '@/types/game';
-import { ITEM_PRICE, SHOP_CATEGORY, useLocalProfile } from '@/hooks/useLocalProfile';
+import { SHOP_CATEGORY, useLocalProfile } from '@/hooks/useLocalProfile';
 import '@/styles/game.css';
 
 const THUMB = 52;
@@ -46,7 +49,7 @@ function hasPart(slot: PartCategory, index: number): boolean {
 
 /** 슬롯 썸네일 여백 — 머리 액세서리는 크게 준다. */
 function thumbPad(slot: PartCategory): number {
-  return slot === 'detail2' ? 0.24 : 0.08;
+  return slot === 'detail2' ? 0.2 : 0.08;
 }
 
 interface StoreSlice {
@@ -88,8 +91,9 @@ function PartThumb({ part, slot, color, selected, price, tooPoor, onSelect }: Th
     drawPartThumbnail(ctx, part, THUMB, color, thumbPad(slot));
   }, [part, color, slot]);
 
+  // 등급(tier)은 테두리/가격표 색으로 드러난다 — 뒤로 갈수록 화려하고 비싸다.
   const className =
-    `ae-item${selected ? ' selected' : ''}${locked ? ' locked' : ''}` +
+    `ae-item t${part.tier}${selected ? ' selected' : ''}${locked ? ' locked' : ''}` +
     `${locked && tooPoor ? ' too-poor' : ''}`;
 
   return (
@@ -97,8 +101,8 @@ function PartThumb({ part, slot, color, selected, price, tooPoor, onSelect }: Th
       type="button"
       className={className}
       onClick={onSelect}
-      title={locked ? `${part.label} — ${price}코인` : part.label}
-      aria-label={locked ? `${part.label} (${price}코인)` : part.label}
+      title={locked ? `${part.label} — ${price} coins` : part.label}
+      aria-label={locked ? `${part.label} (${price} coins)` : part.label}
       aria-pressed={selected}
     >
       <canvas ref={ref} width={THUMB * 2} height={THUMB * 2} />
@@ -178,9 +182,9 @@ function DragHandle({ slot, offset, onMove, onReset }: HandleProps): JSX.Element
       role="button"
       tabIndex={0}
       aria-label={
-        `${PART_LABEL[slot]} 위치 — 드래그하거나 방향키로 옮기세요 ` +
-        `(가로 ${Math.round((offset.x / MAX_OFFSET) * 100)}%, ` +
-        `세로 ${Math.round((offset.y / MAX_OFFSET) * 100)}%)`
+        `${PART_LABEL[slot]} position — drag it or use the arrow keys ` +
+        `(x ${Math.round((offset.x / MAX_OFFSET) * 100)}%, ` +
+        `y ${Math.round((offset.y / MAX_OFFSET) * 100)}%)`
       }
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -196,7 +200,7 @@ function DragHandle({ slot, offset, onMove, onReset }: HandleProps): JSX.Element
         <button
           type="button"
           className="ae-handle-reset"
-          title="위치 되돌리기"
+          title="Reset position"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onReset}
         >
@@ -228,7 +232,7 @@ function MiniPreview({ value, size }: { value: Customization; size: number }): J
       width={size * 2}
       height={size * 2}
       style={{ width: size, height: size }}
-      aria-label="캐릭터 미리보기"
+      aria-label="Character preview"
     />
   );
 }
@@ -284,12 +288,13 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
     (category: PartCategory, index: number) => {
       const shopKey = SHOP_CATEGORY[category] ?? category;
       if (!isOwned(shopKey, index)) {
-        if (!buyItem(shopKey, index, ITEM_PRICE)) {
-          setNotice({ text: `코인이 부족합니다. ${ITEM_PRICE}코인이 필요해요. (보유 ${coins})` });
+        const price = partPrice(category, index);
+        if (!buyItem(shopKey, index, price)) {
+          setNotice({ text: `Not enough coins — ${price} needed. (you have ${coins})` });
           return;
         }
         setNotice({
-          text: `${PART_TABLE[category][index]?.label ?? '아이템'} 구매 완료! -${ITEM_PRICE}코인`,
+          text: `${PART_TABLE[category][index]?.label ?? 'Item'} unlocked! -${price} coins`,
         });
       } else {
         setNotice(null);
@@ -331,18 +336,18 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
       <div className="ae-launcher">
         <MiniPreview value={value} size={MINI} />
         <div className="ae-launcher-text">
-          <b>내 캐릭터</b>
-          <span>눈 · 입 · 디테일 · 액세서리를 고르고 파츠 위치까지 옮길 수 있어요.</span>
+          <b>My character</b>
+          <span>Pick eyes, mouth, details and accessories — and drag them where you want.</span>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>
-          꾸미기
+          CUSTOMIZE
         </button>
       </div>
     );
   }
 
   return (
-    <div className="ae-modal" role="dialog" aria-modal="true" aria-label="캐릭터 꾸미기">
+    <div className="ae-modal" role="dialog" aria-modal="true" aria-label="Customize character">
       <div className="ae-modal-body">
         {/* ── 왼쪽: 캐릭터 스테이지 ─────────────────────────── */}
         <div className="ae-stage-col">
@@ -350,9 +355,9 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
             <span className="ae-move-icon">🖱</span>
             <span className="ae-move-arrow">↕</span>
             <span className="ae-move-text">
-              드래그해서
+              Drag to
               <br />
-              파츠 이동
+              move a part
             </span>
           </div>
 
@@ -362,7 +367,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
               width={STAGE * 2}
               height={STAGE * 2}
               style={{ width: STAGE, height: STAGE }}
-              aria-label="캐릭터 미리보기"
+              aria-label="Character preview"
             />
             {hasPart(tab, activeIndex) ? (
               <DragHandle
@@ -374,7 +379,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
             ) : null}
           </div>
 
-          <div className="ae-colors" role="group" aria-label="몸통 색상">
+          <div className="ae-colors" role="group" aria-label="Body color">
             {COLORS.map((c) => (
               <button
                 type="button"
@@ -396,7 +401,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
 
         {/* ── 오른쪽: 탭 + 파츠 그리드 ──────────────────────── */}
         <div className="ae-picker">
-          <div className="ae-tabs" role="tablist" aria-label="파츠 종류">
+          <div className="ae-tabs" role="tablist" aria-label="Part type">
             {PART_CATEGORIES.map((key) => (
               <button
                 type="button"
@@ -418,6 +423,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
             {parts.map((part, i) => {
               const shopKey = SHOP_CATEGORY[tab] ?? tab;
               const owned = isOwned(shopKey, i);
+              const price = partPrice(tab, i);
               return (
                 <Thumb
                   key={part.name}
@@ -425,8 +431,8 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
                   slot={tab}
                   color={value.color}
                   selected={activeIndex === i}
-                  price={owned ? null : ITEM_PRICE}
-                  tooPoor={!owned && coins < ITEM_PRICE}
+                  price={owned ? null : price}
+                  tooPoor={!owned && coins < price}
                   onSelect={() => selectPart(tab, i)}
                 />
               );
@@ -435,7 +441,8 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
 
           <div className="ae-foot">
             <span className="ae-shop-hint">
-              🔒 잠긴 항목 <b>{ITEM_PRICE}코인</b> · 보유 💰 {coins}
+              🔒 Fancier parts cost more — <b>{MIN_PAID_PRICE}–{MAX_PART_PRICE} coins</b> · you have
+              💰 {coins}
             </span>
             {notice ? <span className="ae-notice">{notice.text}</span> : null}
           </div>

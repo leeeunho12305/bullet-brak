@@ -40,7 +40,7 @@ CLOSE_FULL = 4409
 
 
 @router.websocket("/ws/{code}")
-async def game_ws(ws: WebSocket, code: str, nickname: str = Query(default="익명")) -> None:
+async def game_ws(ws: WebSocket, code: str, nickname: str = Query(default="Guest")) -> None:
     await ws.accept()
     player_id: str | None = None
     try:
@@ -50,10 +50,10 @@ async def game_ws(ws: WebSocket, code: str, nickname: str = Query(default="익�
 
         room = room_manager.get(code)
         if room is None:
-            await _fail(ws, "존재하지 않는 방입니다.", CLOSE_NOT_FOUND)
+            await _fail(ws, "Room not found.", CLOSE_NOT_FOUND)
             return
         if room_manager.is_full(room):
-            await _fail(ws, "방이 가득 찼습니다.", CLOSE_FULL)
+            await _fail(ws, "That room is full.", CLOSE_FULL)
             return
 
         player = _create_player(room, join, nickname)
@@ -84,7 +84,7 @@ async def _await_join(ws: WebSocket) -> JoinMsg | None:
     raw = await _receive_json(ws)
     parsed = parse_client_message(raw) if raw is not None else None
     if parsed is None or parsed[0] != "join":
-        await _fail(ws, "첫 메시지는 join 이어야 합니다.", CLOSE_BAD_REQUEST)
+        await _fail(ws, "The first message must be join.", CLOSE_BAD_REQUEST)
         return None
     payload = parsed[1]
     return payload if isinstance(payload, JoinMsg) else None
@@ -92,8 +92,8 @@ async def _await_join(ws: WebSocket) -> JoinMsg | None:
 
 def _create_player(room: Room, join: JoinMsg, query_nickname: str) -> Player:
     nick = join.nickname
-    if nick == "익명":
-        nick = (query_nickname or "").strip()[:16] or "익명"
+    if nick == "Guest":
+        nick = (query_nickname or "").strip()[:16] or "Guest"
 
     custom = join.customization.model_dump()
     custom["color"] = _pick_color(room, custom.get("color"))
@@ -209,7 +209,7 @@ async def _do_rematch(room: Room, player: Player, accept: bool) -> None:
     if result in ("ignored", "pending"):
         return
 
-    note = "리매치!" if result == "start" else "리매치를 거절했습니다."
+    note = "Rematch!" if result == "start" else "declined the rematch."
     message = chat_service.push(room, player.nickname, note)
     if message:
         await hub.broadcast(room.code, message)
@@ -259,7 +259,7 @@ async def _cleanup(code: str, player_id: str | None) -> None:
     room = room_manager.get(code)
     if room is None:
         return
-    room.players.pop(player_id, None)
+    left = room.players.pop(player_id, None)
     room.scores.pop(player_id, None)
     room.round_wins.pop(player_id, None)
     room.rematch_votes.discard(player_id)
@@ -274,6 +274,18 @@ async def _cleanup(code: str, player_id: str | None) -> None:
 
     if room.mode == "pvp" and len(room.players) < 2 and room.phase != "waiting":
         engine.reset_match(room)
+
+    # 남은 사람에게 "누가 나갔는지"를 먼저 알린다. room_state 가 화면을 대기실로 되돌리기
+    # 때문에, 순서가 뒤집히면 알림이 화면 전환에 묻힌다.
+    await hub.broadcast(
+        code,
+        {
+            "type": "player_left",
+            "player_id": player_id,
+            "nickname": (left.nickname if left else "") or "Guest",
+            "players_left": len(room.players),
+        },
+    )
     await hub.broadcast(code, {"type": "room_state", "room": room_state(room)})
 
 

@@ -114,7 +114,7 @@ class CardInfoResponse(BaseModel):
 class JoinMsg(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    nickname: str = "익명"
+    nickname: str = "Guest"
     customization: Customization = Field(default_factory=Customization)
     coins: int = 0
 
@@ -122,7 +122,7 @@ class JoinMsg(BaseModel):
     @classmethod
     def _trim_nick(cls, v: str) -> str:
         v = (v or "").strip()
-        return v[:16] if v else "익명"
+        return v[:16] if v else "Guest"
 
     @field_validator("coins")
     @classmethod

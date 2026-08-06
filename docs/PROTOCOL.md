@@ -61,14 +61,24 @@
 | `state` | `Snapshot` (60Hz) |
 | `chat` | `{"message":ChatMessage}` |
 | `event` | `{"event":"round_over"\|"match_over"\|"card_phase"\|"game_started","winner_id":str\|null,"loser_id":str\|null}` |
+| `player_left` | `{"player_id":str,"nickname":str,"players_left":int}` — 남은 사람에게만. 뒤이어 오는 `room_state` 보다 **먼저** 보낸다 |
 | `error` | `{"message":str}` |
+
+`player_left`: 2인 방에서 한 명이 나가면 서버가 매치를 접고 `phase` 를 `waiting` 으로 되돌린다.
+남은 사람 입장에서는 화면이 갑자기 대기실로 바뀌므로, 그 이유를 알리는 메시지가 반드시 필요하다.
 
 ---
 
 ## 3. 데이터 구조 (JSON)
 
 ```jsonc
-Customization = { "eye": 0, "mouth": 0, "detail": 0, "color": "#ff6b6b" }
+Customization = {
+  "eye": 0, "mouth": 0, "detail": 0, "detail2": 0,   // 파츠 index (편집기 탭 4개)
+  "color": "#ff6b6b",
+  "offsets": { "eye": {"x": 0.05, "y": -0.02} }      // 파츠 위치 보정(몸통 대비 비율, ±0.32)
+}
+// offsets 는 0이 아닌 슬롯만 실린다. 모르는 슬롯/범위 밖 값은 서버가 버린다.
+// detail  = DETAIL1(얼굴 디테일), detail2 = DETAIL2(머리 위 액세서리)
 
 MapTheme = { "bg": "#0b0d17", "grid": "rgba(...)", "platform": "#1b2438", "edge": "rgba(...)" }
 

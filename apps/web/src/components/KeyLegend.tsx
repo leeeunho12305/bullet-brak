@@ -8,19 +8,19 @@ interface Entry {
 }
 
 const ENTRIES: Entry[] = [
-  { keys: ['A', 'D'], label: '이동' },
-  { keys: ['W', 'Space'], label: '점프' },
-  { keys: ['마우스'], label: '조준' },
-  { keys: ['좌클릭'], label: '사격' },
-  { keys: ['좌클릭 길게', 'E'], label: '강공격' },
-  { keys: ['우클릭', 'Shift'], label: '가드' },
-  { keys: ['Enter'], label: '채팅' },
-  { keys: ['Tab'], label: '정보 보기', highlight: true },
+  { keys: ['A', 'D'], label: 'Move' },
+  { keys: ['W', 'Space'], label: 'Jump' },
+  { keys: ['Mouse'], label: 'Aim' },
+  { keys: ['L-Click'], label: 'Shoot' },
+  { keys: ['Hold L-Click', 'E'], label: 'Heavy shot' },
+  { keys: ['R-Click', 'Shift'], label: 'Block' },
+  { keys: ['Enter'], label: 'Chat' },
+  { keys: ['Tab'], label: 'Stats', highlight: true },
 ];
 
 export default function KeyLegend(): JSX.Element {
   return (
-    <div className="key-legend" aria-label="조작키 안내">
+    <div className="key-legend" aria-label="Controls">
       {ENTRIES.map((entry) => (
         <span
           key={entry.label}

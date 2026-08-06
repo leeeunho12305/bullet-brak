@@ -7,11 +7,13 @@ import {
   DETAILS2,
   EYES,
   MOUTHS,
+  TIER_PRICE,
+  priceOfPart,
   type PartOption,
 } from './avatarParts';
 
-export { COLORS, DEFAULT_COLOR, DETAILS, DETAILS2, EYES, MOUTHS };
-export type { ColorOption, PartOption, PartDraw } from './avatarParts';
+export { COLORS, DEFAULT_COLOR, DETAILS, DETAILS2, EYES, MOUTHS, TIER_PRICE };
+export type { ColorOption, PartOption, PartDraw, PartTier } from './avatarParts';
 
 /** 편집기 탭 = 파츠 슬롯. types/game 의 PartSlot 과 같은 값이다. */
 export type PartCategory = PartSlot;
@@ -47,6 +49,20 @@ export const PART_ANCHOR: Record<PartCategory, { x: number; y: number; w: number
 
 /** 파츠를 몸통 밖으로 완전히 밀어내지 못하게 하는 한계(박스 대비 비율) */
 export const MAX_OFFSET = 0.32;
+
+/** 상점 가격(코인). 0이면 기본 제공 파츠다. 없는 인덱스는 0으로 본다. */
+export function partPrice(slot: PartCategory, index: number): number {
+  return priceOfPart(PART_TABLE[slot]?.[index]);
+}
+
+/** 파츠 등급(0~4). 편집기가 가격표 색을 정하는 데 쓴다. */
+export function partTier(slot: PartCategory, index: number): number {
+  return PART_TABLE[slot]?.[index]?.tier ?? 0;
+}
+
+/** 가장 싼 유료 등급 / 가장 비싼 등급 — 안내 문구용 */
+export const MIN_PAID_PRICE = TIER_PRICE[1];
+export const MAX_PART_PRICE = TIER_PRICE[TIER_PRICE.length - 1];
 
 export const DEFAULT_CUSTOMIZATION: Customization = {
   eye: 0,

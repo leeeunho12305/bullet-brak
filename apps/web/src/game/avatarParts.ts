@@ -14,9 +14,20 @@ export type PartDraw = (
   h: number,
 ) => void;
 
+/**
+ * 파츠 등급. 0 = 기본(무료), 4 = 가장 화려하고 비싼 것.
+ * 카탈로그는 이 값으로 정렬되므로 "뒤로 갈수록 예쁘고 비싸다" 가 자동으로 성립한다.
+ */
+export type PartTier = 0 | 1 | 2 | 3 | 4;
+
+/** 등급별 가격(코인). 0등급은 무료다. */
+export const TIER_PRICE: readonly number[] = [0, 30, 80, 150, 250];
+
 export interface PartOption {
   /** 내부 식별용 이름 (React key 로도 쓰므로 배열 안에서 고유해야 한다) */
   name: string;
+  /** 등급(= 가격). 정렬 기준이기도 하다. */
+  tier: PartTier;
   /** UI 표기용 한국어 라벨 */
   label: string;
   draw: PartDraw;
@@ -184,18 +195,22 @@ type EyeDraw = (
 interface EyeShape {
   name: string;
   label: string;
+  /** 눈썹 조합으로 만들어진 파츠도 이 등급을 그대로 물려받는다. */
+  tier: PartTier;
   draw: EyeDraw;
 }
 
 const EYE_SHAPES: EyeShape[] = [
   {
     name: 'Round',
-    label: '동글',
+    tier: 0,
+    label: 'Round',
     draw: (ctx, cx, cy, u) => disc(ctx, cx, cy, u * 0.085),
   },
   {
     name: 'Big',
-    label: '큰눈',
+    tier: 2,
+    label: 'Big',
     draw: (ctx, cx, cy, u) => {
       disc(ctx, cx, cy, u * 0.13, WHITE);
       ring(ctx, cx, cy, u * 0.13, lw(u) * 0.6);
@@ -205,7 +220,8 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Wide',
-    label: '왕눈',
+    tier: 2,
+    label: 'Wide',
     draw: (ctx, cx, cy, u, side) => {
       ellipse(ctx, cx, cy, u * 0.11, u * 0.145, WHITE);
       ring(ctx, cx, cy, u * 0.11, lw(u) * 0.5);
@@ -214,7 +230,8 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Sleepy',
-    label: '졸림',
+    tier: 1,
+    label: 'Sleepy',
     draw: (ctx, cx, cy, u) => {
       curve(ctx, cx, cy, u * 0.1, Math.PI, Math.PI * 2, lw(u));
       path(ctx, [[cx - u * 0.1, cy], [cx + u * 0.1, cy]], lw(u) * 0.8);
@@ -222,7 +239,8 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Wink',
-    label: '윙크',
+    tier: 2,
+    label: 'Wink',
     draw: (ctx, cx, cy, u, side) => {
       if (side < 0) {
         curve(ctx, cx, cy + u * 0.05, u * 0.1, Math.PI * 1.15, Math.PI * 1.85, lw(u));
@@ -233,7 +251,8 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Sparkle',
-    label: '반짝',
+    tier: 4,
+    label: 'Sparkle',
     draw: (ctx, cx, cy, u) => {
       star(ctx, cx, cy, u * 0.135, '#ffd43b');
       star(ctx, cx, cy, u * 0.075, WHITE, 4);
@@ -241,12 +260,14 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Heart',
-    label: '하트',
+    tier: 4,
+    label: 'Heart',
     draw: (ctx, cx, cy, u) => heart(ctx, cx, cy, u * 0.1, '#ff4a7d'),
   },
   {
     name: 'Dizzy',
-    label: '뱅글',
+    tier: 3,
+    label: 'Dizzy',
     draw: (ctx, cx, cy, u) => {
       ctx.strokeStyle = INK;
       ctx.lineWidth = lw(u) * 0.75;
@@ -264,7 +285,8 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Glasses',
-    label: '안경',
+    tier: 3,
+    label: 'Glasses',
     draw: (ctx, cx, cy, u, side) => {
       disc(ctx, cx, cy, u * 0.07);
       ring(ctx, cx, cy, u * 0.125, lw(u) * 0.7, '#2b2f3d');
@@ -278,7 +300,8 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Monocle',
-    label: '외알안경',
+    tier: 3,
+    label: 'Monocle',
     draw: (ctx, cx, cy, u, side) => {
       disc(ctx, cx, cy, u * 0.075);
       if (side > 0) {
@@ -289,12 +312,14 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Oval',
-    label: '세로눈',
+    tier: 1,
+    label: 'Oval',
     draw: (ctx, cx, cy, u) => ellipse(ctx, cx, cy, u * 0.055, u * 0.12),
   },
   {
     name: 'Glossy',
-    label: '촉촉',
+    tier: 2,
+    label: 'Glossy',
     draw: (ctx, cx, cy, u) => {
       disc(ctx, cx, cy, u * 0.115);
       disc(ctx, cx - u * 0.04, cy - u * 0.045, u * 0.04, WHITE);
@@ -303,7 +328,8 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Tired',
-    label: '다크서클',
+    tier: 1,
+    label: 'Tired',
     draw: (ctx, cx, cy, u) => {
       disc(ctx, cx, cy, u * 0.07);
       curve(ctx, cx, cy + u * 0.02, u * 0.1, Math.PI * 0.15, Math.PI * 0.85, lw(u) * 0.6, '#5b6072');
@@ -312,7 +338,8 @@ const EYE_SHAPES: EyeShape[] = [
   },
   {
     name: 'Slit',
-    label: '실눈',
+    tier: 0,
+    label: 'Slit',
     draw: (ctx, cx, cy, u, side) => {
       path(
         ctx,
@@ -337,7 +364,7 @@ const BROWS: Brow[] = [
   { name: '', label: '', draw: null },
   {
     name: 'Angry',
-    label: ' · 화남',
+    label: ' - Angry',
     draw: (ctx, cx, cy, u, side) => {
       path(
         ctx,
@@ -351,7 +378,7 @@ const BROWS: Brow[] = [
   },
   {
     name: 'Sad',
-    label: ' · 슬픔',
+    label: ' - Sad',
     draw: (ctx, cx, cy, u, side) => {
       path(
         ctx,
@@ -383,7 +410,8 @@ function eyePair(shape: EyeShape, brow: Brow): PartDraw {
 const LEGACY_EYES: PartOption[] = [
   {
     name: 'Normal',
-    label: '기본',
+    tier: 0,
+    label: 'Normal',
     draw: (ctx, x, y, w, h) => {
       disc(ctx, x + w * 0.3, y + h * 0.45, w * 0.08);
       disc(ctx, x + w * 0.7, y + h * 0.45, w * 0.08);
@@ -391,7 +419,8 @@ const LEGACY_EYES: PartOption[] = [
   },
   {
     name: 'Angry',
-    label: '분노',
+    tier: 0,
+    label: 'Angry',
     draw: (ctx, x, y, w, h) => {
       path(ctx, [[x + w * 0.2, y + h * 0.35], [x + w * 0.4, y + h * 0.45]], lw(w));
       path(ctx, [[x + w * 0.8, y + h * 0.35], [x + w * 0.6, y + h * 0.45]], lw(w));
@@ -401,7 +430,8 @@ const LEGACY_EYES: PartOption[] = [
   },
   {
     name: 'Cute',
-    label: '귀염',
+    tier: 1,
+    label: 'Cute',
     draw: (ctx, x, y, w, h) => {
       disc(ctx, x + w * 0.3, y + h * 0.45, w * 0.1);
       disc(ctx, x + w * 0.7, y + h * 0.45, w * 0.1);
@@ -411,7 +441,8 @@ const LEGACY_EYES: PartOption[] = [
   },
   {
     name: 'Dead',
-    label: 'X눈',
+    tier: 1,
+    label: 'Dead',
     draw: (ctx, x, y, w, h) => {
       path(ctx, [[x + w * 0.2, y + h * 0.4], [x + w * 0.4, y + h * 0.5]], lw(w));
       path(ctx, [[x + w * 0.4, y + h * 0.4], [x + w * 0.2, y + h * 0.5]], lw(w));
@@ -421,7 +452,8 @@ const LEGACY_EYES: PartOption[] = [
   },
   {
     name: 'Cool',
-    label: '선글',
+    tier: 2,
+    label: 'Cool',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = INK;
       ctx.fillRect(x + w * 0.15, y + h * 0.4, w * 0.7, h * 0.1);
@@ -433,7 +465,8 @@ const LEGACY_EYES: PartOption[] = [
 const SPECIAL_EYES: PartOption[] = [
   {
     name: 'Cyclops',
-    label: '외눈',
+    tier: 3,
+    label: 'Cyclops',
     draw: (ctx, x, y, w, h) => {
       disc(ctx, x + w * 0.5, y + h * 0.44, w * 0.19, WHITE);
       ring(ctx, x + w * 0.5, y + h * 0.44, w * 0.19, lw(w) * 0.6);
@@ -443,7 +476,8 @@ const SPECIAL_EYES: PartOption[] = [
   },
   {
     name: 'ThirdEye',
-    label: '세눈',
+    tier: 4,
+    label: 'Third eye',
     draw: (ctx, x, y, w, h) => {
       disc(ctx, x + w * 0.3, y + h * 0.48, w * 0.075);
       disc(ctx, x + w * 0.7, y + h * 0.48, w * 0.075);
@@ -457,10 +491,11 @@ const SPECIAL_EYES: PartOption[] = [
 export const EYES: PartOption[] = [
   ...LEGACY_EYES,
   ...SPECIAL_EYES,
-  ...BROWS.flatMap((brow) =>
-    EYE_SHAPES.map((shape) => ({
+  ...EYE_SHAPES.flatMap((shape) =>
+    BROWS.map((brow) => ({
       name: `${shape.name}${brow.name}`,
       label: `${shape.label}${brow.label}`,
+      tier: shape.tier,
       draw: eyePair(shape, brow),
     })),
   ),
@@ -473,24 +508,28 @@ export const EYES: PartOption[] = [
 export const MOUTHS: PartOption[] = [
   {
     name: 'Smile',
-    label: '미소',
+    tier: 0,
+    label: 'Smile',
     draw: (ctx, x, y, w, h) =>
       curve(ctx, x + w * 0.5, y + h * 0.6, w * 0.2, 0.1 * Math.PI, 0.9 * Math.PI, lw(w)),
   },
   {
     name: 'Flat',
-    label: '무표정',
+    tier: 0,
+    label: 'Flat',
     draw: (ctx, x, y, w, h) =>
       path(ctx, [[x + w * 0.35, y + h * 0.75], [x + w * 0.65, y + h * 0.75]], lw(w)),
   },
   {
     name: 'O',
-    label: '동그라미',
+    tier: 0,
+    label: 'O',
     draw: (ctx, x, y, w, h) => ring(ctx, x + w * 0.5, y + h * 0.75, w * 0.08, lw(w)),
   },
   {
     name: 'Cat',
-    label: '고양이',
+    tier: 1,
+    label: 'Cat',
     draw: (ctx, x, y, w, h) => {
       curve(ctx, x + w * 0.4, y + h * 0.7, w * 0.1, 0, Math.PI, lw(w));
       curve(ctx, x + w * 0.6, y + h * 0.7, w * 0.1, 0, Math.PI, lw(w));
@@ -498,7 +537,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Grin',
-    label: '이빨',
+    tier: 1,
+    label: 'Grin',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = WHITE;
       ctx.strokeStyle = INK;
@@ -512,13 +552,15 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Frown',
-    label: '시무룩',
+    tier: 0,
+    label: 'Frown',
     draw: (ctx, x, y, w, h) =>
       curve(ctx, x + w * 0.5, y + h * 0.85, w * 0.18, 1.15 * Math.PI, 1.85 * Math.PI, lw(w)),
   },
   {
     name: 'BigSmile',
-    label: '활짝',
+    tier: 2,
+    label: 'Big smile',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = INK;
       ctx.beginPath();
@@ -535,7 +577,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Shout',
-    label: '외침',
+    tier: 2,
+    label: 'Shout',
     draw: (ctx, x, y, w, h) => {
       ellipse(ctx, x + w * 0.5, y + h * 0.74, w * 0.13, h * 0.17);
       ellipse(ctx, x + w * 0.5, y + h * 0.84, w * 0.08, h * 0.06, '#ff6b8b');
@@ -543,7 +586,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Wavy',
-    label: '삐죽',
+    tier: 1,
+    label: 'Pout',
     draw: (ctx, x, y, w, h) => {
       const yy = y + h * 0.74;
       path(
@@ -561,7 +605,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Tongue',
-    label: '메롱',
+    tier: 2,
+    label: 'Tongue',
     draw: (ctx, x, y, w, h) => {
       curve(ctx, x + w * 0.5, y + h * 0.62, w * 0.18, 0.12 * Math.PI, 0.88 * Math.PI, lw(w));
       ellipse(ctx, x + w * 0.56, y + h * 0.85, w * 0.07, h * 0.07, '#ff6b8b');
@@ -569,7 +614,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Fang',
-    label: '덧니',
+    tier: 2,
+    label: 'Snaggletooth',
     draw: (ctx, x, y, w, h) => {
       curve(ctx, x + w * 0.5, y + h * 0.63, w * 0.18, 0.1 * Math.PI, 0.9 * Math.PI, lw(w));
       poly(
@@ -585,7 +631,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Vampire',
-    label: '송곳니',
+    tier: 3,
+    label: 'Fangs',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = INK;
       ctx.beginPath();
@@ -614,7 +661,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Smirk',
-    label: '썩소',
+    tier: 1,
+    label: 'Smirk',
     draw: (ctx, x, y, w, h) => {
       ctx.strokeStyle = INK;
       ctx.lineWidth = lw(w);
@@ -627,12 +675,14 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Gasp',
-    label: '헉',
+    tier: 1,
+    label: 'Gasp',
     draw: (ctx, x, y, w, h) => ellipse(ctx, x + w * 0.5, y + h * 0.76, w * 0.06, h * 0.08),
   },
   {
     name: 'Teeth',
-    label: '이빨악물기',
+    tier: 3,
+    label: 'Gritted',
     draw: (ctx, x, y, w, h) => {
       const bx = x + w * 0.32;
       const by = y + h * 0.68;
@@ -651,7 +701,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Lips',
-    label: '입술',
+    tier: 4,
+    label: 'Lips',
     draw: (ctx, x, y, w, h) => {
       const cx = x + w * 0.5;
       const cy = y + h * 0.76;
@@ -666,12 +717,14 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Tiny',
-    label: '점입',
+    tier: 0,
+    label: 'Dot',
     draw: (ctx, x, y, w, h) => disc(ctx, x + w * 0.5, y + h * 0.76, w * 0.035),
   },
   {
     name: 'Beak',
-    label: '부리',
+    tier: 3,
+    label: 'Beak',
     draw: (ctx, x, y, w, h) => {
       poly(
         ctx,
@@ -687,7 +740,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Zigzag',
-    label: '지그재그',
+    tier: 2,
+    label: 'Zigzag',
     draw: (ctx, x, y, w, h) => {
       const yy = y + h * 0.75;
       path(
@@ -706,7 +760,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Stitch',
-    label: '꿰맨입',
+    tier: 3,
+    label: 'Stitched',
     draw: (ctx, x, y, w, h) => {
       const yy = y + h * 0.76;
       path(ctx, [[x + w * 0.3, yy], [x + w * 0.7, yy]], lw(w) * 0.7);
@@ -718,7 +773,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Drool',
-    label: '침',
+    tier: 3,
+    label: 'Drool',
     draw: (ctx, x, y, w, h) => {
       curve(ctx, x + w * 0.5, y + h * 0.63, w * 0.17, 0.12 * Math.PI, 0.88 * Math.PI, lw(w));
       drop(ctx, x + w * 0.63, y + h * 0.86, w * 0.035, '#7fd7ff');
@@ -726,7 +782,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Whistle',
-    label: '휘파람',
+    tier: 3,
+    label: 'Whistle',
     draw: (ctx, x, y, w, h) => {
       ring(ctx, x + w * 0.42, y + h * 0.76, w * 0.055, lw(w) * 0.8);
       path(ctx, [[x + w * 0.55, y + h * 0.72], [x + w * 0.66, y + h * 0.68]], lw(w) * 0.5, '#8b93b8');
@@ -735,7 +792,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Tight',
-    label: '앙다문',
+    tier: 1,
+    label: 'Clenched',
     draw: (ctx, x, y, w, h) => {
       const yy = y + h * 0.76;
       path(
@@ -752,7 +810,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'OpenWide',
-    label: '입쩍',
+    tier: 2,
+    label: 'Wide open',
     draw: (ctx, x, y, w, h) => {
       ellipse(ctx, x + w * 0.5, y + h * 0.75, w * 0.16, h * 0.13);
       ellipse(ctx, x + w * 0.5, y + h * 0.83, w * 0.1, h * 0.05, '#ff6b8b');
@@ -760,7 +819,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Kiss',
-    label: '뽀뽀',
+    tier: 4,
+    label: 'Kiss',
     draw: (ctx, x, y, w, h) => {
       ring(ctx, x + w * 0.5, y + h * 0.77, w * 0.05, lw(w) * 0.9, '#ff5c8a');
       heart(ctx, x + w * 0.68, y + h * 0.66, w * 0.05, 'rgba(255, 92, 138, 0.85)');
@@ -768,7 +828,8 @@ export const MOUTHS: PartOption[] = [
   },
   {
     name: 'Pixel',
-    label: '픽셀',
+    tier: 2,
+    label: 'Pixel',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = INK;
       const s = w * 0.055;
@@ -786,10 +847,11 @@ export const MOUTHS: PartOption[] = [
 // --------------------------------------------------------------------------
 
 export const DETAILS: PartOption[] = [
-  { name: 'None', label: '없음', draw: () => {} },
+  { name: 'None', label: 'None', tier: 0, draw: () => {} },
   {
     name: 'Blush',
-    label: '홍조',
+    tier: 0,
+    label: 'Blush',
     draw: (ctx, x, y, w, h) => {
       disc(ctx, x + w * 0.25, y + h * 0.6, w * 0.08, 'rgba(255, 120, 160, 0.6)');
       disc(ctx, x + w * 0.75, y + h * 0.6, w * 0.08, 'rgba(255, 120, 160, 0.6)');
@@ -797,7 +859,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Bow',
-    label: '리본',
+    tier: 3,
+    label: 'Ribbon',
     draw: (ctx, x, y, w, h) => {
       poly(
         ctx,
@@ -813,7 +876,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Hat',
-    label: '모자',
+    tier: 3,
+    label: 'Hat',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = '#333';
       ctx.fillRect(x + w * 0.2, y, w * 0.6, h * 0.15);
@@ -822,7 +886,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Mustache',
-    label: '콧수염',
+    tier: 2,
+    label: 'Moustache',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = '#222';
       ctx.beginPath();
@@ -835,7 +900,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Freckles',
-    label: '주근깨',
+    tier: 1,
+    label: 'Freckles',
     draw: (ctx, x, y, w, h) => {
       const c = 'rgba(180, 100, 60, 0.75)';
       [
@@ -850,12 +916,14 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Tear',
-    label: '눈물',
+    tier: 1,
+    label: 'Tear',
     draw: (ctx, x, y, w, h) => drop(ctx, x + w * 0.3, y + h * 0.62, w * 0.05, 'rgba(120, 200, 255, 0.9)'),
   },
   {
     name: 'Tears',
-    label: '펑펑',
+    tier: 2,
+    label: 'Sobbing',
     draw: (ctx, x, y, w, h) => {
       drop(ctx, x + w * 0.28, y + h * 0.63, w * 0.055, 'rgba(120, 200, 255, 0.9)');
       drop(ctx, x + w * 0.72, y + h * 0.63, w * 0.055, 'rgba(120, 200, 255, 0.9)');
@@ -863,7 +931,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Scar',
-    label: '흉터',
+    tier: 2,
+    label: 'Scar',
     draw: (ctx, x, y, w, h) => {
       path(ctx, [[x + w * 0.68, y + h * 0.24], [x + w * 0.82, y + h * 0.46]], lw(w) * 0.7, '#c04a4a');
       path(ctx, [[x + w * 0.68, y + h * 0.38], [x + w * 0.82, y + h * 0.3]], lw(w) * 0.7, '#c04a4a');
@@ -871,7 +940,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Bandaid',
-    label: '반창고',
+    tier: 2,
+    label: 'Bandage',
     draw: (ctx, x, y, w, h) => {
       ctx.save();
       ctx.translate(x + w * 0.72, y + h * 0.3);
@@ -887,7 +957,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Beard',
-    label: '턱수염',
+    tier: 2,
+    label: 'Beard',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = '#3a2f28';
       ctx.beginPath();
@@ -899,7 +970,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Sweat',
-    label: '식은땀',
+    tier: 1,
+    label: 'Cold sweat',
     draw: (ctx, x, y, w, h) => {
       drop(ctx, x + w * 0.8, y + h * 0.22, w * 0.06, 'rgba(140, 210, 255, 0.95)');
       path(ctx, [[x + w * 0.86, y + h * 0.1], [x + w * 0.9, y + h * 0.18]], lw(w) * 0.5, 'rgba(140, 210, 255, 0.6)');
@@ -907,7 +979,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Eyepatch',
-    label: '안대',
+    tier: 3,
+    label: 'Eyepatch',
     draw: (ctx, x, y, w, h) => {
       path(ctx, [[x + w * 0.1, y + h * 0.3], [x + w * 0.62, y + h * 0.36]], lw(w) * 0.6, '#1b1d26');
       ctx.fillStyle = '#1b1d26';
@@ -918,7 +991,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'BlushLines',
-    label: '홍조선',
+    tier: 1,
+    label: 'Blush lines',
     draw: (ctx, x, y, w, h) => {
       const c = 'rgba(255, 110, 150, 0.85)';
       for (let i = 0; i < 3; i += 1) {
@@ -930,7 +1004,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Nose',
-    label: '코',
+    tier: 0,
+    label: 'Nose',
     draw: (ctx, x, y, w, h) => {
       poly(
         ctx,
@@ -945,7 +1020,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Mask',
-    label: '마스크',
+    tier: 3,
+    label: 'Mask',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = '#e9eef7';
       ctx.beginPath();
@@ -959,7 +1035,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'WarPaint',
-    label: '워페인트',
+    tier: 4,
+    label: 'War paint',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = 'rgba(220, 40, 60, 0.75)';
       ctx.fillRect(x + w * 0.08, y + h * 0.52, w * 0.84, h * 0.05);
@@ -968,7 +1045,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Dimples',
-    label: '보조개',
+    tier: 0,
+    label: 'Dimples',
     draw: (ctx, x, y, w, h) => {
       disc(ctx, x + w * 0.29, y + h * 0.74, w * 0.022, 'rgba(0, 0, 0, 0.4)');
       disc(ctx, x + w * 0.71, y + h * 0.74, w * 0.022, 'rgba(0, 0, 0, 0.4)');
@@ -976,7 +1054,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Stubble',
-    label: '까칠수염',
+    tier: 1,
+    label: 'Stubble',
     draw: (ctx, x, y, w, h) => {
       const c = 'rgba(40, 40, 50, 0.5)';
       for (let i = 0; i < 14; i += 1) {
@@ -988,7 +1067,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Cyber',
-    label: '사이버',
+    tier: 4,
+    label: 'Cyber',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = 'rgba(0, 229, 255, 0.85)';
       ctx.fillRect(x + w * 0.58, y + h * 0.26, w * 0.28, h * 0.03);
@@ -998,7 +1078,8 @@ export const DETAILS: PartOption[] = [
   },
   {
     name: 'Snot',
-    label: '콧물',
+    tier: 1,
+    label: 'Snot',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = 'rgba(150, 220, 120, 0.9)';
       ctx.beginPath();
@@ -1013,10 +1094,11 @@ export const DETAILS: PartOption[] = [
 // --------------------------------------------------------------------------
 
 export const DETAILS2: PartOption[] = [
-  { name: 'None2', label: '없음', draw: () => {} },
+  { name: 'None2', label: 'None', tier: 0, draw: () => {} },
   {
     name: 'Halo',
-    label: '천사링',
+    tier: 4,
+    label: 'Halo',
     draw: (ctx, x, y, w, h) => {
       ctx.strokeStyle = '#ffd43b';
       ctx.lineWidth = lw(w) * 0.8;
@@ -1027,31 +1109,30 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Horns',
-    label: '뿔',
+    tier: 2,
+    label: 'Horns',
     draw: (ctx, x, y, w, h) => {
-      poly(
-        ctx,
-        [
-          [x + w * 0.16, y + h * 0.14],
-          [x + w * 0.3, y + h * 0.02],
-          [x + w * 0.32, y + h * 0.2],
-        ],
-        '#e64a4a',
-      );
-      poly(
-        ctx,
-        [
-          [x + w * 0.84, y + h * 0.14],
-          [x + w * 0.7, y + h * 0.02],
-          [x + w * 0.68, y + h * 0.2],
-        ],
-        '#e64a4a',
-      );
+      // 빨간 몸통 위에서도 보이라고 어두운 자주색 + 옅은 테두리를 쓴다.
+      const horn = (pts: number[][]) => {
+        poly(ctx, pts, '#8f1f3a');
+        path(ctx, pts, lw(w) * 0.4, 'rgba(255, 255, 255, 0.5)', true);
+      };
+      horn([
+        [x + w * 0.14, y + h * 0.16],
+        [x + w * 0.28, y - h * 0.04],
+        [x + w * 0.34, y + h * 0.2],
+      ]);
+      horn([
+        [x + w * 0.86, y + h * 0.16],
+        [x + w * 0.72, y - h * 0.04],
+        [x + w * 0.66, y + h * 0.2],
+      ]);
     },
   },
   {
     name: 'Antenna',
-    label: '더듬이',
+    tier: 0,
+    label: 'Antennae',
     draw: (ctx, x, y, w, h) => {
       path(ctx, [[x + w * 0.5, y + h * 0.06], [x + w * 0.56, y - h * 0.14]], lw(w) * 0.6, '#8b93b8');
       disc(ctx, x + w * 0.57, y - h * 0.17, w * 0.05, '#00e5ff');
@@ -1059,7 +1140,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Crown',
-    label: '왕관',
+    tier: 4,
+    label: 'Crown',
     draw: (ctx, x, y, w, h) => {
       poly(
         ctx,
@@ -1079,7 +1161,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Cap',
-    label: '야구모자',
+    tier: 2,
+    label: 'Cap',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = '#3b7dd8';
       ctx.beginPath();
@@ -1094,10 +1177,11 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Headphones',
-    label: '헤드폰',
+    tier: 3,
+    label: 'Headphones',
     draw: (ctx, x, y, w, h) => {
-      curve(ctx, x + w * 0.5, y + h * 0.5, w * 0.56, Math.PI * 1.15, Math.PI * 1.85, lw(w) * 0.9, '#2f3446');
-      ctx.fillStyle = '#2f3446';
+      curve(ctx, x + w * 0.5, y + h * 0.5, w * 0.56, Math.PI * 1.15, Math.PI * 1.85, lw(w) * 0.9, '#4a5170');
+      ctx.fillStyle = '#4a5170';
       ctx.fillRect(x - w * 0.1, y + h * 0.34, w * 0.16, h * 0.22);
       ctx.fillRect(x + w * 0.94, y + h * 0.34, w * 0.16, h * 0.22);
       ctx.fillStyle = '#00e5ff';
@@ -1107,7 +1191,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Flower',
-    label: '꽃',
+    tier: 3,
+    label: 'Flower',
     draw: (ctx, x, y, w, h) => {
       const cx = x + w * 0.78;
       const cy = y + h * 0.06;
@@ -1120,7 +1205,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Sparkles',
-    label: '반짝임',
+    tier: 4,
+    label: 'Sparkles',
     draw: (ctx, x, y, w, h) => {
       star(ctx, x + w * 0.14, y + h * 0.12, w * 0.07, '#ffd43b', 4);
       star(ctx, x + w * 0.86, y + h * 0.06, w * 0.05, '#fff2a8', 4);
@@ -1129,7 +1215,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'CatEars',
-    label: '고양이귀',
+    tier: 2,
+    label: 'Cat ears',
     draw: (ctx, x, y, w, h) => {
       poly(
         ctx,
@@ -1138,7 +1225,7 @@ export const DETAILS2: PartOption[] = [
           [x + w * 0.2, y - h * 0.08],
           [x + w * 0.42, y + h * 0.08],
         ],
-        '#2f3446',
+        '#4a5170',
       );
       poly(
         ctx,
@@ -1147,7 +1234,7 @@ export const DETAILS2: PartOption[] = [
           [x + w * 0.8, y - h * 0.08],
           [x + w * 0.58, y + h * 0.08],
         ],
-        '#2f3446',
+        '#4a5170',
       );
       poly(
         ctx,
@@ -1171,7 +1258,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'BunnyEars',
-    label: '토끼귀',
+    tier: 2,
+    label: 'Bunny ears',
     draw: (ctx, x, y, w, h) => {
       ellipse(ctx, x + w * 0.36, y - h * 0.1, w * 0.07, h * 0.2, '#f4f6ff', -0.15);
       ellipse(ctx, x + w * 0.64, y - h * 0.1, w * 0.07, h * 0.2, '#f4f6ff', 0.15);
@@ -1181,33 +1269,44 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Propeller',
-    label: '프로펠러',
+    tier: 3,
+    label: 'Propeller',
     draw: (ctx, x, y, w, h) => {
-      ctx.fillStyle = '#ff6b6b';
+      ctx.fillStyle = '#3b7dd8';
       ctx.beginPath();
       ctx.arc(x + w * 0.5, y + h * 0.16, w * 0.26, Math.PI, 0);
       ctx.fill();
-      path(ctx, [[x + w * 0.5, y - h * 0.1], [x + w * 0.5, y + h * 0.02]], lw(w) * 0.5, '#8b93b8');
-      ellipse(ctx, x + w * 0.36, y - h * 0.12, w * 0.13, h * 0.03, '#4dabf7');
-      ellipse(ctx, x + w * 0.64, y - h * 0.12, w * 0.13, h * 0.03, '#4dabf7');
+      path(ctx, [[x + w * 0.5, y - h * 0.1], [x + w * 0.5, y + h * 0.02]], lw(w) * 0.5, '#c9d2e8');
+      ellipse(ctx, x + w * 0.36, y - h * 0.12, w * 0.13, h * 0.03, '#ffd43b');
+      ellipse(ctx, x + w * 0.64, y - h * 0.12, w * 0.13, h * 0.03, '#ffd43b');
     },
   },
   {
     name: 'Bandana',
-    label: '두건',
+    tier: 1,
+    label: 'Bandana',
     draw: (ctx, x, y, w, h) => {
+      // 머리 윗부분을 덮는 띠. 몸통 원으로 잘라내 머리에 딱 붙게 만든다.
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x + w * 0.5, y + h * 0.5, w * 0.5, 0, Math.PI * 2);
+      ctx.clip();
       ctx.fillStyle = '#e64a4a';
       ctx.beginPath();
-      ctx.moveTo(x + w * 0.06, y + h * 0.3);
-      ctx.quadraticCurveTo(x + w * 0.5, y + h * 0.06, x + w * 0.94, y + h * 0.3);
-      ctx.quadraticCurveTo(x + w * 0.5, y + h * 0.2, x + w * 0.06, y + h * 0.3);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w, y);
+      ctx.lineTo(x + w, y + h * 0.26);
+      ctx.quadraticCurveTo(x + w * 0.5, y + h * 0.38, x, y + h * 0.26);
       ctx.fill();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+      ctx.fillRect(x, y + h * 0.12, w, h * 0.04);
+      ctx.restore();
       poly(
         ctx,
         [
-          [x + w * 0.9, y + h * 0.26],
-          [x + w * 1.06, y + h * 0.36],
-          [x + w * 0.92, y + h * 0.4],
+          [x + w * 0.86, y + h * 0.22],
+          [x + w * 1.04, y + h * 0.34],
+          [x + w * 0.88, y + h * 0.36],
         ],
         '#c03838',
       );
@@ -1215,20 +1314,22 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Ahoge',
-    label: '삐친머리',
+    tier: 0,
+    label: 'Ahoge',
     draw: (ctx, x, y, w, h) => {
-      ctx.strokeStyle = '#3a2f28';
-      ctx.lineWidth = lw(w) * 0.8;
+      ctx.strokeStyle = '#5c4636';
+      ctx.lineWidth = lw(w) * 0.9;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(x + w * 0.48, y + h * 0.04);
-      ctx.quadraticCurveTo(x + w * 0.42, y - h * 0.2, x + w * 0.66, y - h * 0.16);
+      ctx.moveTo(x + w * 0.5, y + h * 0.03);
+      ctx.quadraticCurveTo(x + w * 0.44, y - h * 0.22, x + w * 0.68, y - h * 0.14);
       ctx.stroke();
     },
   },
   {
     name: 'Sprout',
-    label: '새싹',
+    tier: 1,
+    label: 'Sprout',
     draw: (ctx, x, y, w, h) => {
       path(ctx, [[x + w * 0.5, y + h * 0.04], [x + w * 0.5, y - h * 0.14]], lw(w) * 0.6, '#4f9b4f');
       ellipse(ctx, x + w * 0.4, y - h * 0.14, w * 0.09, h * 0.05, '#5cb85c', -0.4);
@@ -1237,9 +1338,10 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'TopHat',
-    label: '실크햇',
+    tier: 3,
+    label: 'Top hat',
     draw: (ctx, x, y, w, h) => {
-      ctx.fillStyle = '#22252f';
+      ctx.fillStyle = '#3c4257';
       ctx.fillRect(x + w * 0.3, y - h * 0.22, w * 0.4, h * 0.28);
       ctx.fillRect(x + w * 0.14, y + h * 0.04, w * 0.72, h * 0.05);
       ctx.fillStyle = '#e64a4a';
@@ -1248,7 +1350,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'PartyHat',
-    label: '고깔',
+    tier: 3,
+    label: 'Party hat',
     draw: (ctx, x, y, w, h) => {
       poly(
         ctx,
@@ -1265,7 +1368,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Question',
-    label: '물음표',
+    tier: 1,
+    label: 'Question',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = '#ffd43b';
       ctx.font = `bold ${w * 0.3}px ${'system-ui, sans-serif'}`;
@@ -1276,19 +1380,25 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'AngerVein',
-    label: '분노마크',
+    tier: 2,
+    label: 'Anger mark',
     draw: (ctx, x, y, w, h) => {
-      const cx = x + w * 0.78;
-      const cy = y + h * 0.14;
-      const s = w * 0.07;
-      const c = '#ff3b5c';
-      path(ctx, [[cx - s, cy - s * 0.4], [cx, cy], [cx - s, cy + s * 0.4]], lw(w) * 0.6, c);
-      path(ctx, [[cx + s, cy - s * 0.4], [cx, cy], [cx + s, cy + s * 0.4]], lw(w) * 0.6, c);
+      const cx = x + w * 0.79;
+      const cy = y + h * 0.13;
+      const s = w * 0.09;
+      const left = [[cx - s, cy - s * 0.45], [cx, cy], [cx - s, cy + s * 0.45]];
+      const right = [[cx + s, cy - s * 0.45], [cx, cy], [cx + s, cy + s * 0.45]];
+      // 빨간 몸통에 묻히지 않게 흰 테두리를 깔고 그 위에 빨간 마크를 얹는다.
+      path(ctx, left, lw(w) * 1.3, 'rgba(255, 255, 255, 0.85)');
+      path(ctx, right, lw(w) * 1.3, 'rgba(255, 255, 255, 0.85)');
+      path(ctx, left, lw(w) * 0.7, '#e01739');
+      path(ctx, right, lw(w) * 0.7, '#e01739');
     },
   },
   {
     name: 'Flame',
-    label: '불꽃',
+    tier: 3,
+    label: 'Flame',
     draw: (ctx, x, y, w, h) => {
       ctx.fillStyle = '#ff8c2b';
       ctx.beginPath();
@@ -1306,20 +1416,21 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Wings',
-    label: '날개',
+    tier: 4,
+    label: 'Wings',
     draw: (ctx, x, y, w, h) => {
       const wing = (dir: -1 | 1) => {
         ctx.fillStyle = 'rgba(240, 246, 255, 0.92)';
         ctx.beginPath();
         ctx.moveTo(x + w * (0.5 + dir * 0.44), y + h * 0.38);
         ctx.quadraticCurveTo(
-          x + w * (0.5 + dir * 0.86),
+          x + w * (0.5 + dir * 0.8),
           y + h * 0.18,
-          x + w * (0.5 + dir * 0.78),
+          x + w * (0.5 + dir * 0.72),
           y + h * 0.56,
         );
         ctx.quadraticCurveTo(
-          x + w * (0.5 + dir * 0.66),
+          x + w * (0.5 + dir * 0.62),
           y + h * 0.5,
           x + w * (0.5 + dir * 0.44),
           y + h * 0.38,
@@ -1332,7 +1443,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Hearts',
-    label: '하트뿅',
+    tier: 1,
+    label: 'Heart pop',
     draw: (ctx, x, y, w, h) => {
       heart(ctx, x + w * 0.14, y + h * 0.1, w * 0.07, 'rgba(255, 74, 125, 0.9)');
       heart(ctx, x + w * 0.84, y - h * 0.02, w * 0.05, 'rgba(255, 74, 125, 0.7)');
@@ -1340,7 +1452,8 @@ export const DETAILS2: PartOption[] = [
   },
   {
     name: 'Bolt',
-    label: '번개',
+    tier: 2,
+    label: 'Bolt',
     draw: (ctx, x, y, w, h) => {
       poly(
         ctx,
@@ -1358,20 +1471,35 @@ export const DETAILS2: PartOption[] = [
   },
 ];
 
+// --------------------------------------------------------------------------
+// 등급 정렬 — "뒤로 갈수록 예쁘고 비싸다"
+// --------------------------------------------------------------------------
+
+// Array.prototype.sort 는 안정 정렬이라 같은 등급 안에서는 위에 적은 순서가 그대로 남는다.
+// (인덱스가 여기서 확정되므로, 파츠를 추가할 때는 등급만 정하면 자리는 알아서 잡힌다.)
+for (const list of [EYES, MOUTHS, DETAILS, DETAILS2]) {
+  list.sort((a, b) => a.tier - b.tier);
+}
+
+/** 파츠 하나의 가격(코인). 0이면 기본 제공. */
+export function priceOfPart(part: PartOption | undefined): number {
+  return part ? TIER_PRICE[part.tier] ?? 0 : 0;
+}
+
 /** 몸통 색상 팔레트 (레거시 12종) */
 export const COLORS: ColorOption[] = [
-  { name: 'Red', label: '레드', val: '#ff6b6b' },
-  { name: 'Teal', label: '틸', val: '#4ecdc4' },
-  { name: 'Cyan', label: '시안', val: '#4cc9e8' },
-  { name: 'Mint', label: '민트', val: '#9ad9bf' },
-  { name: 'Cream', label: '크림', val: '#ffe8a3' },
-  { name: 'Pink', label: '핑크', val: '#f06595' },
-  { name: 'Seafoam', label: '씨폼', val: '#9bdccf' },
-  { name: 'Yellow', label: '옐로', val: '#ffd43b' },
-  { name: 'Purple', label: '퍼플', val: '#c08ad9' },
-  { name: 'Blue', label: '블루', val: '#4dabf7' },
-  { name: 'Orange', label: '오렌지', val: '#ffa94d' },
-  { name: 'Green', label: '그린', val: '#51cf66' },
+  { name: 'Red', label: 'Red', val: '#ff6b6b' },
+  { name: 'Teal', label: 'Teal', val: '#4ecdc4' },
+  { name: 'Cyan', label: 'Cyan', val: '#4cc9e8' },
+  { name: 'Mint', label: 'Mint', val: '#9ad9bf' },
+  { name: 'Cream', label: 'Cream', val: '#ffe8a3' },
+  { name: 'Pink', label: 'Pink', val: '#f06595' },
+  { name: 'Seafoam', label: 'Seafoam', val: '#9bdccf' },
+  { name: 'Yellow', label: 'Yellow', val: '#ffd43b' },
+  { name: 'Purple', label: 'Purple', val: '#c08ad9' },
+  { name: 'Blue', label: 'Blue', val: '#4dabf7' },
+  { name: 'Orange', label: 'Orange', val: '#ffa94d' },
+  { name: 'Green', label: 'Green', val: '#51cf66' },
 ];
 
 export const DEFAULT_COLOR = COLORS[0].val;

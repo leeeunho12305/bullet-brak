@@ -1,4 +1,5 @@
-// 800x600 고정 해상도 캔버스. rAF 루프에서 net.latest 를 직접 읽는다(React state 사용 금지).
+// 800x600 고정 좌표계 캔버스(백버퍼는 표시 크기에 맞춰 늘린다).
+// rAF 루프에서 net.latest 를 직접 읽는다(React state 사용 금지).
 import { memo, useEffect, useRef } from 'react';
 import type { JSX, RefObject } from 'react';
 import { net } from '@/net/connection';
@@ -35,24 +36,36 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
     if (!ctx) return;
 
     let raf = 0;
-    let dpr = 0;
+    let scale = 0;
     let lastTick = -1;
     let lastPhase: Phase | null = null;
     let lastMapId: string | null = null;
 
-    const fitToDpr = (): void => {
-      const next = Math.min(window.devicePixelRatio || 1, 2);
-      if (next === dpr) return;
-      dpr = next;
-      canvas.width = Math.round(WORLD_WIDTH * dpr);
-      canvas.height = Math.round(WORLD_HEIGHT * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 백버퍼는 "표시 크기 × 픽셀비율" 로 맞춘다. 전체화면에서는 캔버스가 800px 보다
+    // 훨씬 커지는데, 800×600 백버퍼를 늘려 그리면 선이 뭉개진다.
+    // 표시 크기는 ResizeObserver 로만 잰다(매 프레임 clientWidth 를 읽으면 레이아웃이 강제된다).
+    let cssWidth = canvas.clientWidth || WORLD_WIDTH;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      if (width > 0) cssWidth = width;
+    });
+    observer.observe(canvas);
+
+    const fitToDisplay = (): void => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const next = Math.min(Math.max((cssWidth / WORLD_WIDTH) * dpr, 1), 3);
+      if (Math.abs(next - scale) < 0.02) return;
+      scale = next;
+      canvas.width = Math.round(WORLD_WIDTH * scale);
+      canvas.height = Math.round(WORLD_HEIGHT * scale);
+      // 백버퍼 크기를 바꾸면 컨텍스트 상태가 초기화된다 — 변환을 다시 건다.
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
       ctx.imageSmoothingEnabled = true;
     };
 
     const loop = (t: number): void => {
       raf = window.requestAnimationFrame(loop);
-      fitToDpr();
+      fitToDisplay();
       const snap = net.latest;
       if (!snap) {
         ctx.fillStyle = backgroundColor();
@@ -76,6 +89,7 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
     raf = window.requestAnimationFrame(loop);
     return () => {
       window.cancelAnimationFrame(raf);
+      observer.disconnect();
       resetInterpolation();
     };
   }, [canvasRef]);
@@ -86,7 +100,7 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
       className="game-canvas"
       width={WORLD_WIDTH}
       height={WORLD_HEIGHT}
-      aria-label="게임 화면"
+      aria-label="Game view"
     />
   );
 }

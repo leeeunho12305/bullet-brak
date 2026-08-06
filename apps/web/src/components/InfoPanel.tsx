@@ -18,16 +18,16 @@ interface Panel {
 const EMPTY: Panel = { table: [], stats: null, cards: [] };
 
 const STAT_ROWS: { key: keyof PlayerStats; label: string; suffix?: string }[] = [
-  { key: 'damage_mult', label: '공격력', suffix: '×' },
-  { key: 'max_hp', label: '최대 체력' },
-  { key: 'cooldown', label: '쿨다운', suffix: '틱' },
-  { key: 'shots_per_fire', label: '발사 수', suffix: '발' },
-  { key: 'bullet_speed', label: '탄속' },
-  { key: 'bullet_size', label: '탄 크기' },
-  { key: 'bounces', label: '도탄', suffix: '회' },
-  { key: 'knockback', label: '넉백', suffix: '×' },
-  { key: 'speed', label: '이동 속도' },
-  { key: 'block_meter_max', label: '가드 게이지' },
+  { key: 'damage_mult', label: 'Damage', suffix: '×' },
+  { key: 'max_hp', label: 'Max HP' },
+  { key: 'cooldown', label: 'Cooldown', suffix: ' ticks' },
+  { key: 'shots_per_fire', label: 'Shots', suffix: '' },
+  { key: 'bullet_speed', label: 'Bullet speed' },
+  { key: 'bullet_size', label: 'Bullet size' },
+  { key: 'bounces', label: 'Bounces' },
+  { key: 'knockback', label: 'Knockback', suffix: '×' },
+  { key: 'speed', label: 'Move speed' },
+  { key: 'block_meter_max', label: 'Block meter' },
 ];
 
 /** 같은 값이면 setState 를 건너뛰기 위한 얕은 비교 */
@@ -131,9 +131,9 @@ export default function InfoPanel(): JSX.Element | null {
   if (!open) return null;
 
   return (
-    <aside className="info-panel" aria-label="플레이어 정보">
+    <aside className="info-panel" aria-label="Player info">
       <section className="info-block">
-        <h3 className="info-title">거리별 대미지</h3>
+        <h3 className="info-title">Damage by distance</h3>
         <table className="info-table">
           <tbody>
             {panel.table.map((row) => (
@@ -147,11 +147,11 @@ export default function InfoPanel(): JSX.Element | null {
             ))}
           </tbody>
         </table>
-        <p className="info-foot">가까울수록 강함 · 600px 이상은 동일</p>
+        <p className="info-foot">Closer hits harder · flat past 600px</p>
       </section>
 
       <section className="info-block">
-        <h3 className="info-title">내 스탯</h3>
+        <h3 className="info-title">My stats</h3>
         <dl className="info-stats">
           {panel.stats &&
             STAT_ROWS.map(({ key, label, suffix }) => (
@@ -167,9 +167,9 @@ export default function InfoPanel(): JSX.Element | null {
       </section>
 
       <section className="info-block">
-        <h3 className="info-title">보유 카드 ({panel.cards.length})</h3>
+        <h3 className="info-title">Cards ({panel.cards.length})</h3>
         {panel.cards.length === 0 ? (
-          <p className="info-empty">아직 없음 — 라운드에서 지면 고를 수 있습니다</p>
+          <p className="info-empty">None yet — you pick one after losing a round</p>
         ) : (
           <ul className="info-cards">
             {panel.cards.map((id, i) => {

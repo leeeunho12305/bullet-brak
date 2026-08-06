@@ -22,6 +22,14 @@ export interface LastEvent {
   loser_id: string | null;
 }
 
+/** 방금 방을 나간 사람. 알림을 띄우고 나면 지운다. */
+export interface PlayerLeft {
+  id: string;
+  nickname: string;
+  /** 그 사람이 나간 뒤 방에 남은 인원 */
+  playersLeft: number;
+}
+
 export interface GameState {
   status: ConnectionStatus;
   error: string | null;
@@ -30,6 +38,8 @@ export interface GameState {
   phase: Phase;
   chat: ChatMessage[];
   lastEvent: LastEvent | null;
+  playerLeft: PlayerLeft | null;
+  clearPlayerLeft(): void;
 
   // 프로필 (localStorage 동기화)
   nickname: string;
@@ -50,7 +60,7 @@ const profile = loadProfile();
 /** 세션(방) 관련 상태만 초기화. 프로필은 유지한다. */
 function sessionDefaults(): Pick<
   GameState,
-  'status' | 'error' | 'playerId' | 'room' | 'phase' | 'chat' | 'lastEvent'
+  'status' | 'error' | 'playerId' | 'room' | 'phase' | 'chat' | 'lastEvent' | 'playerLeft'
 > {
   return {
     status: 'idle',
@@ -60,6 +70,7 @@ function sessionDefaults(): Pick<
     phase: 'waiting',
     chat: [],
     lastEvent: null,
+    playerLeft: null,
   };
 }
 
@@ -129,11 +140,26 @@ export const useGameStore = create<GameState>()((set, get) => ({
         break;
       }
 
+      case 'player_left': {
+        set({
+          playerLeft: {
+            id: msg.player_id,
+            nickname: msg.nickname || 'Guest',
+            playersLeft: msg.players_left,
+          },
+        });
+        break;
+      }
+
       case 'error': {
         set({ error: msg.message });
         break;
       }
     }
+  },
+
+  clearPlayerLeft() {
+    if (get().playerLeft !== null) set({ playerLeft: null });
   },
 
   setStatus(s, error) {

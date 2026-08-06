@@ -44,7 +44,7 @@ async def create_room(body: CreateRoomRequest) -> CreateRoomResponse:
 async def get_room(code: str) -> RoomInfoResponse:
     room = room_manager.get(code)
     if room is None:
-        raise HTTPException(status_code=404, detail="존재하지 않는 방입니다.")
+        raise HTTPException(status_code=404, detail="Room not found.")
     return RoomInfoResponse(
         code=room.code,
         mode=room.mode,

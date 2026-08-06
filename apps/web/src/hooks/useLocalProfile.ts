@@ -6,7 +6,7 @@
 // 어느 쪽이 먼저 평가돼도 안전하다.
 import { useCallback, useState } from 'react';
 import type { Customization, PartOffsets, PartSlot } from '@/types/game';
-import { clampOffset } from '@/game/avatars';
+import { clampOffset, partPrice } from '@/game/avatars';
 import { useGameStore } from '@/store/gameStore';
 
 export const COINS_KEY = 'bulletBrakCoins';
@@ -14,22 +14,31 @@ export const OWNED_ITEMS_KEY = 'bulletBrakOwnedItems';
 export const NICKNAME_KEY = 'bulletBrakNickname';
 export const CUSTOMIZATION_KEY = 'bulletBrakCustomization';
 
-/**
- * 잠금 없이 기본 제공되는 아이템 개수(각 카테고리 앞쪽 index 0~7).
- * 파츠 카탈로그를 크게 늘리면서 무료 기본 세트도 같이 늘렸다.
- * 그 뒤 인덱스는 전부 ITEM_PRICE 코인짜리 상점 아이템이다.
- */
-export const FREE_ITEM_COUNT = 8;
-/** 잠금 아이템 가격(코인) */
-export const ITEM_PRICE = 50;
-
 /** 편집기의 파츠 카테고리 → localStorage 아이템 키 접두사(레거시 포맷 유지) */
-export const SHOP_CATEGORY: Record<string, string> = {
+export const SHOP_CATEGORY: Record<PartSlot, string> = {
   eye: 'eyes',
   mouth: 'mouths',
   detail: 'details',
   detail2: 'details2',
 };
+
+/** 위의 역방향. 상점 키만 들고 있는 곳에서 가격을 되찾을 때 쓴다. */
+const SLOT_BY_SHOP: Record<string, PartSlot> = {
+  eyes: 'eye',
+  mouths: 'mouth',
+  details: 'detail',
+  details2: 'detail2',
+};
+
+/**
+ * 상점 키 기준 가격(코인). 값은 파츠 등급에서 온다 —
+ * 카탈로그가 등급 순으로 정렬돼 있어서 "뒤로 갈수록 예쁘고 비싸다".
+ * 0이면 기본 제공이라 살 필요가 없다.
+ */
+export function itemPrice(category: string, index: number): number {
+  const slot = SLOT_BY_SHOP[category];
+  return slot ? partPrice(slot, index) : 0;
+}
 
 export type OwnedItems = Record<string, boolean>;
 
@@ -150,7 +159,7 @@ export function itemKey(category: string, index: number): string {
 
 export function isItemOwned(items: OwnedItems, category: string, index: number): boolean {
   if (category === 'colors') return true;
-  if (index < FREE_ITEM_COUNT) return true;
+  if (itemPrice(category, index) <= 0) return true; // 0등급은 기본 제공
   return items[itemKey(category, index)] === true;
 }
 
@@ -161,7 +170,7 @@ export interface UseLocalProfile extends LocalProfile {
   addCoins(delta: number): void;
   owned: OwnedItems;
   isOwned(category: string, index: number): boolean;
-  /** 코인이 충분하면 구매하고 true. 부족하면 false. */
+  /** 코인이 충분하면 구매하고 true. 부족하면 false. 가격은 등급에서 자동으로 온다. */
   buyItem(category: string, index: number, price?: number): boolean;
 }
 
@@ -192,7 +201,7 @@ export function useLocalProfile(): UseLocalProfile {
   );
 
   const buyItem = useCallback(
-    (category: string, index: number, price = ITEM_PRICE) => {
+    (category: string, index: number, price = itemPrice(category, index)) => {
       if (isItemOwned(owned, category, index)) return true;
       const current = useGameStore.getState().coins;
       if (current < price) return false;

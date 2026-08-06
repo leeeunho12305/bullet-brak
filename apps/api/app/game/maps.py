@@ -73,9 +73,9 @@ class GameMap:
 _MAPS: tuple[GameMap, ...] = (
     GameMap(
         id="classic",
-        name="클래식",
+        name="Classic",
         emoji="🟦",
-        desc="넓은 바닥과 3단 발판. 기본기를 겨루는 표준 맵.",
+        desc="Wide floor, three tiers of platforms. The standard proving ground.",
         theme=Theme("#0b0d17", "rgba(0, 229, 255, 0.055)", "#1b2438", "rgba(0, 229, 255, 0.45)"),
         platforms=(
             rect(0, 550, 800, 50),
@@ -87,9 +87,9 @@ _MAPS: tuple[GameMap, ...] = (
     ),
     GameMap(
         id="towers",
-        name="쌍둥이 탑",
+        name="Twin Towers",
         emoji="🏙️",
-        desc="양쪽 탑과 연결 다리. 높이 싸움이 전부다.",
+        desc="Two towers and a bridge. Whoever holds the high ground wins.",
         theme=Theme("#0d0a1c", "rgba(177, 151, 252, 0.07)", "#241d3d", "rgba(177, 151, 252, 0.5)"),
         platforms=(
             rect(0, 550, 800, 50),
@@ -103,9 +103,9 @@ _MAPS: tuple[GameMap, ...] = (
     ),
     GameMap(
         id="chasm",
-        name="협곡",
+        name="Canyon",
         emoji="🌋",
-        desc="한가운데가 뚫려 있다. 발을 헛디디면 그대로 낙사.",
+        desc="The middle is a hole. One bad step and you fall out.",
         theme=Theme("#160a0a", "rgba(255, 143, 77, 0.06)", "#33201a", "rgba(255, 143, 77, 0.5)"),
         platforms=(
             rect(0, 520, 300, 80),
@@ -119,9 +119,9 @@ _MAPS: tuple[GameMap, ...] = (
     ),
     GameMap(
         id="stairs",
-        name="계단",
+        name="Staircase",
         emoji="🪜",
-        desc="왼쪽 아래에서 오른쪽 위로. 고지를 먼저 잡는 쪽이 유리하다.",
+        desc="Bottom left to top right. Climb first, shoot down.",
         theme=Theme("#0a1410", "rgba(148, 216, 45, 0.06)", "#18291c", "rgba(148, 216, 45, 0.45)"),
         platforms=(
             rect(0, 550, 800, 50),
@@ -136,9 +136,9 @@ _MAPS: tuple[GameMap, ...] = (
     ),
     GameMap(
         id="arena",
-        name="투기장",
+        name="Arena",
         emoji="🏟️",
-        desc="양옆이 벽으로 막힌 좁은 무대. 도망칠 곳이 없다.",
+        desc="Walled in on both sides. Nowhere to run.",
         theme=Theme("#150f06", "rgba(255, 212, 59, 0.06)", "#2e2412", "rgba(255, 212, 59, 0.45)"),
         platforms=(
             rect(0, 550, 800, 50),
@@ -153,9 +153,9 @@ _MAPS: tuple[GameMap, ...] = (
     ),
     GameMap(
         id="skylands",
-        name="부유섬",
+        name="Floating Isles",
         emoji="☁️",
-        desc="바닥이 없다. 섬과 섬 사이는 전부 허공.",
+        desc="No floor at all. Between the islands is open sky.",
         theme=Theme("#04101f", "rgba(77, 171, 247, 0.07)", "#12263f", "rgba(77, 171, 247, 0.55)"),
         platforms=(
             rect(280, 420, 240, 24),
@@ -170,9 +170,9 @@ _MAPS: tuple[GameMap, ...] = (
     ),
     GameMap(
         id="bunker",
-        name="벙커",
+        name="Bunker",
         emoji="🛡️",
-        desc="가운데 엄폐 구조물. 옆구리로만 드나들 수 있다.",
+        desc="Cover in the middle. You can only get in from the sides.",
         theme=Theme("#0e1114", "rgba(173, 181, 189, 0.06)", "#232a31", "rgba(173, 181, 189, 0.45)"),
         platforms=(
             rect(0, 550, 800, 50),
@@ -187,9 +187,9 @@ _MAPS: tuple[GameMap, ...] = (
     ),
     GameMap(
         id="cross",
-        name="십자로",
+        name="Crossroads",
         emoji="✚",
-        desc="가운데 벽이 시야를 끊는다. 정면 대결은 통하지 않는다.",
+        desc="A wall cuts the sightline. Head-on trades do not work here.",
         theme=Theme("#14060d", "rgba(255, 46, 151, 0.06)", "#2c1120", "rgba(255, 46, 151, 0.5)"),
         platforms=(
             rect(0, 550, 800, 50),
@@ -203,9 +203,9 @@ _MAPS: tuple[GameMap, ...] = (
     ),
     GameMap(
         id="rooftop",
-        name="옥상",
+        name="Rooftops",
         emoji="🌃",
-        desc="건물 두 채와 하늘다리. 아래로 떨어져도 죽지는 않는다.",
+        desc="Two buildings and a skybridge. Falling down here is survivable.",
         theme=Theme("#081413", "rgba(32, 201, 151, 0.06)", "#14302b", "rgba(32, 201, 151, 0.5)"),
         platforms=(
             rect(0, 560, 800, 40),

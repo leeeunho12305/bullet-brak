@@ -240,6 +240,8 @@ export type ServerMessage =
       winner_id: string | null;
       loser_id: string | null;
     }
+  /** 누군가 방을 나갔다. 남아 있는 사람에게만 온다(나간 본인은 이미 연결이 끊겼다). */
+  | { type: 'player_left'; player_id: string; nickname: string; players_left: number }
   | { type: 'error'; message: string };
 
 export type ClientMessage =

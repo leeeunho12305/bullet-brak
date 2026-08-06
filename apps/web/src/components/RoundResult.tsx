@@ -55,15 +55,16 @@ function buildView(players: PlayerSnap[], ev: LastEvent | null, myId: string | n
   }
   const orbs: OrbView[] = list.map((p) => ({
     id: p.id,
-    nickname: p.nickname || '익명',
+    nickname: p.nickname || 'Guest',
     color: colorOf(p),
     wins: p.round_wins,
   }));
 
+  // 참고 화면대로 "HALF <이긴 쪽>" / 2승째면 "POINT <이긴 쪽>".
   const winner = players.find((p) => p.id === winnerIdOf(players, ev)) ?? null;
   const title = winner
-    ? `${winner.nickname || '익명'} ${winner.round_wins >= ROUNDS_TO_SCORE ? '득점!' : '하프!'}`
-    : '라운드 무승부';
+    ? `${winner.round_wins >= ROUNDS_TO_SCORE ? 'POINT' : 'HALF'} ${(winner.nickname || 'GUEST').toUpperCase()}`
+    : 'DRAW';
   const color = winner ? colorOf(winner) : 'var(--muted)';
   const key = `${title}|${orbs.map((o) => `${o.id}:${o.wins}:${o.color}`).join(',')}`;
   return { key, title, color, orbs };
