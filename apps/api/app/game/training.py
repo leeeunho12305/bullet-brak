@@ -10,9 +10,11 @@ FastAPI/WebSocket 을 import 하지 않는다(순수 로직).
 
 from __future__ import annotations
 
+import random
 from typing import Any
 
 from app.game import constants as C
+from app.game import maps
 from app.game.bots import create_bot
 from app.game.models import Room, TrainingState
 
@@ -139,7 +141,8 @@ def _tick_respawn(room: Room, state: TrainingState, player: Any) -> None:
     # 같은 웨이브를 처음부터. 카드/스탯은 그대로 두는 게 훈련장의 요점이다.
     player.hp = player.max_hp
     player.vx = player.vy = 0.0
-    player.x, player.y = 380.0, 120.0
+    points = maps.spawn_points(room)
+    player.x, player.y = random.choice(points) if points else maps.fallback_spawn()
     player.grounded = False
     player.jumps = 0
     player.cooldown = 0.0

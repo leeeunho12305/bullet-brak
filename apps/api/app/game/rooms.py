@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import time
 
+from app.game import maps
 from app.game.models import Mode, Room
 
 #: 아무도 입장하지 않은 빈 방을 유지해 주는 시간(초)
@@ -30,14 +31,24 @@ class RoomManager:
         raise RoomError("방 코드를 발급할 수 없습니다.")
 
     # -- CRUD --------------------------------------------------------------
-    def create(self, mode: Mode = "pvp", max_players: int = 2) -> Room:
+    def create(
+        self, mode: Mode = "pvp", max_players: int = 2, map_id: str = maps.DEFAULT_ID
+    ) -> Room:
         if len(self.rooms) >= self.max_rooms:
             raise RoomError("서버가 가득 찼습니다.")
+        if not maps.is_valid_selection(map_id):
+            map_id = maps.DEFAULT_ID
         room = Room(
             code=self._new_code(),
             mode=mode if mode in ("pvp", "training") else "pvp",
             max_players=max(1, min(8, int(max_players))),
+            map_id=map_id,
         )
+        resolved = maps.resolve(map_id)
+        if room.mode == "training" and map_id == maps.RANDOM_ID:
+            # 훈련장 무작위는 낙사 없는 맵에서만 고른다(봇 상대로 떨어지면 연습이 안 된다).
+            resolved = random.choice(maps.TRAINING_SAFE_IDS)
+        maps.apply(room, resolved)
         if room.mode == "training":
             # 훈련장은 입장 즉시 시작. 웨이브 스폰은 첫 틱에 training 이 처리한다.
             from app.game import training

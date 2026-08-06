@@ -3,12 +3,12 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import type { JSX } from 'react';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
+import ScoreOrb from '@/components/ScoreOrb';
 import { MAX_CHARGE } from '@/types/game';
 import type { CardInfo, PlayerSnap, TrainingSnap } from '@/types/game';
 
 const SAMPLE_MS = 100;
 const SCORE_TO_WIN = 5;
-const ROUNDS_TO_SCORE = 2;
 /** 서버 틱레이트. 훈련장 카운트다운(틱)을 초로 바꾸는 데만 쓴다. */
 const TICK_RATE = 60;
 
@@ -116,19 +116,6 @@ function Meter({ ratio, color, label }: MeterProps): JSX.Element {
   );
 }
 
-interface DotsProps {
-  count: number;
-  total: number;
-}
-
-function Dots({ count, total }: DotsProps): JSX.Element {
-  const items = [];
-  for (let i = 0; i < total; i += 1) {
-    items.push(<i key={i} className={i < count ? 'hud-dot won' : 'hud-dot'} />);
-  }
-  return <div className="hud-dots">{items}</div>;
-}
-
 interface SideProps {
   p: HudPlayer;
   mine: boolean;
@@ -162,7 +149,7 @@ function PlayerSide({ p, mine, side }: SideProps): JSX.Element {
         />
       </div>
       <div className="hud-bottom">
-        <Dots count={p.roundWins} total={ROUNDS_TO_SCORE} />
+        <ScoreOrb wins={p.roundWins} color={p.color} />
         <div className="hud-cards">
           {p.cards.map((id, i) => {
             const info = cardCache.get(id);

@@ -13,13 +13,16 @@
 .game-topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .game-room { display: flex; align-items: baseline; gap: 8px; }
 .game-room-code { font-weight: 700; letter-spacing: 0.08em; color: var(--accent-2); }
-.game-room-mode {
+.game-room-mode,
+.game-room-map {
   font-size: 0.78rem;
   color: var(--muted);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 2px 8px;
+  white-space: nowrap;
 }
+.game-room-map { color: var(--accent-2); border-color: rgba(0, 229, 255, 0.35); }
 .game-controls {
   flex: 1;
   min-width: 220px;
@@ -132,15 +135,9 @@
 .hud-sub { display: flex; flex-direction: column; gap: 3px; }
 .hud-sub .hud-meter { height: 4px; }
 .hud-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.hud-dots { display: flex; gap: 5px; }
-.hud-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid var(--line);
-}
-.hud-dot.won { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+/* 라운드 승수 원: 1승이면 반쪽, 2승이면 꽉 참. 색은 그 플레이어 색(--orb). */
+.score-orb { flex: none; opacity: 0.38; transition: opacity 0.18s ease; }
+.score-orb.lit { opacity: 1; filter: drop-shadow(0 0 6px var(--orb)); }
 .hud-cards { display: flex; gap: 3px; flex-wrap: wrap; }
 .hud-card {
   font-size: 0.8rem;
@@ -195,48 +192,288 @@
   z-index: 30;
   text-align: center;
 }
+.overlay.picking { overflow-y: auto; }
+.overlay-kicker {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
 .overlay-title { margin: 0; font-size: 1.6rem; letter-spacing: 0.08em; }
 .overlay-desc { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.overlay-desc kbd {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-family: var(--font);
+  font-size: 0.78rem;
+  color: var(--text);
+}
 .overlay-actions { display: flex; gap: 10px; margin-top: 8px; }
+
+/* 상대가 고르는 동안 도는 점 세 개 */
+.dots { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: middle; }
+.dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: dot-pulse 1.05s infinite ease-in-out;
+}
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dot-pulse {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
 .card-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+
+/* 카드는 3D 뒤집기 상자다. 버튼 자신은 투명한 틀이고, 실제 그림은 .card-face 두 장이 그린다.
+   높이를 고정해야 앞/뒤 면을 겹쳐 놓을 수 있다(가장 긴 카드 설명 3줄 + 이름 2줄 기준). */
 .card-item {
-  width: 132px;
-  min-height: 190px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 10px;
-  border: 2px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
+  position: relative;
+  width: 138px;
+  height: 214px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--text);
   cursor: pointer;
-  text-align: center;
-  transition: transform 0.16s ease, background 0.16s ease;
+  perspective: 900px;
+  transition: transform 0.18s ease, opacity 0.16s ease;
   animation: card-in 0.24s ease both;
 }
 @keyframes card-in {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
-.card-item:hover:enabled { transform: translateY(-8px) scale(1.04); background: var(--panel-2); }
-.card-item:disabled { cursor: default; opacity: 0.45; }
-.card-item.picked { opacity: 1; outline: 2px solid var(--accent-2); }
+/* 밝기는 버튼이 아니라 면에 건다. filter 는 3D 컨텍스트를 납작하게 만들 수 있어서
+   perspective/preserve-3d 를 가진 요소에는 올리지 않는다. */
+.card-item:hover:enabled { transform: translateY(-8px) scale(1.04); }
+.card-item:hover:enabled .card-face { filter: brightness(1.12); }
+.card-item:disabled { cursor: default; }
+/* 고른 카드는 앞으로, 나머지는 뒤로 물러난다 */
+.card-item.picked { transform: translateY(-6px) scale(1.05); }
+.card-item.picked .card-front { outline: 2px solid var(--accent-2); }
+.card-item.faded { opacity: 0.28; transform: scale(0.96); }
+
+.card-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.42s cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+.card-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 10px 12px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  text-align: center;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: filter 0.18s ease;
+}
+/* 뒷면은 미리 180도 돌려 둔다 — .card-inner 가 180도 돌면 이쪽이 정면이 된다. */
+.card-rear {
+  transform: rotateY(180deg);
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 8px, transparent 8px 16px),
+    linear-gradient(150deg, var(--panel-2), var(--panel));
+}
+.card-rear-mark {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+/* 마우스를 카드 줄에 올리면, 가리키지 않은 카드는 뒷면으로 돌아간다.
+   키보드(Tab)로 훑을 때도 같게 동작한다. */
+.card-row:not(.locked):hover .card-item:not(:hover) .card-inner,
+.card-row:not(.locked):focus-within .card-item:not(:hover):not(:focus-visible) .card-inner {
+  transform: rotateY(180deg);
+}
+.card-row:not(.locked):hover .card-item:not(:hover),
+.card-row:not(.locked):focus-within .card-item:not(:hover):not(:focus-visible) {
+  transform: scale(0.95);
+}
+.card-row:not(.locked):hover .card-item:not(:hover) .card-face,
+.card-row:not(.locked):focus-within .card-item:not(:hover):not(:focus-visible) .card-face {
+  filter: brightness(0.78);
+}
+
+.card-stripe { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.card-key {
+  position: absolute;
+  top: 7px;
+  left: 8px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: var(--muted);
+}
 .card-category { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; }
 .card-emoji { font-size: 2rem; line-height: 1; margin: 4px 0; }
-.card-name { font-weight: 700; font-size: 0.95rem; }
-.card-desc { font-size: 0.74rem; color: var(--muted); line-height: 1.35; }
-.result-title { margin: 0; font-size: 2.4rem; letter-spacing: 0.1em; }
+/* 카드 이름은 영문 한 단어가 길 수 있다(PRISTINE PERSISTENCE 등) — 고정 높이라 넘치면 잘린다 */
+.card-name { font-weight: 700; font-size: 0.95rem; line-height: 1.2; overflow-wrap: anywhere; }
+.card-desc { font-size: 0.74rem; color: var(--muted); line-height: 1.35; overflow-wrap: anywhere; }
+/* 내 차례가 아닐 때 보여주는 뒷면 카드. .card-rear 와 같은 무늬를 써서 같은 물건으로 읽히게 한다 */
+.card-back {
+  width: 96px;
+  min-height: 138px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 8px, transparent 8px 16px),
+    linear-gradient(150deg, var(--panel-2), var(--panel));
+  color: var(--muted);
+  font-size: 1.8rem;
+  font-weight: 800;
+  opacity: 0.75;
+  animation: card-in 0.24s ease both;
+}
+/* 매치 결과는 REMATCH? 보다 작게. 주인공은 리매치 질문이다. */
+.overlay.finished { gap: 6px; background: rgba(8, 11, 20, 0.72); backdrop-filter: blur(4px); }
+.result-title { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 0.1em; }
 .result-title.win { color: var(--accent-2); text-shadow: 0 0 24px rgba(0, 229, 255, 0.5); }
 .result-title.lose { color: var(--accent); }
-.result-winner { margin: 0; font-size: 1rem; }
+.result-winner { margin: 0; font-size: 0.85rem; color: var(--muted); }
 .result-score {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+}
+
+/* ---------- 리매치 (네온 글씨) ---------- */
+.rematch-q {
+  margin: 14px 0 2px;
+  font-size: clamp(2.2rem, 9vw, 4rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.05;
+  color: var(--warn);
+  text-shadow: 0 0 30px rgba(255, 212, 59, 0.45);
+  animation: rematch-in 0.3s ease-out both;
+}
+@keyframes rematch-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.rematch-choices { display: flex; gap: clamp(24px, 7vw, 64px); }
+.rematch-btn {
+  padding: 4px 10px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: clamp(1.5rem, 5vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  color: var(--muted);
+  transition: transform 0.14s ease, color 0.14s ease, text-shadow 0.14s ease;
+}
+.rematch-btn:hover:enabled { transform: scale(1.08); }
+.rematch-btn.yes { color: var(--warn); }
+.rematch-btn.yes:hover:enabled { text-shadow: 0 0 26px rgba(255, 212, 59, 0.7); }
+.rematch-btn.no:hover:enabled { color: var(--danger); }
+.rematch-btn.no.on { color: var(--danger); }
+.rematch-btn.yes.on {
+  color: var(--warn);
+  text-shadow: 0 0 26px rgba(255, 212, 59, 0.7);
+  cursor: default;
+}
+
+/* 외곽선만 남긴 네온 글씨는 지원하는 브라우저에서만. 내가 고른 쪽은 속을 채워 구분한다. */
+@supports (-webkit-text-stroke: 2px currentColor) {
+  .rematch-q {
+    color: transparent;
+    -webkit-text-stroke: 2px var(--warn);
+  }
+  .rematch-btn {
+    color: transparent;
+    -webkit-text-stroke: 2px var(--muted);
+    transition: transform 0.14s ease, text-shadow 0.14s ease, -webkit-text-stroke-color 0.14s ease;
+  }
+  .rematch-btn.yes { -webkit-text-stroke-color: var(--warn); }
+  .rematch-btn.no:hover:enabled { -webkit-text-stroke-color: var(--danger); }
+  .rematch-btn.yes.on { color: var(--warn); -webkit-text-stroke-width: 0; }
+  .rematch-btn.no.on { color: var(--danger); -webkit-text-stroke-width: 0; }
+}
+.rematch-status {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--text);
+}
+.rematch-keys { margin: 0; font-size: 0.72rem; color: var(--muted); }
+.rematch-keys kbd {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-family: var(--font);
+  font-size: 0.72rem;
+  color: var(--text);
+}
+
+/* ---------- 라운드 종료 표시 ---------- */
+.round-result {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  border-radius: var(--radius);
+  background: rgba(8, 11, 20, 0.55);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  animation: round-in 0.18s ease-out;
+}
+@keyframes round-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.round-result-title {
+  margin: 0;
+  font-size: clamp(1.6rem, 6vw, 3rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 28px currentColor;
+}
+.round-result-orbs { display: flex; gap: clamp(28px, 9vw, 76px); }
+.round-orb { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.round-orb .score-orb { opacity: 0.55; }
+.round-orb .score-orb.lit { opacity: 1; filter: drop-shadow(0 0 14px var(--orb)); }
+.round-orb-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 /* ---------- 채팅 ---------- */

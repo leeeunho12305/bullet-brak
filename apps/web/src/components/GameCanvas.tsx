@@ -3,12 +3,13 @@ import { memo, useEffect, useRef } from 'react';
 import type { JSX, RefObject } from 'react';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
-import { renderFrame, resetInterpolation } from '@/game/renderer';
+import { backgroundColor, renderFrame, resetInterpolation, setMapTheme } from '@/game/renderer';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '@/types/game';
-import type { Phase } from '@/types/game';
+import type { MapTheme, Phase, RoomState } from '@/types/game';
 
 interface StoreSlice {
   playerId: string | null;
+  room: RoomState | null;
 }
 
 interface GameCanvasProps {
@@ -20,6 +21,13 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
   const playerIdRef = useRef<string | null>(playerId);
   playerIdRef.current = playerId;
 
+  // 맵 테마는 room_state 로만 내려온다(스냅샷에 매 틱 싣기엔 무겁다).
+  // 무작위 맵이면 라운드마다 바뀌므로 서버가 그때마다 room_state 를 다시 쏜다.
+  const theme = useGameStore((s: StoreSlice) => s.room?.map?.theme) as MapTheme | undefined;
+  useEffect(() => {
+    setMapTheme(theme);
+  }, [theme]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -30,6 +38,7 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
     let dpr = 0;
     let lastTick = -1;
     let lastPhase: Phase | null = null;
+    let lastMapId: string | null = null;
 
     const fitToDpr = (): void => {
       const next = Math.min(window.devicePixelRatio || 1, 2);
@@ -46,16 +55,21 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
       fitToDpr();
       const snap = net.latest;
       if (!snap) {
-        ctx.fillStyle = '#0b0d17';
+        ctx.fillStyle = backgroundColor();
         ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
         return;
       }
-      // 라운드 재시작/리스폰 시 보간 상태를 비운다.
-      if (snap.tick < lastTick || (lastPhase !== 'playing' && snap.phase === 'playing')) {
+      // 라운드 재시작 / 리스폰 / 맵 교체 시 보간 상태를 비운다.
+      if (
+        snap.tick < lastTick ||
+        (lastPhase !== 'playing' && snap.phase === 'playing') ||
+        (lastMapId !== null && lastMapId !== snap.map_id)
+      ) {
         resetInterpolation();
       }
       lastTick = snap.tick;
       lastPhase = snap.phase;
+      lastMapId = snap.map_id;
       renderFrame(ctx, snap, playerIdRef.current, t);
     };
 

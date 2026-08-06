@@ -24,6 +24,8 @@ from app.schemas.messages import (
     InputMsg,
     JoinMsg,
     PickCardMsg,
+    RematchMsg,
+    SetMapMsg,
     parse_client_message,
 )
 from app.services import chat as chat_service
@@ -96,7 +98,7 @@ def _create_player(room: Room, join: JoinMsg, query_nickname: str) -> Player:
     custom = join.customization.model_dump()
     custom["color"] = _pick_color(room, custom.get("color"))
 
-    x, y = engine.random_spawn()
+    x, y = engine.random_spawn(room)
     player = Player(
         id=uuid.uuid4().hex[:8],
         nickname=nick,
@@ -110,6 +112,12 @@ def _create_player(room: Room, join: JoinMsg, query_nickname: str) -> Player:
     except Exception:
         logger.exception("reset_card_state 실패")
     return player
+
+
+def _is_host(room: Room, player: Player) -> bool:
+    """방장 = 가장 먼저 입장한 사람. 클라이언트 RoomScreen 의 판정과 같은 규칙이다."""
+    first = next(iter(room.players), None)
+    return first is None or first == player.id
 
 
 def _pick_color(room: Room, requested: str | None) -> str:
@@ -170,6 +178,11 @@ async def _handle(room: Room, player: Player, msg_type: str, payload: Any) -> No
         if message:
             await hub.broadcast(room.code, message)
 
+    elif msg_type == "set_map" and isinstance(payload, SetMapMsg):
+        # 맵은 방장(가장 먼저 들어온 사람)만 바꾼다.
+        if _is_host(room, player) and engine.set_map(room, payload.map_id):
+            await hub.broadcast(room.code, {"type": "room_state", "room": room_state(room)})
+
     elif msg_type == "start_game":
         if engine.start_game(room):
             await hub.broadcast(room.code, {"type": "room_state", "room": room_state(room)})
@@ -179,12 +192,28 @@ async def _handle(room: Room, player: Player, msg_type: str, payload: Any) -> No
             engine.reset_match(room)
             await hub.broadcast(room.code, {"type": "room_state", "room": room_state(room)})
 
+    elif msg_type == "rematch" and isinstance(payload, RematchMsg):
+        await _do_rematch(room, player, payload.accept)
+
     elif msg_type == "avatar" and isinstance(payload, AvatarMsg):
         if room.phase in ("waiting", "finished"):
             custom = payload.customization.model_dump()
             custom["color"] = player.customization.get("color", custom.get("color"))
             player.customization = custom
             await hub.broadcast(room.code, {"type": "room_state", "room": room_state(room)})
+
+
+async def _do_rematch(room: Room, player: Player, accept: bool) -> None:
+    """리매치 투표. 상대가 아직이면 스냅샷의 rematch 로만 알리고, 결론이 나면 방송한다."""
+    result = engine.vote_rematch(room, player.id, accept)
+    if result in ("ignored", "pending"):
+        return
+
+    note = "리매치!" if result == "start" else "리매치를 거절했습니다."
+    message = chat_service.push(room, player.nickname, note)
+    if message:
+        await hub.broadcast(room.code, message)
+    await hub.broadcast(room.code, {"type": "room_state", "room": room_state(room)})
 
 
 def _do_shoot(room: Room, player: Player) -> None:
@@ -233,6 +262,7 @@ async def _cleanup(code: str, player_id: str | None) -> None:
     room.players.pop(player_id, None)
     room.scores.pop(player_id, None)
     room.round_wins.pop(player_id, None)
+    room.rematch_votes.discard(player_id)
     if room.loser_to_pick == player_id:
         room.loser_to_pick = None
         engine.reset_round(room)

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from app.game import constants as C
+from app.game import maps as M
 
 Phase = Literal["waiting", "playing", "round_over", "picking", "finished"]
 Mode = Literal["pvp", "training"]
@@ -223,14 +224,21 @@ class Room:
     bots: dict[str, Bot] = field(default_factory=dict)
     bullets: list[Bullet] = field(default_factory=list)
     zones: list[Zone] = field(default_factory=list)
-    platforms: list[dict[str, float]] = field(default_factory=lambda: [dict(p) for p in C.PLATFORMS])
     messages: list[ChatMessage] = field(default_factory=list)
+
+    #: 방장이 대기실에서 고른 값. maps.RANDOM_ID("random") 일 수 있다.
+    map_id: str = M.DEFAULT_ID
+    #: 지금 실제로 깔려 있는 맵. random 선택은 게임 시작 때 여기로 확정된다.
+    active_map_id: str = M.DEFAULT_ID
+    platforms: list[dict[str, float]] = field(default_factory=lambda: M.platforms_of(M.DEFAULT_ID))
 
     scores: dict[str, int] = field(default_factory=dict)
     round_wins: dict[str, int] = field(default_factory=dict)
     loser_to_pick: str | None = None
     available_cards: list[str] = field(default_factory=list)
     winner_id: str | None = None
+    #: 매치 종료(finished) 후 리매치에 동의한 플레이어 id. 전원 동의하면 바로 다시 시작한다.
+    rematch_votes: set[str] = field(default_factory=set)
 
     tick: int = 0
     bullet_seq: int = 0

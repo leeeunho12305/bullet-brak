@@ -3,15 +3,31 @@
 export const WORLD_WIDTH = 800;
 export const WORLD_HEIGHT = 600;
 export const MAX_CHARGE = 60;
+/** 라운드 2승 = 1점 (서버 constants.ROUNDS_TO_SCORE 와 같아야 한다) */
+export const ROUNDS_TO_SCORE = 2;
 
 export type Phase = 'waiting' | 'playing' | 'round_over' | 'picking' | 'finished';
 export type Mode = 'pvp' | 'training';
+
+/** 편집기 탭 = 파츠 슬롯 (EYES · MOUTHS · DETAIL1 · DETAIL2) */
+export type PartSlot = 'eye' | 'mouth' | 'detail' | 'detail2';
+
+/** 파츠를 몸통 박스 대비 비율만큼 밀어 놓은 값. 편집기에서 드래그로 정한다. */
+export interface PartOffset {
+  x: number;
+  y: number;
+}
+
+export type PartOffsets = Partial<Record<PartSlot, PartOffset>>;
 
 export interface Customization {
   eye: number;
   mouth: number;
   detail: number;
+  detail2: number;
   color: string;
+  /** 슬롯별 위치 보정. 없으면 전부 0. */
+  offsets?: PartOffsets;
 }
 
 export interface Vec {
@@ -26,11 +42,37 @@ export interface RoomPlayer {
   coins: number;
 }
 
+/** 맵 배경/발판 색. renderer 가 그대로 받아 쓴다. */
+export interface MapTheme {
+  bg: string;
+  grid: string;
+  platform: string;
+  edge: string;
+}
+
+/** 맵 카탈로그 한 칸 (GET /api/maps · RoomState.map) */
+export interface MapInfo {
+  id: string;
+  name: string;
+  emoji: string;
+  desc: string;
+  theme: MapTheme;
+  platforms: Platform[];
+  spawns: Vec[];
+}
+
+/** 방장이 "무작위"를 골랐을 때의 값. 실제 맵 id 가 아니다. */
+export const RANDOM_MAP_ID = 'random';
+
 export interface RoomState {
   code: string;
   mode: Mode;
   max_players: number;
   phase: Phase;
+  /** 방장이 고른 값. 'random' 일 수 있다. */
+  map_id: string;
+  /** 지금 실제로 깔려 있는 맵 */
+  map: MapInfo;
   players: RoomPlayer[];
 }
 
@@ -145,6 +187,8 @@ export interface Snapshot {
   tick: number;
   phase: Phase;
   mode: Mode;
+  /** 지금 깔려 있는 맵 id. 이름/테마는 room_state 로만 온다(대역폭). */
+  map_id: string;
   players: PlayerSnap[];
   bots: BotSnap[];
   bullets: BulletSnap[];
@@ -153,6 +197,8 @@ export interface Snapshot {
   loser_to_pick: string | null;
   available_cards: CardInfo[];
   winner_id: string | null;
+  /** 리매치에 동의한 플레이어 id. finished 에서만 찬다. */
+  rematch: string[];
   /** 훈련장 진행 상황. pvp 방이면 null (PROTOCOL §3 TrainingSnap) */
   training: TrainingSnap | null;
 }
@@ -207,4 +253,7 @@ export type ClientMessage =
   | { type: 'chat'; text: string }
   | { type: 'start_game' }
   | { type: 'restart' }
-  | { type: 'avatar'; customization: Customization };
+  | { type: 'rematch'; accept: boolean }
+  | { type: 'avatar'; customization: Customization }
+  /** 방장 전용. 서버가 방장이 아닌 요청은 조용히 무시한다. */
+  | { type: 'set_map'; map_id: string };

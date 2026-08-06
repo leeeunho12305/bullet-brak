@@ -18,7 +18,7 @@ from app.config import get_settings
 from app.game import constants as C
 from app.game import engine
 from app.game.rooms import room_manager
-from app.game.serialize import snapshot
+from app.game.serialize import room_state, snapshot
 from app.services.hub import hub
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -26,6 +26,10 @@ logger = logging.getLogger("bullet-brak")
 
 #: 방 코드 -> 직전 틱의 phase (페이즈 전환 이벤트 감지용)
 _last_phase: dict[str, str] = {}
+
+#: 방 코드 -> 직전 틱의 active_map_id. 맵이 바뀌면 room_state 를 한 번 더 쏜다.
+#: (테마·맵 이름은 스냅샷에 매 틱 싣기엔 무거워서 저빈도 메시지로만 내려간다)
+_last_map: dict[str, str] = {}
 
 #: 빈 방 정리 주기(틱)
 CLEANUP_PERIOD = 600
@@ -42,6 +46,10 @@ async def _tick_once(code: str) -> None:
     engine.tick_room(room)
     _last_phase[code] = room.phase
 
+    if _last_map.get(code) != room.active_map_id:
+        _last_map[code] = room.active_map_id
+        await hub.broadcast(code, {"type": "room_state", "room": room_state(room)})
+
     text = json.dumps(snapshot(room), separators=(",", ":"), ensure_ascii=False)
     await hub.broadcast_text(code, text)
 
@@ -56,6 +64,8 @@ def _sweep() -> None:
         hub.drop_room(code)
     for code in [c for c in _last_phase if c not in room_manager.rooms]:
         _last_phase.pop(code, None)
+    for code in [c for c in _last_map if c not in room_manager.rooms]:
+        _last_map.pop(code, None)
 
 
 async def game_loop() -> None:

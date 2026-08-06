@@ -292,6 +292,19 @@ textarea {
 }
 
 /* ---------- 방 대기실 ---------- */
+.room-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 880px) {
+  .room-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .room-code {
   display: flex;
   align-items: center;
@@ -361,6 +374,106 @@ textarea {
 
 .room-actions > .btn {
   flex: 1;
+}
+
+/* ---------- 맵 선택 ---------- */
+.map-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.map-picker-head .section-title {
+  margin-bottom: 4px;
+}
+
+.map-picker-now {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+/* 선택한 맵 설명은 제목 옆에 이어 붙는다(줄바꿈 없이 한 문단으로) */
+.map-picker-now .hint {
+  display: inline;
+  margin: 0;
+}
+
+.map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  max-height: 344px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.map-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(11, 13, 23, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+}
+
+.map-tile:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--accent-2);
+  color: var(--text);
+}
+
+.map-tile:disabled {
+  cursor: default;
+}
+
+.map-tile.selected {
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 6px 18px rgba(255, 46, 151, 0.28);
+}
+
+.map-tile-art {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.map-tile-dice {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.7rem;
+  background: rgba(8, 11, 20, 0.58);
+}
+
+.map-tile-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* ---------- 로딩 ---------- */

@@ -15,11 +15,15 @@
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/health` | - | `{"status":"ok"}` |
-| POST | `/api/rooms` | `{"mode":"pvp"\|"training","max_players":2}` | `{"code":"123456","mode":"pvp","max_players":2}` |
-| GET | `/api/rooms/{code}` | - | `{"code","mode","max_players","player_count","phase"}` / 404 `{"detail":"..."}` |
+| POST | `/api/rooms` | `{"mode":"pvp"\|"training","max_players":2,"map_id":"classic"}` | `{"code":"123456","mode":"pvp","max_players":2,"map_id":"classic"}` |
+| GET | `/api/rooms/{code}` | - | `{"code","mode","max_players","player_count","phase","map_id"}` / 404 `{"detail":"..."}` |
 | GET | `/api/cards` | - | `[{"id","name","desc","category","color","emoji"}]` |
+| GET | `/api/maps` | - | `[MapInfo]` — 발판·스폰·테마까지. 대기실 미리보기가 그대로 그린다 |
 
 `mode`: `pvp`(방 대전) / `training`(봇 3마리 솔로 연습).
+
+`map_id`: 맵 id 또는 `"random"`. 모르는 값이면 서버가 기본 맵(`classic`)으로 되돌린다.
+`"random"` 이면 **라운드마다** 맵이 바뀐다(훈련장은 낙사 없는 맵 중에서만 뽑는다).
 
 ---
 
@@ -42,8 +46,10 @@
 | `strong_release` | `{}` | 강공격 발사 |
 | `pick_card` | `{"card_id":str}` | 카드 선택 (패자만 유효) |
 | `chat` | `{"text":str}` | 채팅 (서버에서 욕설 마스킹) |
+| `set_map` | `{"map_id":str}` | 방장이 맵 선택 (`waiting`/`finished` 에서만, 방장 아니면 무시) |
 | `start_game` | `{}` | 방장이 게임 시작 |
-| `restart` | `{}` | 종료 후 리매치 |
+| `restart` | `{}` | 종료 후 대기실로 되돌리기 |
+| `rematch` | `{"accept":bool}` | 종료 후 "한 판 더?" 투표. 전원 동의 시 즉시 새 매치, 한 명이라도 거절하면 대기실로 |
 | `avatar` | `{"customization":Customization}` | 대기 중 외형 변경 |
 
 ### 2.2 Server → Client
@@ -64,11 +70,24 @@
 ```jsonc
 Customization = { "eye": 0, "mouth": 0, "detail": 0, "color": "#ff6b6b" }
 
+MapTheme = { "bg": "#0b0d17", "grid": "rgba(...)", "platform": "#1b2438", "edge": "rgba(...)" }
+
+MapInfo = {
+  "id": "classic", "name": "클래식", "emoji": "🟦", "desc": "...",
+  "theme": MapTheme,
+  "platforms": [Platform],          // 인게임과 같은 800x600 좌표계
+  "spawns": [ {"x": f, "y": f} ]    // 라운드 시작 위치(플레이어 수만큼 나눠 쓴다)
+}
+
 RoomState = {
   "code": "123456", "mode": "pvp", "max_players": 2, "phase": "waiting",
+  "map_id": "random",               // 방장이 고른 값. "random" 일 수 있다
+  "map": MapInfo,                   // 지금 실제로 깔려 있는 맵
   "players": [ { "id": "...", "nickname": "익명", "customization": Customization, "coins": 0 } ]
 }
 // phase: "waiting" | "playing" | "round_over" | "picking" | "finished"
+// 맵이 바뀌면(무작위 리롤 포함) 서버가 room_state 를 한 번 더 브로드캐스트한다.
+// 테마/이름을 60Hz 스냅샷에 싣지 않기 위한 장치다.
 
 PlayerSnap = {
   "id": str, "nickname": str, "customization": Customization,
@@ -117,11 +136,13 @@ TrainingSnap = {              // mode=="training" 일 때만. pvp 면 null
 
 Snapshot = {
   "type": "state", "tick": int, "phase": str, "mode": str,
+  "map_id": str,                    // 지금 깔린 맵. 이름/테마는 RoomState 로만 온다
   "players": [PlayerSnap], "bots": [BotSnap], "bullets": [BulletSnap],
   "zones": [ZoneSnap], "platforms": [Platform],
   "loser_to_pick": str | null,
   "available_cards": [CardInfo],
   "winner_id": str | null,
+  "rematch": [str],                 // 리매치에 동의한 player id. finished 에서만 찬다
   "training": TrainingSnap | null
 }
 ```
@@ -133,6 +154,8 @@ Snapshot = {
 - HP 120, 중력 0.6, 마찰 0.8, 이동속도 5, 점프 -16, 기본 쿨다운 15틱.
 - 라운드: 상대를 먼저 쓰러뜨리면 `round_wins` +1. **2 라운드 승 = 1 점**, **5 점 = 매치 승리**.
 - 라운드 종료 2초 뒤: 점수가 났으면 패자가 카드 5장 중 1장 선택(`picking`), 아니면 즉시 다음 라운드.
+- 매치 종료(`finished`) 후 리매치: 양쪽 다 `rematch{accept:true}` 를 보내면 카드/스탯을 초기화하고
+  대기실을 거치지 않고 바로 `playing` 으로 간다. 한 명이라도 거절하면 `waiting`(대기실)으로 돌아간다.
 - **거리별 대미지 감쇠**: 탄환이 발사 지점에서 날아간 거리에 비례해 위력이 줄어든다.
   배율 = 0px 에서 1.5배 → 600px 이상 0.4배 (선형). 기본 탄(20) 기준 근접 30 / 원거리 8.
   가드 반사 시 반사 지점이 새 기준점이 되고, 위력은 반사한 쪽 공격력 배율로 환산된다.
@@ -188,9 +211,20 @@ def start_wave(room: Room, wave: int) -> None
 def record(room: Room, key: str, amount: float = 1) -> None   # 통계 집계(no-op 가능)
 def snap(room: Room) -> dict | None             # PROTOCOL 3장 TrainingSnap
 
+# app/game/maps.py  (맵 카탈로그 — constants 외에 아무것도 import 하지 않는다)
+RANDOM_ID = "random"; DEFAULT_ID = "classic"
+BY_ID: dict[str, GameMap]                       # 발판/스폰/테마를 든 불변 데이터
+TRAINING_SAFE_IDS: tuple[str, ...]              # 낙사 없는 맵(훈련장 무작위용)
+def catalog() -> list[dict]                     # GET /api/maps
+def get(map_id) -> GameMap                      # 모르는 id 면 기본 맵
+def is_valid_selection(map_id) -> bool          # 실제 맵이거나 "random"
+def resolve(map_id, current=None) -> str        # "random" -> 실제 id
+def apply(room, map_id) -> GameMap              # 방에 발판을 깔고 active_map_id 기록
+def spawn_points(room=None) -> list[tuple[float, float]]
+
 # app/game/rooms.py  (RoomManager)
 class RoomManager:
-    def create(mode, max_players) -> Room
+    def create(mode, max_players, map_id="classic") -> Room
     def get(code) -> Room | None
     def remove(code) -> None
     rooms: dict[str, Room]
@@ -198,6 +232,8 @@ class RoomManager:
 # app/game/engine.py
 def tick_room(room: Room) -> None        # 1틱 시뮬레이션(플레이어/봇/총알/존/라운드판정)
 def snapshot(room: Room) -> dict         # PROTOCOL 3장 Snapshot 그대로
+def set_map(room, map_id) -> bool        # 방장 선택(waiting/finished 에서만)
+def prepare_map(room) -> None            # 라운드 시작 전 맵 확정("random" 이면 리롤)
 
 # app/game/serialize.py
 def room_state(room: Room) -> dict

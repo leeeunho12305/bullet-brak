@@ -8,13 +8,14 @@ FastAPI/WebSocket 을 절대 import 하지 않는다(순수 로직, 테스트 �
 from __future__ import annotations
 
 import random
-from typing import Any
+from typing import Any, Literal
 
 from app.game import constants as C
-from app.game import sim, training
+from app.game import maps, sim, training
 from app.game.bullets import update_bullets
 from app.game.cards import apply_card, random_cards, reset_card_state
 from app.game.models import Room
+from app.game.physics import clamp
 
 #: 라운드 종료 시점의 승자 id 를 방 코드별로 기억(타이머 만료 때 사용).
 _ROUND_WINNER: dict[str, str | None] = {}
@@ -159,14 +160,57 @@ def _event(name: str, winner_id: str | None, loser_id: str | None) -> dict[str, 
 # ==========================================================================
 
 
-def random_spawn() -> tuple[float, float]:
-    return 100.0 + random.random() * 600.0, 150.0
+def random_spawn(room: Room | None = None) -> tuple[float, float]:
+    """맵에 정의된 스폰 지점 하나. 맵을 모르면 월드 상단 랜덤."""
+    points = maps.spawn_points(room)
+    return random.choice(points) if points else maps.fallback_spawn()
+
+
+def _place_players(room: Room) -> None:
+    """라운드 시작 배치. 스폰 지점을 섞어 겹치지 않게 나눠 준다."""
+    points = maps.spawn_points(room)
+    random.shuffle(points)
+    for i, p in enumerate(room.players.values()):
+        if not points:
+            x, y = maps.fallback_spawn()
+        else:
+            x, y = points[i % len(points)]
+            if i >= len(points):  # 스폰 지점보다 사람이 많으면 자리를 재사용하므로 흩뜨린다
+                x += random.uniform(-45.0, 45.0)
+        p.x = clamp(x, 0.0, C.WIDTH - p.width)
+        p.y = y
+
+
+def prepare_map(room: Room) -> None:
+    """라운드 시작 전 맵 확정.
+
+    방장이 "무작위"를 골랐다면 ROUNDS 처럼 라운드마다 새 맵을 뽑는다.
+    훈련장은 낙사 없는 맵에서만 고른다(봇 상대로 떨어지면 연습이 안 된다).
+    """
+    if room.map_id == maps.RANDOM_ID:
+        pool = maps.TRAINING_SAFE_IDS if room.mode == "training" else None
+        maps.apply(room, maps.random_id(exclude=room.active_map_id, pool=pool))
+    elif room.active_map_id != room.map_id:
+        maps.apply(room, room.map_id)
+
+
+def set_map(room: Room, map_id: str) -> bool:
+    """방장의 맵 선택. 대기실 / 매치 종료 상태에서만 바꿀 수 있다."""
+    if room.phase not in ("waiting", "finished"):
+        return False
+    if not maps.is_valid_selection(map_id):
+        return False
+    room.map_id = map_id
+    if map_id != maps.RANDOM_ID:
+        maps.apply(room, map_id)
+    return True
 
 
 def reset_round(room: Room) -> None:
     """다음 라운드 준비. 카드 효과(스탯)는 유지한다."""
     if room.phase == "finished":
         return
+    prepare_map(room)
     room.phase = "playing"
     room.round_end_timer = 0
     room.loser_to_pick = None
@@ -175,8 +219,8 @@ def reset_round(room: Room) -> None:
     room.zones.clear()
     _ROUND_WINNER.pop(room.code, None)
 
+    _place_players(room)
     for p in room.players.values():
-        p.x, p.y = random_spawn()
         p.vx = p.vy = 0.0
         p.hp = p.max_hp
         p.cooldown = 0.0
@@ -206,6 +250,7 @@ def reset_match(room: Room) -> None:
     """매치 전체 초기화(리매치). 카드/스탯을 기본값으로 되돌린다."""
     room.scores.clear()
     room.round_wins.clear()
+    room.rematch_votes.clear()
     room.winner_id = None
     room.loser_to_pick = None
     room.available_cards = []
@@ -245,9 +290,36 @@ def start_game(room: Room) -> bool:
         return False
     room.scores.clear()
     room.round_wins.clear()
+    room.rematch_votes.clear()
     room.winner_id = None
     reset_round(room)
     return True
+
+
+#: vote_rematch 의 반환값
+RematchResult = Literal["ignored", "pending", "start", "declined"]
+
+
+def vote_rematch(room: Room, player_id: str, accept: bool) -> RematchResult:
+    """매치 종료 후 "한 판 더?" 투표.
+
+    한 명이라도 거절하면 대기실로 돌아가고, 전원 동의하면 곧바로 새 매치를 시작한다.
+    """
+    if room.phase != "finished" or player_id not in room.players:
+        return "ignored"
+
+    if not accept:
+        reset_match(room)  # phase -> waiting (대기실로)
+        return "declined"
+
+    room.rematch_votes.add(player_id)
+    # 혼자 남은 방에서는 상대를 기다린다(둘이 되면 방장이 다시 시작한다).
+    if len(room.players) < 2 or not room.rematch_votes.issuperset(room.players):
+        return "pending"
+
+    reset_match(room)  # 카드/스탯 초기화 + phase -> waiting
+    start_game(room)  # 대기실을 거치지 않고 바로 다음 매치로
+    return "start"
 
 
 def pick_card(room: Room, player_id: str, card_id: str) -> bool:

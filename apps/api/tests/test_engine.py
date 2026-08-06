@@ -173,6 +173,52 @@ def test_reset_match_clears_scores(manager: RoomManager) -> None:
     assert a.hp == C.MAX_HP
 
 
+def test_rematch_needs_both_players(manager: RoomManager) -> None:
+    room = manager.create("pvp", 2)
+    room.phase = "finished"
+    a = _add_player(room, "a")
+    _add_player(room, "b", 600.0)
+    room.scores["a"] = C.SCORE_TO_WIN
+    room.winner_id = "a"
+    a.cards.append("glass_cannon")
+
+    assert engine.vote_rematch(room, "a", True) == "pending"
+    assert room.phase == "finished"  # 상대를 기다린다
+    assert snapshot(room)["rematch"] == ["a"]
+
+    assert engine.vote_rematch(room, "b", True) == "start"
+    assert room.phase == "playing"  # 대기실을 거치지 않는다
+    assert room.scores == {}
+    assert room.winner_id is None
+    assert a.cards == []
+    assert room.rematch_votes == set()
+
+
+def test_rematch_decline_returns_to_lobby(manager: RoomManager) -> None:
+    room = manager.create("pvp", 2)
+    room.phase = "finished"
+    _add_player(room, "a")
+    _add_player(room, "b", 600.0)
+    room.scores["a"] = C.SCORE_TO_WIN
+
+    assert engine.vote_rematch(room, "a", True) == "pending"
+    assert engine.vote_rematch(room, "b", False) == "declined"
+    assert room.phase == "waiting"
+    assert room.rematch_votes == set()
+
+
+def test_rematch_ignored_outside_finished(manager: RoomManager) -> None:
+    room = manager.create("pvp", 2)
+    room.phase = "playing"
+    _add_player(room, "a")
+    assert engine.vote_rematch(room, "a", True) == "ignored"
+    assert room.phase == "playing"
+
+    room.phase = "finished"
+    assert engine.vote_rematch(room, "nobody", True) == "ignored"  # 방에 없는 id
+    assert room.rematch_votes == set()
+
+
 def test_training_first_wave_spawns_from_table(manager: RoomManager) -> None:
     room = manager.create("training", 1)
     _add_player(room, "solo")
@@ -280,6 +326,7 @@ SNAPSHOT_KEYS = {
     "tick",
     "phase",
     "mode",
+    "map_id",
     "players",
     "bots",
     "bullets",
@@ -288,6 +335,7 @@ SNAPSHOT_KEYS = {
     "loser_to_pick",
     "available_cards",
     "winner_id",
+    "rematch",
     "training",
 }
 
@@ -383,7 +431,7 @@ def test_room_state_shape(manager: RoomManager) -> None:
     room = manager.create("pvp", 2)
     _add_player(room, "a")
     state = room_state(room)
-    assert set(state) == {"code", "mode", "max_players", "phase", "players"}
+    assert set(state) == {"code", "mode", "max_players", "phase", "map_id", "map", "players"}
     assert set(state["players"][0]) == {"id", "nickname", "customization", "coins"}
 
 

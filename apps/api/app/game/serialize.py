@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.game import training
+from app.game import maps, training
 from app.game.cards import card_info
 from app.game.models import Bot, Bullet, Player, Room, Zone
 from app.game.stats import damage_table, stat_summary
@@ -114,6 +114,8 @@ def snapshot(room: Room) -> dict[str, Any]:
         "tick": room.tick,
         "phase": room.phase,
         "mode": room.mode,
+        # 테마/이름 같은 무거운 필드는 room_state 로만 보낸다(맵이 바뀌면 서버가 다시 쏜다).
+        "map_id": room.active_map_id,
         "players": [player_snap(room, p, loadout) for p in room.players.values()],
         "bots": [bot_snap(b) for b in room.bots.values()],
         "bullets": [bullet_snap(b) for b in room.bullets if b.active],
@@ -122,6 +124,8 @@ def snapshot(room: Room) -> dict[str, Any]:
         "loser_to_pick": room.loser_to_pick,
         "available_cards": _available_cards(room),
         "winner_id": room.winner_id,
+        # 리매치에 동의한 사람들(finished 에서만 찬다). PROTOCOL §3 Snapshot.rematch
+        "rematch": [pid for pid in room.players if pid in room.rematch_votes],
         "training": training.snap(room),
     }
 
@@ -133,6 +137,9 @@ def room_state(room: Room) -> dict[str, Any]:
         "mode": room.mode,
         "max_players": room.max_players,
         "phase": room.phase,
+        # map_id 는 방장이 고른 값("random" 일 수 있고), map 은 지금 깔린 실제 맵이다.
+        "map_id": room.map_id,
+        "map": maps.get(room.active_map_id).to_dict(),
         "players": [
             {
                 "id": p.id,

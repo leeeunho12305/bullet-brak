@@ -50,12 +50,15 @@ class CreateRoomRequest(BaseModel):
 
     mode: Mode = "pvp"
     max_players: int = Field(default=2, ge=1, le=8)
+    #: 맵 id 또는 "random". 모르는 값이면 서버가 기본 맵으로 되돌린다.
+    map_id: str = Field(default="classic", max_length=32)
 
 
 class CreateRoomResponse(BaseModel):
     code: str
     mode: str
     max_players: int
+    map_id: str = "classic"
 
 
 class RoomInfoResponse(BaseModel):
@@ -64,6 +67,7 @@ class RoomInfoResponse(BaseModel):
     max_players: int
     player_count: int
     phase: str
+    map_id: str = "classic"
 
 
 class CardInfoResponse(BaseModel):
@@ -129,6 +133,14 @@ class PickCardMsg(BaseModel):
     card_id: str
 
 
+class SetMapMsg(BaseModel):
+    """방장의 맵 선택(PROTOCOL §2.1 set_map). 값은 맵 id 또는 "random"."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    map_id: str = Field(default="classic", max_length=32)
+
+
 class ChatMsg(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -146,6 +158,14 @@ class AvatarMsg(BaseModel):
     customization: Customization = Field(default_factory=Customization)
 
 
+class RematchMsg(BaseModel):
+    """매치 종료 후 리매치 투표(PROTOCOL §2.1 rematch). accept=False 면 거절."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    accept: bool = True
+
+
 #: type 문자열 → 페이로드 모델. 값이 None 이면 페이로드가 없는 메시지.
 PAYLOAD_MODELS: dict[str, type[BaseModel] | None] = {
     "join": JoinMsg,
@@ -158,7 +178,9 @@ PAYLOAD_MODELS: dict[str, type[BaseModel] | None] = {
     "chat": ChatMsg,
     "start_game": None,
     "restart": None,
+    "rematch": RematchMsg,
     "avatar": AvatarMsg,
+    "set_map": SetMapMsg,
 }
 
 

@@ -1,11 +1,13 @@
 // 로비: 닉네임 / 외형 / 코인 + 방 만들기 · 코드로 참가 · 훈련 모드
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import AvatarEditor from '@/components/AvatarEditor';
 import { ApiError, api } from '@/api/client';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
 import { useLocalProfile } from '@/hooks/useLocalProfile';
+import { RANDOM_MAP_ID } from '@/types/game';
+import type { MapInfo } from '@/types/game';
 
 const NICKNAME_MAX = 12;
 const CODE_LENGTH = 6;
@@ -23,8 +25,26 @@ export default function LobbyScreen() {
 
   const [code, setCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(2);
+  const [mapId, setMapId] = useState<string>(RANDOM_MAP_ID);
+  const [maps, setMaps] = useState<MapInfo[]>([]);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // 시작 맵. 방을 만든 뒤 대기실에서 방장이 언제든 바꿀 수 있다.
+  useEffect(() => {
+    let alive = true;
+    api
+      .getMaps()
+      .then((list) => {
+        if (alive) setMaps(list);
+      })
+      .catch(() => {
+        /* 목록을 못 받으면 select 가 '무작위' 하나만 남는다 — 서버가 알아서 고른다 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const connecting = status === 'connecting' || busy;
   const message = localError ?? storeError;
@@ -47,6 +67,7 @@ export default function LobbyScreen() {
         const room = await api.createRoom({
           mode,
           max_players: mode === 'training' ? 1 : maxPlayers,
+          map_id: mapId,
         });
         net.connect(room.code, profile());
       } catch (e) {
@@ -55,7 +76,7 @@ export default function LobbyScreen() {
         setBusy(false);
       }
     },
-    [maxPlayers, profile],
+    [mapId, maxPlayers, profile],
   );
 
   const joinRoom = useCallback(
@@ -133,6 +154,26 @@ export default function LobbyScreen() {
               <option value={3}>3명</option>
               <option value={4}>4명</option>
             </select>
+          </div>
+
+          <div className="field">
+            <label className="label" htmlFor="mapId">
+              맵
+            </label>
+            <select
+              id="mapId"
+              className="input"
+              value={mapId}
+              onChange={(e) => setMapId(e.target.value)}
+            >
+              <option value={RANDOM_MAP_ID}>🎲 무작위 (라운드마다 변경)</option>
+              {maps.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.emoji} {m.name}
+                </option>
+              ))}
+            </select>
+            <p className="hint">대기실에서 방장이 다시 고를 수 있어요.</p>
           </div>
 
           <button

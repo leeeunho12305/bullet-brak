@@ -5,7 +5,8 @@
 // import 한다(순환). 순수 함수는 전부 "function 선언"으로 두어 호이스팅되므로
 // 어느 쪽이 먼저 평가돼도 안전하다.
 import { useCallback, useState } from 'react';
-import type { Customization } from '@/types/game';
+import type { Customization, PartOffsets, PartSlot } from '@/types/game';
+import { clampOffset } from '@/game/avatars';
 import { useGameStore } from '@/store/gameStore';
 
 export const COINS_KEY = 'bulletBrakCoins';
@@ -14,11 +15,11 @@ export const NICKNAME_KEY = 'bulletBrakNickname';
 export const CUSTOMIZATION_KEY = 'bulletBrakCustomization';
 
 /**
- * 잠금 없이 기본 제공되는 아이템 개수(index 0~1).
- * 즉 각 카테고리의 뒤쪽 3종이 유료다 —
- *   눈: 귀염 / X눈 / 선글, 입: 동그라미 / 고양이 / 이빨, 디테일: 리본 / 모자 / 콧수염
+ * 잠금 없이 기본 제공되는 아이템 개수(각 카테고리 앞쪽 index 0~7).
+ * 파츠 카탈로그를 크게 늘리면서 무료 기본 세트도 같이 늘렸다.
+ * 그 뒤 인덱스는 전부 ITEM_PRICE 코인짜리 상점 아이템이다.
  */
-export const FREE_ITEM_COUNT = 2;
+export const FREE_ITEM_COUNT = 8;
 /** 잠금 아이템 가격(코인) */
 export const ITEM_PRICE = 50;
 
@@ -27,6 +28,7 @@ export const SHOP_CATEGORY: Record<string, string> = {
   eye: 'eyes',
   mouth: 'mouths',
   detail: 'details',
+  detail2: 'details2',
 };
 
 export type OwnedItems = Record<string, boolean>;
@@ -41,8 +43,12 @@ export const DEFAULT_CUSTOMIZATION: Customization = {
   eye: 0,
   mouth: 0,
   detail: 0,
+  detail2: 0,
   color: '#ff6b6b',
+  offsets: {},
 };
+
+const PART_SLOTS: PartSlot[] = ['eye', 'mouth', 'detail', 'detail2'];
 
 function readRaw(key: string): string | null {
   try {
@@ -60,6 +66,21 @@ function writeRaw(key: string, value: string): void {
   }
 }
 
+/** 저장된 offsets 를 슬롯별로 정리한다. 모르는 키/잘못된 값은 버린다. */
+function parseOffsets(raw: unknown): PartOffsets {
+  if (!raw || typeof raw !== 'object') return {};
+  const src = raw as Record<string, unknown>;
+  const out: PartOffsets = {};
+  for (const slot of PART_SLOTS) {
+    const value = src[slot];
+    if (!value || typeof value !== 'object') continue;
+    const { x, y } = value as { x?: unknown; y?: unknown };
+    const off = clampOffset({ x: Number(x), y: Number(y) });
+    if (off.x !== 0 || off.y !== 0) out[slot] = off;
+  }
+  return out;
+}
+
 /** 저장된 값에서 Customization 을 안전하게 복구 */
 function parseCustomization(raw: string | null): Customization {
   if (!raw) return { ...DEFAULT_CUSTOMIZATION };
@@ -71,7 +92,10 @@ function parseCustomization(raw: string | null): Customization {
       eye: typeof obj.eye === 'number' ? obj.eye : 0,
       mouth: typeof obj.mouth === 'number' ? obj.mouth : 0,
       detail: typeof obj.detail === 'number' ? obj.detail : 0,
+      // detail2 는 나중에 생긴 슬롯이라 예전 저장값에는 없다 → 0(없음)
+      detail2: typeof obj.detail2 === 'number' ? obj.detail2 : 0,
       color: typeof obj.color === 'string' ? obj.color : DEFAULT_CUSTOMIZATION.color,
+      offsets: parseOffsets(obj.offsets),
     };
   } catch {
     return { ...DEFAULT_CUSTOMIZATION };

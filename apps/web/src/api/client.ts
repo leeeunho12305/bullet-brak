@@ -1,5 +1,5 @@
 // REST 클라이언트 — docs/PROTOCOL.md §1
-import type { CardInfo, Mode, Phase } from '@/types/game';
+import type { CardInfo, MapInfo, Mode, Phase } from '@/types/game';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
@@ -10,12 +10,15 @@ export interface HealthResponse {
 export interface CreateRoomBody {
   mode: Mode;
   max_players: number;
+  /** 맵 id 또는 'random'. 생략하면 서버 기본 맵. */
+  map_id?: string;
 }
 
 export interface CreateRoomResponse {
   code: string;
   mode: Mode;
   max_players: number;
+  map_id: string;
 }
 
 export interface RoomSummary {
@@ -24,6 +27,7 @@ export interface RoomSummary {
   max_players: number;
   player_count: number;
   phase: Phase;
+  map_id: string;
 }
 
 /** 서버가 내려주는 에러(detail)를 그대로 담는 예외 */
@@ -84,5 +88,9 @@ export const api = {
 
   getCards(): Promise<CardInfo[]> {
     return request<CardInfo[]>('/api/cards');
+  },
+
+  getMaps(): Promise<MapInfo[]> {
+    return request<MapInfo[]>('/api/maps');
   },
 };

@@ -1,0 +1,42 @@
+# 배포된 게임 서버를 재우지 않기 위한 외부 핑.
+#
+# Render 무료 플랜은 15분간 인바운드 요청이 없으면 인스턴스를 재운다. 재우면
+#   - 다음 접속자가 콜드 스타트를 기다리고(30초~1분)
+#   - 메모리에 있던 방/점수가 전부 사라진다 (방 상태가 프로세스 메모리다)
+#
+# serve-static.mjs 도 스스로 핑을 쏘지만, 그건 "깨어 있는 동안 유지"만 된다.
+# 이미 잠든 인스턴스를 깨우는 건 밖에서만 가능하므로 이 워크플로가 필요하다.
+#
+# 주의: GitHub 은 저장소에 60일간 활동이 없으면 스케줄 워크플로를 자동 비활성화한다.
+#       그때는 Actions 탭에서 다시 켜면 된다.
+name: keepalive
+
+on:
+  schedule:
+    # 10분마다. Render 의 유휴 판정(15분)보다 짧아야 의미가 있다.
+    # GitHub 스케줄은 혼잡하면 몇 분씩 밀리므로 여유를 두고 10분으로 잡았다.
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # 수동으로 즉시 깨우고 싶을 때
+
+# 핑이 겹쳐 돌 필요는 없다.
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 게임 서버 깨우기
+        env:
+          # 다른 주소에 배포했다면 저장소 Variables 에 SITE_URL 을 넣으면 그쪽을 쓴다.
+          SITE_URL: ${{ vars.SITE_URL || 'https://bullet-brak.onrender.com' }}
+        run: |
+          # 잠들어 있으면 콜드 스타트가 오래 걸리므로 넉넉히 기다린다.
+          code=$(curl -sS -m 120 -o /dev/null -w '%{http_code}' "$SITE_URL/healthz" || echo "000")
+          echo "$SITE_URL/healthz -> $code"
+          # 상태까지 남겨 두면 나중에 로그만 보고 API 가 살아 있었는지 알 수 있다.
+          curl -sS -m 60 "$SITE_URL/healthz" || true
+          echo
+          test "$code" = "200"

@@ -1,11 +1,31 @@
 // 순수 캔버스 렌더러 — React 에 의존하지 않는다.
 // renderFrame() 은 rAF 루프에서 매 프레임 호출된다. 객체 할당을 최소화한다.
 import { MAX_CHARGE, WORLD_HEIGHT, WORLD_WIDTH } from '@/types/game';
-import type { BotSnap, PlayerSnap, Snapshot } from '@/types/game';
+import type { BotSnap, MapTheme, PlayerSnap, Snapshot } from '@/types/game';
 import { drawAvatar } from './avatars';
 
 const GRID = 40;
 const TAU = Math.PI * 2;
+
+/** 맵 정보가 아직 안 왔을 때 쓰는 기본 테마(= classic) */
+const DEFAULT_THEME: MapTheme = {
+  bg: '#0b0d17',
+  grid: 'rgba(0, 229, 255, 0.055)',
+  platform: '#1b2438',
+  edge: 'rgba(0, 229, 255, 0.45)',
+};
+
+let theme: MapTheme = DEFAULT_THEME;
+
+/** 맵이 바뀌면 GameCanvas 가 호출한다(room_state 로만 내려오는 값이라 rAF 밖에서 넣는다). */
+export function setMapTheme(next: MapTheme | null | undefined): void {
+  theme = next ?? DEFAULT_THEME;
+}
+
+/** 스냅샷이 아직 없을 때 캔버스를 칠할 색 */
+export function backgroundColor(): string {
+  return theme.bg;
+}
 
 /** 존 타입별 색상 */
 const ZONE_COLORS: Record<string, string> = {
@@ -71,7 +91,7 @@ function getVignette(ctx: CanvasRenderingContext2D): CanvasGradient {
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = '#0b0d17';
+  ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
   // 네온 그리드 (경로 1개로 한 번에 stroke)
@@ -84,7 +104,7 @@ function drawBackground(ctx: CanvasRenderingContext2D): void {
     ctx.moveTo(0, y + 0.5);
     ctx.lineTo(WORLD_WIDTH, y + 0.5);
   }
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.055)';
+  ctx.strokeStyle = theme.grid;
   ctx.lineWidth = 1;
   ctx.stroke();
 
@@ -94,16 +114,16 @@ function drawBackground(ctx: CanvasRenderingContext2D): void {
 
 function drawPlatforms(ctx: CanvasRenderingContext2D, snap: Snapshot): void {
   const list = snap.platforms;
-  ctx.fillStyle = '#1b2438';
+  ctx.fillStyle = theme.platform;
   for (let i = 0; i < list.length; i += 1) {
     const p = list[i];
     ctx.fillRect(p.x, p.y, p.width, p.height);
   }
   ctx.save();
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)';
+  ctx.strokeStyle = theme.edge;
   ctx.lineWidth = 2;
   ctx.shadowBlur = 10;
-  ctx.shadowColor = 'rgba(0, 229, 255, 0.6)';
+  ctx.shadowColor = theme.edge;
   ctx.beginPath();
   for (let i = 0; i < list.length; i += 1) {
     const p = list[i];

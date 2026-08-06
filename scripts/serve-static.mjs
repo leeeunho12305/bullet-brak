@@ -328,9 +328,45 @@ async function startEmbeddedApi() {
   console.error(`내장 API 가 뜨지 않았다. 외부 ${API_ORIGIN} 로 계속 간다.`);
 }
 
+// --------------------------------------------------------------------------
+// 슬립 방지
+//
+// Render 무료 플랜은 15분간 인바운드 요청이 없으면 인스턴스를 재운다. 그러면 다음
+// 접속자가 콜드 스타트를 기다려야 하고, 메모리에 있던 방과 점수도 사라진다.
+// 깨어 있는 동안 스스로 공개 URL 을 두드려 유휴 타이머를 리셋한다(밖으로 나갔다
+// 라우터를 거쳐 돌아오므로 인바운드 요청으로 잡힌다).
+//
+// 이미 잠든 뒤에는 스스로 깨어날 수 없다. 깨우는 역할은 밖에 있는
+// .github/workflows/keepalive.yml 이 맡는다. 둘이 한 쌍이다.
+// --------------------------------------------------------------------------
+
+const KEEPALIVE_URL = (process.env.KEEPALIVE_URL ?? process.env.RENDER_EXTERNAL_URL ?? '').replace(
+  /\/+$/,
+  '',
+);
+const KEEPALIVE_MS = Number(process.env.KEEPALIVE_MS ?? 10 * 60 * 1000);
+
+function startKeepAlive() {
+  if (!KEEPALIVE_URL || KEEPALIVE_MS <= 0) return;
+
+  const url = `${KEEPALIVE_URL}/healthz`;
+  console.log(`슬립 방지: ${Math.round(KEEPALIVE_MS / 60000)}분마다 ${url}`);
+
+  const timer = setInterval(() => {
+    const lib = url.startsWith('https:') ? https : http;
+    const req = lib.get(url, (res) => res.resume());
+    req.on('error', (err) => console.error(`슬립 방지 핑 실패: ${err.message}`));
+    req.setTimeout(20_000, () => req.destroy());
+  }, KEEPALIVE_MS);
+  timer.unref?.(); // 이 타이머 때문에 프로세스가 안 죽는 일은 없게
+
+  return timer;
+}
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`정적 서버 http://0.0.0.0:${PORT} -> ${ROOT}`);
   console.log(`  /api, /ws -> ${target.origin}`);
   // 정적 서빙을 막지 않도록 기다리지 않는다.
   void startEmbeddedApi();
+  startKeepAlive();
 });
