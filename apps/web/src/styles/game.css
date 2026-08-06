@@ -545,27 +545,19 @@
   from { opacity: 0; transform: scale(0.98); }
   to { opacity: 1; transform: none; }
 }
-.round-result-kicker {
-  margin: 0;
-  font-size: clamp(0.62rem, 1.6vw, 0.82rem);
-  font-weight: 800;
-  letter-spacing: 0.42em;
-  /* letter-spacing 은 마지막 글자 뒤에도 붙는다. 그 몫을 빼야 가운데가 진짜 가운데다. */
-  margin-right: -0.42em;
-  text-transform: uppercase;
-  opacity: 0.85;
-}
+/* "HALF BLUE" — 글자는 흰색, 글로우만 팀 색(inline style). */
 .round-result-title {
-  margin: 0;
+  margin: 0 -0.06em 0 0; /* 마지막 글자 뒤 letter-spacing 몫 보정 */
   padding: 0 14px;
   max-width: 100%;
-  font-size: clamp(1.9rem, 7vw, 3.6rem);
+  font-size: clamp(2.1rem, 9vw, 4.4rem);
   font-weight: 800;
   letter-spacing: 0.06em;
-  line-height: 1.1;
+  line-height: 1.05;
   text-align: center;
+  text-transform: uppercase;
   overflow-wrap: anywhere;
-  text-shadow: 0 0 28px currentColor;
+  color: #f2f7ff;
 }
 
 /* 라운드 승수 원 — 양쪽 화면에 똑같이, 화면을 채울 만큼 크게 */
@@ -574,9 +566,11 @@
   align-items: flex-start;
   gap: clamp(28px, 10vw, 110px);
 }
-.round-orb { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.round-orb { display: flex; }
+/* 아직 한 판도 못 딴 쪽도 또렷하게 보인다(테두리 + 가운데 선 + 은은한 글로우). */
 .round-orb .score-orb {
-  opacity: 0.45;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 10px var(--orb));
   animation: orb-pop 0.4s cubic-bezier(0.2, 0.8, 0.3, 1.35) both;
 }
 .round-orb .score-orb.lit { opacity: 1; filter: drop-shadow(0 0 18px var(--orb)); }
@@ -594,21 +588,6 @@
 @keyframes orb-glow {
   0%, 100% { filter: drop-shadow(0 0 18px var(--orb)); }
   50% { filter: drop-shadow(0 0 42px var(--orb)); }
-}
-.round-orb-name {
-  max-width: clamp(120px, 22vw, 200px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: clamp(0.85rem, 2.2vw, 1.15rem);
-  font-weight: 800;
-}
-.round-orb-count {
-  font-size: clamp(0.68rem, 1.7vw, 0.85rem);
-  font-weight: 700;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.08em;
 }
 
 /* ---------- 채팅 ---------- */

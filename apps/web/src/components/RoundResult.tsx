@@ -5,6 +5,7 @@ import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
 import type { LastEvent } from '@/store/gameStore';
 import ScoreOrb from '@/components/ScoreOrb';
+import { colorName } from '@/game/colorNames';
 import { ROUNDS_TO_SCORE } from '@/types/game';
 import type { Phase, PlayerSnap } from '@/types/game';
 
@@ -32,8 +33,9 @@ interface OrbView {
 interface RoundView {
   /** 리렌더 판정용 서명 */
   key: string;
-  kicker: string;
+  /** "HALF BLUE" / "POINT BLUE" / "DRAW" */
   title: string;
+  /** 이긴 팀 색. 제목 글로우에 쓴다(글자 자체는 흰색). */
   color: string;
   orbs: OrbView[];
 }
@@ -68,14 +70,16 @@ function buildView(players: PlayerSnap[], ev: LastEvent | null, myId: string | n
     won: p.id === winnerId,
   }));
 
-  // 1승이면 "하프", 2승째면 그 라운드로 점수가 난다.
+  // 이긴 팀을 닉네임이 아니라 "색"으로 부른다 — 원의 색과 문구가 바로 이어진다.
+  // 1승이면 원이 반만 차니까 HALF, 2승째면 원이 꽉 차고 점수가 난다.
   const winner = players.find((p) => p.id === winnerId) ?? null;
   const scored = winner !== null && winner.round_wins >= ROUNDS_TO_SCORE;
-  const kicker = winner ? (scored ? '득점' : '라운드 승리') : '무승부';
-  const title = winner ? `${winner.nickname || '익명'} ${scored ? '득점!' : '하프!'}` : '라운드 무승부';
+  const title = winner
+    ? `${scored ? 'POINT' : 'HALF'} ${colorName(colorOf(winner))}`
+    : 'DRAW';
   const color = winner ? colorOf(winner) : 'var(--muted)';
   const key = `${title}|${orbs.map((o) => `${o.id}:${o.wins}:${o.color}:${o.won ? 1 : 0}`).join(',')}`;
-  return { key, kicker, title, color, orbs };
+  return { key, title, color, orbs };
 }
 
 function RoundResultInner(): JSX.Element | null {
@@ -102,23 +106,22 @@ function RoundResultInner(): JSX.Element | null {
 
   return (
     <div className="round-result">
-      <p className="round-result-kicker" style={{ color: view.color }}>
-        {view.kicker}
-      </p>
-      <h3 className="round-result-title" style={{ color: view.color }}>
+      {/* 글자는 흰색이고 글로우만 이긴 팀 색이다(어느 색이 이겨도 잘 읽힌다). */}
+      <h3
+        className="round-result-title"
+        style={{ textShadow: `0 0 28px ${view.color}, 0 0 68px ${view.color}` }}
+      >
         {view.title}
       </h3>
-      {/* 양쪽 화면에 똑같이 뜬다 — 서로 몇 판씩 땄는지 한눈에 보라고 크게 그린다. */}
+      {/* 양쪽 화면에 똑같이 뜬다. 라벨 없이 원만 — 색이 곧 이름이다. */}
       <div className="round-result-orbs">
         {view.orbs.map((o) => (
-          <div key={o.id} className={`round-orb${o.won ? ' won' : ''}`}>
+          <div
+            key={o.id}
+            className={`round-orb${o.won ? ' won' : ''}`}
+            aria-label={`${o.nickname}: ${o.wins}/${ROUNDS_TO_SCORE}`}
+          >
             <ScoreOrb wins={o.wins} color={o.color} size={ORB_SIZE} />
-            <span className="round-orb-name" style={{ color: o.color }}>
-              {o.nickname}
-            </span>
-            <span className="round-orb-count">
-              {o.wins} / {ROUNDS_TO_SCORE}
-            </span>
           </div>
         ))}
       </div>
