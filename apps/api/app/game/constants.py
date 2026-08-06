@@ -107,4 +107,18 @@ AVATAR_PALETTE = [
     "#94d82d",
 ]
 
-DEFAULT_CUSTOMIZATION = {"eye": 0, "mouth": 0, "detail": 0, "color": "#ff6b6b"}
+# 편집기 파츠 슬롯. 클라 types/game.ts 의 PartSlot 과 같은 값이어야 한다.
+PART_SLOTS = ("eye", "mouth", "detail", "detail2")
+# 파츠 위치 보정 한계(몸통 박스 대비 비율). 클라 game/avatars.ts 의 MAX_OFFSET 과 같은 값.
+MAX_PART_OFFSET = 0.32
+# 파츠 인덱스 상한. 클라 카탈로그보다 넉넉하게 두고, 실제 그림은 클라가 clamp 한다.
+MAX_PART_INDEX = 199
+
+DEFAULT_CUSTOMIZATION = {
+    "eye": 0,
+    "mouth": 0,
+    "detail": 0,
+    "detail2": 0,
+    "color": "#ff6b6b",
+    "offsets": {},
+}

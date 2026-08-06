@@ -505,71 +505,231 @@
 .chat-input { width: 100%; }
 
 /* ---------- 아바타 편집기 ---------- */
-.avatar-editor { display: flex; gap: 12px; padding: 12px; align-items: stretch; flex-wrap: wrap; }
-.ae-preview {
-  display: grid;
-  place-items: center;
-  width: 170px;
-  height: 170px;
+/* 로비에 놓이는 작은 런처 카드 */
+.ae-launcher {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--panel-2);
-  flex: none;
 }
-.ae-side { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.ae-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-.ae-tab {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 4px 9px;
-  border-radius: 6px;
+.ae-launcher canvas { flex: none; }
+.ae-launcher-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ae-launcher-text b { font-size: 0.9rem; }
+.ae-launcher-text span { font-size: 0.72rem; color: var(--muted); line-height: 1.35; }
+
+/* 전체화면 편집기 */
+.ae-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overflow: auto;
+  background:
+    radial-gradient(680px 460px at 22% 40%, rgba(46, 80, 160, 0.22), transparent 70%),
+    #070a18;
+  animation: ae-fade 0.16s ease-out;
 }
-.ae-tab.active { color: var(--accent-2); background: rgba(0, 229, 255, 0.12); }
-.ae-grid { display: flex; gap: 6px; flex-wrap: wrap; }
-.ae-item {
+@keyframes ae-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ae-modal-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 5vw, 60px);
+  flex-wrap: wrap;
+}
+
+/* ── 왼쪽: 캐릭터 스테이지 ── */
+.ae-stage-col {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 4px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  gap: 16px;
+}
+.ae-stage { position: relative; touch-action: none; }
+.ae-stage canvas { display: block; }
+
+/* "드래그해서 파츠 이동" 안내 — 사진처럼 캐릭터 왼쪽에 붙인다 */
+.ae-move-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(232, 236, 255, 0.5);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  line-height: 1.3;
+  user-select: none;
+}
+.ae-move-icon { font-size: 1rem; }
+.ae-move-arrow { font-size: 1.1rem; opacity: 0.7; }
+
+/* 파츠 드래그 핸들 (사진의 파란 점 4개) */
+.ae-handle {
+  position: absolute;
+  border: 1px dashed rgba(90, 160, 255, 0.4);
+  border-radius: 10px;
+  cursor: move;
+  touch-action: none;
+}
+.ae-handle:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.ae-dot {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #2f7dea;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 10px rgba(47, 125, 234, 0.9);
+}
+.ae-dot.tl { left: -6px; top: -6px; }
+.ae-dot.tr { right: -6px; top: -6px; }
+.ae-dot.bl { left: -6px; bottom: -6px; }
+.ae-dot.br { right: -6px; bottom: -6px; }
+.ae-handle-reset {
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translate(100%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
   cursor: pointer;
-  color: var(--muted);
 }
+.ae-handle-reset:hover { background: rgba(255, 255, 255, 0.22); }
+
+.ae-colors {
+  display: grid;
+  grid-template-columns: repeat(6, 26px);
+  gap: 8px;
+  justify-content: center;
+}
+.ae-color {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.ae-color.selected { border-color: #fff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.5); }
+
+.ae-done {
+  padding: 9px 40px;
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, transform 0.14s ease;
+}
+.ae-done:hover { background: #fff; color: #070a18; transform: scale(1.04); }
+
+/* ── 오른쪽: 탭 + 파츠 그리드 ── */
+.ae-picker { display: flex; flex-direction: column; gap: 10px; width: min(430px, 92vw); }
+.ae-tabs { display: flex; gap: 8px; }
+.ae-tab {
+  flex: 1;
+  padding: 7px 4px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  color: rgba(232, 236, 255, 0.65);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.ae-tab:hover { border-color: rgba(255, 255, 255, 0.6); color: #fff; }
+.ae-tab.active { background: rgba(255, 255, 255, 0.16); border-color: #fff; color: #fff; }
+
+.ae-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+.ae-grid::-webkit-scrollbar { width: 8px; }
+.ae-grid::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: 4px; }
+.ae-item {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.ae-item canvas { display: block; width: 100%; height: 100%; }
+.ae-item:hover { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.35); }
 .ae-item.selected {
-  border-color: var(--accent-2);
-  box-shadow: 0 0 10px rgba(0, 229, 255, 0.35);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35) inset;
 }
-.ae-item-label { font-size: 0.62rem; }
 /* 아직 안 산 파츠: 흐리게 + 가격표 */
-.ae-item.locked { opacity: 0.55; }
+.ae-item.locked { opacity: 0.5; }
 .ae-item.locked:hover { opacity: 0.85; }
 .ae-item.locked.too-poor { cursor: not-allowed; }
 .ae-price {
-  font-size: 0.6rem;
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: rgba(7, 10, 24, 0.75);
+  font-size: 0.52rem;
   font-weight: 700;
-  color: var(--accent-3, #ffd43b);
+  color: var(--warn);
   letter-spacing: -0.02em;
 }
+
+.ae-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 22px; }
 .ae-shop-hint { font-size: 0.68rem; color: var(--muted); margin: 0; }
-.ae-shop-hint b { color: var(--accent-3, #ffd43b); }
+.ae-shop-hint b { color: var(--warn); }
 .ae-notice {
   font-size: 0.7rem;
   margin: 0;
   color: var(--accent-2);
   background: rgba(0, 229, 255, 0.1);
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 3px 8px;
 }
-.ae-color { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
-.ae-color.selected { border-color: #fff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.5); }
+
+/* 넓은 화면에서는 안내 문구를 캐릭터 왼쪽으로 뺀다(사진과 같은 배치) */
+@media (min-width: 1080px) {
+  .ae-move-hint {
+    position: absolute;
+    top: 34%;
+    right: calc(100% + 18px);
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
 
 @media (max-width: 860px) {
   .chat-box { flex: 1 1 100%; height: 220px; }

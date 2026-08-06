@@ -5,9 +5,12 @@ PROTOCOL §1 / §2.1 그대로. 검증 실패 시 해당 메시지는 무시한�
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.game import constants as C
 
 Mode = Literal["pvp", "training"]
 
@@ -16,18 +19,42 @@ Mode = Literal["pvp", "training"]
 # --------------------------------------------------------------------------
 
 
+class PartOffset(BaseModel):
+    """파츠를 몸통 박스 대비 비율만큼 밀어 놓은 값(편집기의 드래그 결과)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    x: float = 0.0
+    y: float = 0.0
+
+    @field_validator("x", "y")
+    @classmethod
+    def _clamp_axis(cls, v: float) -> float:
+        f = float(v)
+        if not math.isfinite(f):
+            return 0.0
+        return max(-C.MAX_PART_OFFSET, min(C.MAX_PART_OFFSET, f))
+
+
 class Customization(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     eye: int = 0
     mouth: int = 0
     detail: int = 0
+    detail2: int = 0
     color: str = "#ff6b6b"
+    offsets: dict[str, PartOffset] = Field(default_factory=dict)
 
-    @field_validator("eye", "mouth", "detail")
+    @field_validator("eye", "mouth", "detail", "detail2")
     @classmethod
     def _clamp_index(cls, v: int) -> int:
-        return max(0, min(20, int(v)))
+        return max(0, min(C.MAX_PART_INDEX, int(v)))
+
+    @field_validator("offsets")
+    @classmethod
+    def _known_slots(cls, v: dict[str, PartOffset]) -> dict[str, PartOffset]:
+        return {k: off for k, off in v.items() if k in C.PART_SLOTS}
 
     @field_validator("color")
     @classmethod

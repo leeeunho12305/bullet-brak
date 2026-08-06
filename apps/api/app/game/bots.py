@@ -57,6 +57,7 @@ def create_bot(room: Room, tier: str = "rookie", hp_scale: float = 1.0) -> Bot:
             "eye": random.randrange(5),
             "mouth": random.randrange(5),
             "detail": random.randrange(5),
+            "detail2": random.randrange(4),
             "color": random.choice(C.AVATAR_PALETTE),
         },
     )

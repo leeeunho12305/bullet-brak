@@ -390,7 +390,7 @@ def test_snapshot_shape(manager: RoomManager) -> None:
     player = snap["players"][0]
     assert set(player) == PLAYER_KEYS  # 대전 중 대부분의 틱에는 loadout 이 빠진다
     assert player["score"] == 2 and player["round_wins"] == 1
-    assert set(player["customization"]) == {"eye", "mouth", "detail", "color"}
+    assert set(player["customization"]) == {"eye", "mouth", "detail", "detail2", "color", "offsets"}
     assert "flags" not in player and "inputs" not in player
 
 
@@ -425,6 +425,53 @@ def test_snapshot_available_cards_are_card_infos(manager: RoomManager) -> None:
     assert len(snap["available_cards"]) == C.CARD_CHOICES
     for info in snap["available_cards"]:
         assert set(info) == {"id", "name", "desc", "category", "color", "emoji"}
+
+
+def test_customization_offsets_are_clamped(manager: RoomManager) -> None:
+    """편집기가 보낸 파츠 위치는 슬롯/범위를 검사해서 통과시킨다."""
+    room = manager.create("pvp", 2)
+    p = _add_player(room, "a")
+    p.customization = {
+        "eye": 12,
+        "mouth": 3,
+        "detail": 1,
+        "detail2": 5,
+        "color": "#4dabf7",
+        "offsets": {
+            "eye": {"x": 0.1, "y": -0.05},
+            "mouth": {"x": 9.0, "y": "nope"},  # 범위 밖 / 숫자 아님
+            "detail": {"x": 0.0, "y": 0.0},  # 0 은 실어 보내지 않는다
+            "wing": {"x": 0.2, "y": 0.2},  # 모르는 슬롯
+        },
+    }
+
+    custom = room_state(room)["players"][0]["customization"]
+    assert custom["detail2"] == 5
+    assert custom["offsets"]["eye"] == {"x": 0.1, "y": -0.05}
+    assert custom["offsets"]["mouth"] == {"x": C.MAX_PART_OFFSET, "y": 0.0}
+    assert "detail" not in custom["offsets"]
+    assert "wing" not in custom["offsets"]
+
+
+def test_customization_message_rejects_bad_values() -> None:
+    """클라가 보낸 avatar 메시지도 같은 규칙으로 정리된다."""
+    from app.schemas.messages import Customization
+
+    c = Customization.model_validate(
+        {
+            "eye": -3,
+            "detail2": 9999,
+            "color": "javascript:alert(1)",
+            "offsets": {"eye": {"x": float("nan"), "y": 0.5}, "hat": {"x": 0.1, "y": 0.1}},
+            "extra": "무시",
+        }
+    )
+    assert c.eye == 0
+    assert c.detail2 == C.MAX_PART_INDEX
+    assert c.color == "#ff6b6b"
+    assert c.offsets["eye"].x == 0.0
+    assert c.offsets["eye"].y == C.MAX_PART_OFFSET
+    assert "hat" not in c.offsets
 
 
 def test_room_state_shape(manager: RoomManager) -> None:

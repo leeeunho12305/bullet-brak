@@ -5,12 +5,45 @@ dataclass 를 통째로 dump 하지 않는다(내부 flags/타이머 유출 금�
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
+from pydantic import BaseModel
+
+from app.game import constants as C
 from app.game import maps, training
 from app.game.cards import card_info
 from app.game.models import Bot, Bullet, Player, Room, Zone
 from app.game.stats import damage_table, stat_summary
+
+
+def _axis(value: Any) -> float:
+    """파츠 오프셋 한 축. 숫자가 아니거나 범위를 벗어나면 잘라낸다."""
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(f):
+        return 0.0
+    return max(-C.MAX_PART_OFFSET, min(C.MAX_PART_OFFSET, f))
+
+
+def _offsets(raw: Any) -> dict[str, dict[str, float]]:
+    """아는 슬롯의, 0이 아닌 오프셋만 내보낸다(대역폭)."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, dict[str, float]] = {}
+    for slot in C.PART_SLOTS:
+        value = raw.get(slot)
+        if isinstance(value, BaseModel):
+            value = value.model_dump()
+        if not isinstance(value, dict):
+            continue
+        x = _axis(value.get("x"))
+        y = _axis(value.get("y"))
+        if x or y:
+            out[slot] = {"x": x, "y": y}
+    return out
 
 
 def _customization(raw: dict[str, Any] | None) -> dict[str, Any]:
@@ -19,7 +52,9 @@ def _customization(raw: dict[str, Any] | None) -> dict[str, Any]:
         "eye": int(raw.get("eye", 0)),
         "mouth": int(raw.get("mouth", 0)),
         "detail": int(raw.get("detail", 0)),
+        "detail2": int(raw.get("detail2", 0)),
         "color": str(raw.get("color", "#ff6b6b")),
+        "offsets": _offsets(raw.get("offsets")),
     }
 
 
