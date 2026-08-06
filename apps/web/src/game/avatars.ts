@@ -176,16 +176,19 @@ export function drawAvatar(
   ctx.restore();
 }
 
-/** 아바타 편집기 썸네일용: 몸통 원 위에 파츠 하나만 그린다. */
+/**
+ * 아바타 편집기 썸네일용: 몸통 원 위에 파츠 하나만 그린다.
+ * padFrac 은 여백 비율 — 머리 위로 솟는 파츠(뿔 · 왕관 · 토끼귀)는 크게 줘야 안 잘린다.
+ */
 export function drawPartThumbnail(
   ctx: CanvasRenderingContext2D,
   part: PartOption,
   size: number,
   bodyColor = '#d5dae2',
+  padFrac = 0.08,
 ): void {
   ctx.clearRect(0, 0, size, size);
-  // 머리 위로 삐져나오는 파츠(뿔 · 왕관 …)를 담으려고 몸통을 조금 작게 그린다.
-  const pad = size * 0.16;
+  const pad = size * padFrac;
   const box = size - pad * 2;
   ctx.fillStyle = bodyColor;
   ctx.beginPath();
