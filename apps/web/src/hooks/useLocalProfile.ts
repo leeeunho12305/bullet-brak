@@ -4,10 +4,11 @@
 // 주의: gameStore 가 아래 순수 함수들을 import 하고, 이 파일의 훅은 gameStore 를
 // import 한다(순환). 순수 함수는 전부 "function 선언"으로 두어 호이스팅되므로
 // 어느 쪽이 먼저 평가돼도 안전하다.
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Customization, PartOffsets, PartSlot } from '@/types/game';
 import { clampOffset, partPrice } from '@/game/avatars';
 import { useGameStore } from '@/store/gameStore';
+import { purchaseItem } from '@/api/identity';
 
 export const COINS_KEY = 'bulletBrakCoins';
 export const OWNED_ITEMS_KEY = 'bulletBrakOwnedItems';
@@ -163,6 +164,22 @@ export function isItemOwned(items: OwnedItems, category: string, index: number):
   return items[itemKey(category, index)] === true;
 }
 
+/** 보유 목록을 서버 응답 형태(키 배열)에서 복원한다. */
+function ownedFromList(keys: string[]): OwnedItems {
+  const out: OwnedItems = {};
+  for (const key of keys) out[key] = true;
+  return out;
+}
+
+export interface BuyResult {
+  /** 그 파츠를 선택해도 되는가(이미 보유하고 있던 경우도 true) */
+  ok: boolean;
+  /** 사용자에게 보여줄 문구. 조용히 넘길 때(중복 클릭 등)는 null */
+  message: string | null;
+  /** 실제로 빠져나간 코인. 가격은 서버가 정하므로 응답의 잔액에서 역산한다. */
+  spent: number;
+}
+
 export interface UseLocalProfile extends LocalProfile {
   setNickname(value: string): void;
   setCustomization(value: Customization): void;
@@ -170,8 +187,13 @@ export interface UseLocalProfile extends LocalProfile {
   addCoins(delta: number): void;
   owned: OwnedItems;
   isOwned(category: string, index: number): boolean;
-  /** 코인이 충분하면 구매하고 true. 부족하면 false. 가격은 등급에서 자동으로 온다. */
-  buyItem(category: string, index: number, price?: number): boolean;
+  /**
+   * 구매를 시도한다. 계정이 있으면 서버가 판정하고(가격도 서버가 정한다),
+   * 계정이 없으면 예전처럼 localStorage 안에서 처리한다.
+   */
+  buyItem(category: string, index: number): Promise<BuyResult>;
+  /** 서버 응답을 기다리는 중. 버튼을 잠가 이중 결제를 막는 데 쓴다. */
+  buying: boolean;
 }
 
 /**
@@ -186,7 +208,28 @@ export function useLocalProfile(): UseLocalProfile {
   const setCustomization = useGameStore((s) => s.setCustomization);
   const setCoins = useGameStore((s) => s.setCoins);
 
+  const accountId = useGameStore((s) => s.accountId);
+
   const [owned, setOwned] = useState<OwnedItems>(() => loadOwnedItems());
+  const [buying, setBuying] = useState(false);
+  // 비동기 구매 중에 클로저의 owned 가 낡을 수 있어 최신값을 따로 들고 다닌다.
+  const ownedRef = useRef(owned);
+  // state 는 리렌더 뒤에나 바뀐다. 연타를 막으려면 즉시 서는 빗장이 따로 필요하다.
+  const busyRef = useRef(false);
+
+  /** 계정이 붙는 순간 applyAccount 가 localStorage 를 서버 값으로 맞춘다 — 그걸 다시 읽어온다. */
+  useEffect(() => {
+    if (!accountId) return;
+    const fresh = loadOwnedItems();
+    ownedRef.current = fresh;
+    setOwned(fresh);
+  }, [accountId]);
+
+  const applyOwned = useCallback((next: OwnedItems) => {
+    ownedRef.current = next;
+    saveOwnedItems(next);
+    setOwned(next);
+  }, []);
 
   const addCoins = useCallback(
     (delta: number) => {
@@ -201,17 +244,49 @@ export function useLocalProfile(): UseLocalProfile {
   );
 
   const buyItem = useCallback(
-    (category: string, index: number, price = itemPrice(category, index)) => {
-      if (isItemOwned(owned, category, index)) return true;
-      const current = useGameStore.getState().coins;
-      if (current < price) return false;
-      const next: OwnedItems = { ...owned, [itemKey(category, index)]: true };
-      saveOwnedItems(next);
-      setOwned(next);
-      setCoins(current - price);
-      return true;
+    async (category: string, index: number): Promise<BuyResult> => {
+      if (isItemOwned(ownedRef.current, category, index)) {
+        return { ok: true, message: null, spent: 0 };
+      }
+      // 응답을 기다리는 동안 같은 버튼을 또 누르면 두 번 결제된다.
+      if (busyRef.current) return { ok: false, message: null, spent: 0 };
+      busyRef.current = true;
+      setBuying(true);
+
+      const price = itemPrice(category, index);
+      const before = useGameStore.getState().coins;
+      try {
+        const outcome = await purchaseItem(itemKey(category, index));
+
+        if (outcome.kind === 'server') {
+          // 서버가 진실이다. 성공이든 거절이든 응답의 잔액/보유목록으로 통째로 덮어쓴다.
+          const { ok, reason, coins: after, owned_items } = outcome.result;
+          applyOwned(ownedFromList(owned_items));
+          setCoins(after);
+          if (ok || reason === 'already_owned') {
+            return { ok: true, message: null, spent: Math.max(0, before - after) };
+          }
+          if (reason === 'insufficient_coins') {
+            return { ok: false, message: shortfallText(price, after), spent: 0 };
+          }
+          return { ok: false, message: '구매할 수 없는 아이템입니다.', spent: 0 };
+        }
+
+        if (outcome.kind === 'error') {
+          return { ok: false, message: outcome.message, spent: 0 };
+        }
+
+        // 로컬 모드 — 계정이 없는 배포에서도 게임은 돌아야 하므로 예전 규칙 그대로.
+        if (before < price) return { ok: false, message: shortfallText(price, before), spent: 0 };
+        applyOwned({ ...ownedRef.current, [itemKey(category, index)]: true });
+        setCoins(before - price);
+        return { ok: true, message: null, spent: price };
+      } finally {
+        busyRef.current = false;
+        setBuying(false);
+      }
     },
-    [owned, setCoins],
+    [applyOwned, setCoins],
   );
 
   return {
@@ -225,5 +300,10 @@ export function useLocalProfile(): UseLocalProfile {
     owned,
     isOwned,
     buyItem,
+    buying,
   };
+}
+
+function shortfallText(price: number, coins: number): string {
+  return `코인이 부족합니다. ${price}코인이 필요해요. (보유 ${coins})`;
 }

@@ -5,6 +5,7 @@
 // -> store 에는 phase 가 바뀔 때만 반영한다.
 import type { ClientMessage, Customization, ServerMessage, Snapshot } from '@/types/game';
 import { useGameStore } from '@/store/gameStore';
+import { loadToken } from '@/api/identity';
 
 const WS_BASE =
   import.meta.env.VITE_WS_BASE ||
@@ -132,11 +133,14 @@ export const net = {
     socket.onopen = () => {
       if (ws !== socket) return;
       // 접속 직후 join 을 반드시 1회 보낸다.
+      // 토큰은 본문으로만 보낸다 — 쿼리스트링에 실으면 서버 액세스 로그에 남는다.
+      // 토큰이 유효하면 서버가 coins 를 무시하고 계정 잔액을 쓴다.
       net.send({
         type: 'join',
         nickname: profile.nickname,
         customization: profile.customization,
         coins: profile.coins,
+        token: loadToken() ?? undefined,
       });
     };
 

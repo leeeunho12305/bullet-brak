@@ -807,6 +807,8 @@
 .ae-item.locked { opacity: 0.62; }
 .ae-item.locked:hover { opacity: 0.85; }
 .ae-item.locked.too-poor { cursor: not-allowed; }
+/* 서버 응답을 기다리는 동안 — 두 번 결제되지 않게 잠근다 */
+.ae-item:disabled { cursor: progress; opacity: 0.45; }
 .ae-price {
   position: absolute;
   right: 1px;

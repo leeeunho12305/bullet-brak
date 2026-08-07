@@ -258,7 +258,13 @@ export interface InputState {
 }
 
 export type ServerMessage =
-  | { type: 'welcome'; player_id: string; room: RoomState }
+  | {
+      type: 'welcome';
+      player_id: string;
+      room: RoomState;
+      /** 이번 입장이 계정에 묶였는지. null 이면 비로그인(진행이 저장되지 않는다). */
+      account_id?: string | null;
+    }
   | { type: 'room_state'; room: RoomState }
   | ({ type: 'state' } & Snapshot)
   | { type: 'chat'; message: ChatMessage }
@@ -273,7 +279,15 @@ export type ServerMessage =
   | { type: 'error'; message: string };
 
 export type ClientMessage =
-  | { type: 'join'; nickname: string; customization: Customization; coins: number }
+  | {
+      type: 'join';
+      nickname: string;
+      customization: Customization;
+      /** 비로그인일 때만 쓰인다. 토큰이 유효하면 서버가 계정 잔액으로 덮는다. */
+      coins: number;
+      /** 디바이스 토큰. 없으면 비로그인으로 입장한다. */
+      token?: string;
+    }
   | ({ type: 'input' } & InputState)
   | { type: 'aim'; x: number; y: number }
   | { type: 'shoot' }

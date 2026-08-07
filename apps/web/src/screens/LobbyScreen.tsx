@@ -24,6 +24,8 @@ export default function LobbyScreen() {
   const { nickname, customization, coins, setNickname } = useLocalProfile();
   const status = useGameStore((s) => s.status);
   const storeError = useGameStore((s) => s.error);
+  // 계정을 못 받았다 — 코인/아이템이 이 브라우저에만 남는다.
+  const localOnly = useGameStore((s) => s.localOnly);
 
   const [code, setCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(2);
@@ -143,6 +145,12 @@ export default function LobbyScreen() {
 
           {/* 외형 편집기(동료 컴포넌트) — store 의 customization 을 직접 갱신한다 */}
           <AvatarEditor />
+
+          {localOnly ? (
+            <p className="hint">
+              💾 계정에 연결되지 않아 코인과 아이템이 이 브라우저에만 저장돼요.
+            </p>
+          ) : null}
 
           <div className="divider" />
 

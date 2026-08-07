@@ -9,7 +9,15 @@ import type {
   RoomState,
   ServerMessage,
 } from '@/types/game';
-import { loadProfile, saveCoins, saveCustomization, saveNickname } from '@/hooks/useLocalProfile';
+import {
+  loadProfile,
+  saveCoins,
+  saveCustomization,
+  saveNickname,
+  saveOwnedItems,
+} from '@/hooks/useLocalProfile';
+import { pushProfileDebounced } from '@/api/identity';
+import type { AccountResponse } from '@/api/client';
 
 /** 채팅은 최근 30개만 유지 */
 export const CHAT_LIMIT = 30;
@@ -41,13 +49,27 @@ export interface GameState {
   playerLeft: PlayerLeft | null;
   clearPlayerLeft(): void;
 
-  // 프로필 (localStorage 동기화)
+  // 프로필 (localStorage 동기화, 계정이 있으면 서버에도 반영)
   nickname: string;
   customization: Customization;
   coins: number;
   setNickname(v: string): void;
   setCustomization(v: Customization): void;
   setCoins(v: number): void;
+
+  /**
+   * 연결된 계정 id. null 이면 '로컬 모드'(서버에 DB 가 없거나 발급 실패).
+   * 로컬 모드에서는 코인이 예전처럼 localStorage 권위라서 위조 가능하다.
+   */
+  accountId: string | null;
+  /**
+   * 부트스트랩이 끝났는데 계정을 못 받았다(= 진행이 이 브라우저에만 남는다).
+   * accountId === null 만으로 판단하면 부팅 직후 잠깐 참이라 안내가 깜빡인다.
+   */
+  localOnly: boolean;
+  /** 서버 계정을 프로필에 반영한다. 코인·소유 아이템은 서버 값이 이긴다. */
+  applyAccount(account: AccountResponse): void;
+  markLocalOnly(): void;
 
   // 내부 액션 (connection.ts 가 호출)
   applyServerMessage(msg: ServerMessage): void;
@@ -80,21 +102,50 @@ export const useGameStore = create<GameState>()((set, get) => ({
   nickname: profile.nickname,
   customization: profile.customization,
   coins: profile.coins,
+  accountId: null,
+  localOnly: false,
 
   setNickname(v) {
     saveNickname(v);
     set({ nickname: v });
+    pushProfileDebounced({ nickname: v });
   },
 
   setCustomization(v) {
     saveCustomization(v);
     set({ customization: v });
+    pushProfileDebounced({ customization: v });
   },
 
   setCoins(v) {
     const safe = Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
     saveCoins(safe);
     set({ coins: safe });
+    // 코인은 올리지 않는다 — 서버가 정하는 값이라 클라이언트가 보낼 이유가 없다.
+  },
+
+  applyAccount(account) {
+    // 코인은 서버가 권위다. localStorage 에도 캐시로 남겨 다음 부팅의 첫 화면을 맞춘다.
+    saveCoins(account.coins);
+    // 닉네임/아바타는 서버에 저장된 값으로 맞춘다(다른 기기에서 바꿨을 수 있다).
+    saveNickname(account.nickname);
+    saveCustomization(account.customization);
+    // 구매가 서버로 넘어간 뒤로 보유 목록도 서버가 진실이다 — localStorage 는 캐시라
+    // 합집합을 만들지 않고 그대로 덮는다(계정 발급 때 기존 아이템은 이미 이관됐다).
+    const owned: Record<string, boolean> = {};
+    for (const key of account.owned_items) owned[key] = true;
+    saveOwnedItems(owned);
+    set({
+      accountId: account.id,
+      localOnly: false,
+      coins: account.coins,
+      nickname: account.nickname,
+      customization: account.customization,
+    });
+  },
+
+  markLocalOnly() {
+    set({ localOnly: true });
   },
 
   applyServerMessage(msg) {
@@ -107,6 +158,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
           room: msg.room,
           phase: msg.room.phase,
         });
+        // 서버가 이번 입장을 계정에 묶었는지 알려준다. 부트스트랩은 성공했는데
+        // 여기서 null 이 오면 토큰이 서버에 안 먹은 것이므로 그대로 반영한다.
+        if (msg.account_id !== undefined) set({ accountId: msg.account_id });
         break;
       }
 
@@ -171,7 +225,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 }));
 
-/** 스냅샷의 내 코인을 프로필로 되돌려 저장(서버가 권위) */
+/**
+ * 스냅샷의 내 코인을 프로필로 되돌려 저장(서버가 권위).
+ * 구매는 로비(= 접속 전)에서만 일어나므로 구매 응답과 여기가 겹칠 일은 없다.
+ */
 function syncMyCoins(players: PlayerSnap[]): void {
   const state = useGameStore.getState();
   if (!state.playerId) return;
