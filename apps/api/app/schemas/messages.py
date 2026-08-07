@@ -138,6 +138,32 @@ class UpdateProfileRequest(BaseModel):
         return (v or "").strip()[:16] or "익명"
 
 
+class BuyItemRequest(BaseModel):
+    """구매(POST /api/me/items) 요청.
+
+    **아이템 키 하나뿐이다.** 가격은 서버 가격표(`app.game.shop`)에서만 나오므로
+    클라이언트가 price/coins 같은 걸 끼워 넣어도 `extra="ignore"` 로 통째로 버린다.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    #: 레거시 포맷 그대로 "{category}:{index}" (예: "eyes:12").
+    item_key: str = Field(min_length=1, max_length=48)
+
+
+class BuyItemResponse(BaseModel):
+    """구매 결과. 실패(코인 부족 등)도 예외가 아니라 200 + ok=false 로 돌아온다.
+
+    coins/owned_items 는 **판정 직후의 서버 값**이다. 성공이든 실패든 이 값으로
+    클라이언트 상태를 덮어쓰면 된다.
+    """
+
+    ok: bool
+    reason: Literal["ok", "already_owned", "insufficient_coins", "invalid_item"]
+    coins: int
+    owned_items: list[str] = Field(default_factory=list)
+
+
 class CreateRoomRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

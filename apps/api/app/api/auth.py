@@ -15,8 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db import db_ready, session_scope
 from app.db.models import Account, AccountItem
+from app.game import shop
 from app.schemas.messages import (
     AccountResponse,
+    BuyItemRequest,
+    BuyItemResponse,
     CreateAnonAccountRequest,
     CreateAnonAccountResponse,
     UpdateProfileRequest,
@@ -132,3 +135,36 @@ async def patch_me(
         customization=(body.customization.model_dump() if body.customization else None),
     )
     return await _to_response(session, account)
+
+
+@router.post("/me/items", response_model=BuyItemResponse)
+async def buy_item(
+    body: BuyItemRequest,
+    account: Account = Depends(current_account),
+    session: AsyncSession = Depends(db_session),
+) -> BuyItemResponse:
+    """파츠 구매. **가격은 서버 가격표에서만 나온다**(요청 본문에 price 가 와도 무시).
+
+    실패해도 HTTP 200 + `ok=false` 다 — 코인 부족은 장애가 아니라 정상적인 결과고,
+    프런트는 어느 쪽이든 응답의 coins/owned_items 로 상태를 맞추면 된다.
+    (인증 실패 401, DB 없음 503 만 예외다.)
+
+    0등급(가격 0) 파츠는 원래 전부에게 열려 있는 기본 파츠라 결제가 아니라 그냥
+    소유 기록만 남는다 — 차감이 0 이라 중복 호출해도 새는 코인이 없다.
+    """
+    key = body.item_key.strip()
+    price = shop.price_of(key)
+
+    if price is None:
+        # 모르는 카테고리(예: 항상 무료인 colors) / 범위 밖 인덱스 / 형식 오류.
+        ok, reason = False, "invalid_item"
+    else:
+        ok, reason = await account_service.buy_item(session, account, key, price)
+
+    owned = await account_service.owned_keys(session, account.id)
+    return BuyItemResponse(
+        ok=ok,
+        reason=reason,
+        coins=account.coins,
+        owned_items=sorted(owned),
+    )
