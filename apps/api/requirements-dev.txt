@@ -1,4 +1,9 @@
+# -*- coding: utf-8 -*-
 -r requirements.txt
 
 pytest==8.3.4
+pytest-asyncio==0.25.0
 httpx==0.28.1
+
+# 계정 테스트용. Postgres 없이 메모리 sqlite 로 스키마를 만들어 돌린다.
+aiosqlite==0.20.0

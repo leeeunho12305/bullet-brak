@@ -38,6 +38,11 @@ class Player:
     customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
     coins: int = 0
 
+    #: 로그인(디바이스 토큰)에 성공한 경우의 계정 id. DB 가 꺼져 있거나 토큰이
+    #: 없으면 None 이고, 그때 이 플레이어의 진행은 아무 데도 남지 않는다.
+    #: 매치 종료 시 전적/보상을 기록할 대상이기도 하다.
+    account_id: str | None = None
+
     # 물리
     x: float = 100.0
     y: float = 150.0

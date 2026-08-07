@@ -70,6 +70,72 @@ class Customization(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+    #: "on" = DB 연결됨, "off" = DATABASE_URL 없음(인메모리 모드).
+    #: 프런트가 이 값으로 계정 기능을 켤지 정한다. 어느 쪽이든 200 이다
+    #: (Render healthCheckPath 가 DB 때문에 실패하면 안 된다).
+    db: Literal["on", "off"] = "off"
+
+
+# -- 계정 / 신원 -------------------------------------------------------------
+
+
+class AccountResponse(BaseModel):
+    """서버가 인정하는 나의 프로필. 코인·소유 아이템의 유일한 진실이다."""
+
+    id: str
+    nickname: str
+    customization: Customization
+    coins: int
+    level: int
+    xp: int
+    matches_played: int
+    matches_won: int
+    owned_items: list[str] = Field(default_factory=list)
+
+
+class CreateAnonAccountRequest(BaseModel):
+    """익명 계정 발급. 기존 localStorage 프로필을 그대로 물려받기 위해 값을 받는다."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    nickname: str = "익명"
+    customization: Customization = Field(default_factory=Customization)
+    #: localStorage 잔액 이관용. 서버가 ACCOUNT_SEED_COINS_MAX 로 자른다.
+    seed_coins: int = 0
+    #: 이미 갖고 있던 아이템 키("eyes:3"). 최초 1회만 그대로 인정한다.
+    seed_items: list[str] = Field(default_factory=list, max_length=200)
+
+    @field_validator("nickname")
+    @classmethod
+    def _trim_nick(cls, v: str) -> str:
+        v = (v or "").strip()
+        return v[:16] if v else "익명"
+
+    @field_validator("seed_coins")
+    @classmethod
+    def _clamp_seed(cls, v: int) -> int:
+        return max(0, min(10_000_000, int(v)))
+
+
+class CreateAnonAccountResponse(BaseModel):
+    """평문 토큰은 여기서 딱 한 번만 나간다. 클라이언트가 잃으면 계정도 잃는다."""
+
+    token: str
+    account: AccountResponse
+
+
+class UpdateProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    nickname: str | None = None
+    customization: Customization | None = None
+
+    @field_validator("nickname")
+    @classmethod
+    def _trim_nick(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return (v or "").strip()[:16] or "익명"
 
 
 class CreateRoomRequest(BaseModel):
@@ -116,7 +182,11 @@ class JoinMsg(BaseModel):
 
     nickname: str = "익명"
     customization: Customization = Field(default_factory=Customization)
+    #: DB 가 켜져 있고 토큰이 유효하면 이 값은 무시되고 계정 잔액이 쓰인다.
     coins: int = 0
+    #: 디바이스 토큰. 있으면 서버가 계정을 찾아 프로필/코인을 계정 쪽으로 덮어쓴다.
+    #: 쿼리스트링이 아니라 본문으로 받는다 — 액세스 로그에 남으면 안 되는 값이다.
+    token: str | None = Field(default=None, max_length=128)
 
     @field_validator("nickname")
     @classmethod

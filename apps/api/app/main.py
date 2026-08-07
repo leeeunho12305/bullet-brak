@@ -12,9 +12,11 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth import router as auth_router
 from app.api.routes import router as api_router
 from app.api.ws import router as ws_router
 from app.config import get_settings
+from app.db import dispose_engine, init_db
 from app.game import constants as C
 from app.game import engine
 from app.game.rooms import room_manager
@@ -100,6 +102,10 @@ async def game_loop() -> None:
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # DB 는 선택 사항이다. 연결/마이그레이션에 실패해도 예외를 올리지 않고
+    # 인메모리 모드로 계속 뜬다 — DB 가 죽었다고 게임까지 죽으면 안 된다.
+    app.state.db_ready = await init_db()
+
     task = asyncio.create_task(game_loop(), name="game-loop")
     app.state.game_loop = task
     try:
@@ -109,6 +115,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await task
         logger.info("game loop 종료")
+        await dispose_engine()
 
 
 def create_app() -> FastAPI:
@@ -122,6 +129,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(api_router)
+    app.include_router(auth_router)
     app.include_router(ws_router)
     return app
 

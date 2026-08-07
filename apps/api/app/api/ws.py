@@ -6,10 +6,12 @@ import json
 import logging
 import random
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
+from app.db import db_ready, session_scope
 from app.game import constants as C
 from app.game import engine
 from app.game.bullets import fire, fire_strong
@@ -29,6 +31,7 @@ from app.schemas.messages import (
     SetPlatformsMsg,
     parse_client_message,
 )
+from app.services import accounts as account_service
 from app.services import chat as chat_service
 from app.services.hub import hub
 
@@ -57,14 +60,26 @@ async def game_ws(ws: WebSocket, code: str, nickname: str = Query(default="익�
             await _fail(ws, "방이 가득 찼습니다.", CLOSE_FULL)
             return
 
-        player = _create_player(room, join, nickname)
+        # 신원 조회는 입장 시 딱 한 번이다(틱 루프가 아니라 여기서만 DB 를 만진다).
+        identity = await _load_identity(join.token)
+
+        player = _create_player(room, join, nickname, identity)
         room.players[player.id] = player
         room.scores.setdefault(player.id, 0)
         room.round_wins.setdefault(player.id, 0)
         player_id = player.id
 
         hub.add(code, player.id, ws)
-        await hub.send(ws, {"type": "welcome", "player_id": player.id, "room": room_state(room)})
+        await hub.send(
+            ws,
+            {
+                "type": "welcome",
+                "player_id": player.id,
+                # 계정에 연결됐는지 클라이언트가 알 수 있게 알려준다(없으면 null).
+                "account_id": player.account_id,
+                "room": room_state(room),
+            },
+        )
         await hub.broadcast(code, {"type": "room_state", "room": room_state(room)})
 
         await _message_loop(ws, room, player)
@@ -91,10 +106,50 @@ async def _await_join(ws: WebSocket) -> JoinMsg | None:
     return payload if isinstance(payload, JoinMsg) else None
 
 
-def _create_player(room: Room, join: JoinMsg, query_nickname: str) -> Player:
+@dataclass(slots=True)
+class _Identity:
+    """계정에서 떼어낸 값 사본.
+
+    ORM 객체를 세션 밖으로 들고 나가면 lazy load 가 터진다. 필요한 필드만 복사한다.
+    """
+
+    account_id: str
+    nickname: str
+    customization: dict[str, Any]
+    coins: int
+
+
+async def _load_identity(token: str | None) -> _Identity | None:
+    """디바이스 토큰 -> 계정. DB 가 꺼져 있거나 토큰이 없으면 None(= 비로그인 입장).
+
+    DB 오류로 입장이 막히면 안 되므로 예외는 삼키고 비로그인으로 떨어뜨린다.
+    """
+    if not token or not db_ready():
+        return None
+    try:
+        async with session_scope() as session:
+            account = await account_service.resolve_token(session, token)
+            if account is None:
+                return None
+            return _Identity(
+                account_id=account.id,
+                nickname=account.nickname,
+                customization=dict(account.customization or {}),
+                coins=account.coins,
+            )
+    except Exception:
+        logger.exception("계정 조회 실패 — 비로그인으로 입장시킨다.")
+        return None
+
+
+def _create_player(
+    room: Room, join: JoinMsg, query_nickname: str, identity: _Identity | None = None
+) -> Player:
     nick = join.nickname
     if nick == "익명":
-        nick = (query_nickname or "").strip()[:16] or "익명"
+        # 쿼리스트링 -> 계정 닉네임 순으로 되짚는다. 아바타 편집기는 클라이언트에
+        # 있고 변경 시 PATCH /api/me 로 올라가므로, 명시적으로 보낸 값이 우선이다.
+        nick = (query_nickname or "").strip()[:16] or (identity.nickname if identity else "") or "익명"
 
     custom = join.customization.model_dump()
     custom["color"] = _pick_color(room, custom.get("color"))
@@ -104,7 +159,9 @@ def _create_player(room: Room, join: JoinMsg, query_nickname: str) -> Player:
         id=uuid.uuid4().hex[:8],
         nickname=nick,
         customization=custom,
-        coins=join.coins,
+        # 로그인 상태면 코인은 계정 잔액이다. join.coins(클라이언트 신고값)는 버린다.
+        coins=identity.coins if identity else join.coins,
+        account_id=identity.account_id if identity else None,
         x=x,
         y=y,
     )
