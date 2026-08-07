@@ -14,7 +14,7 @@
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| GET | `/api/health` | - | `{"status":"ok"}` |
+| GET | `/api/health` | - | `{"status":"ok","db":"on"\|"off"}` — DB 상태와 무관하게 항상 200 |
 | POST | `/api/rooms` | `{"mode":"pvp"\|"training","max_players":2,"map_id":"classic"}` | `{"code":"123456","mode":"pvp","max_players":2,"map_id":"classic"}` |
 | GET | `/api/rooms/{code}` | - | `{"code","mode","max_players","player_count","phase","map_id"}` / 404 `{"detail":"..."}` |
 | GET | `/api/cards` | - | `[{"id","name","desc","category","color","emoji"}]` |
@@ -24,6 +24,58 @@
 
 `map_id`: 맵 id 또는 `"random"`. 모르는 값이면 서버가 기본 맵(`classic`)으로 되돌린다.
 `"random"` 이면 **라운드마다** 맵이 바뀐다(훈련장은 낙사 없는 맵 중에서만 뽑는다).
+
+### 1.1 계정 (`/api/auth`, `/api/me`)
+
+로그인 화면이 없다. 브라우저가 **디바이스 토큰**(불투명 난수)을 `localStorage.bulletBrakToken` 에
+들고 있고, 서버는 그 sha256 해시로 계정을 찾는다. 평문 토큰은 서버에 저장되지 않는다.
+
+| Method | Path | Auth | Body | Response |
+|---|---|---|---|---|
+| POST | `/api/auth/anon` | - | `{"nickname":str,"customization":Customization,"seed_coins":int,"seed_items":[str]}` | 201 `{"token":str,"account":Account}` |
+| GET | `/api/me` | Bearer | - | `Account` |
+| PATCH | `/api/me` | Bearer | `{"nickname"?:str,"customization"?:Customization}` | `Account` |
+| POST | `/api/me/items` | Bearer | `{"item_key":str}` | `{"ok":bool,"reason":str,"coins":int,"owned_items":[str]}` |
+
+```jsonc
+// Account
+{
+  "id": "ed2845fa7e654d48b66ff246718ed2bf",
+  "nickname": "테스터",
+  "customization": { /* Customization */ },
+  "coins": 250,          // 서버 권위. PATCH 로 바꿀 수 없다
+  "level": 1, "xp": 0,
+  "matches_played": 0, "matches_won": 0,
+  "owned_items": ["eyes:3"]
+}
+```
+
+- 토큰은 `Authorization: Bearer <token>` 헤더로만 보낸다. **쿼리스트링에 싣지 않는다**(액세스 로그에 남는다).
+- `token` 평문은 발급 응답에서 **한 번만** 나온다. 잃으면 그 계정으로 못 돌아온다.
+- `seed_coins` / `seed_items` 는 localStorage 시절 잔액·소유를 물려받기 위한 값이다.
+  위조 가능한 값이라 `ACCOUNT_SEED_COINS_MAX` 로 잘린다. 이관이 끝나면 0 으로 내린다.
+- **서버에 DB 가 없으면 이 엔드포인트들은 503** 을 돌려준다. 클라이언트는 그때 예전처럼
+  localStorage 로만 동작한다(`GET /api/health` 의 `db` 로 미리 알 수 있다).
+
+#### 구매 (`POST /api/me/items`)
+
+```jsonc
+// 요청 — 아이템 키 하나가 전부다.
+{ "item_key": "eyes:8" }
+
+// 응답 (항상 200). 거절도 예외가 아니라 정상 응답이다.
+{ "ok": false, "reason": "insufficient_coins", "coins": 70, "owned_items": ["eyes:3"] }
+```
+
+- `item_key` 는 `"{category}:{index}"`. category 는 `eyes|mouths|details|details2`.
+  `colors` 는 항상 무료라 구매 대상이 아니다(`invalid_item`).
+  `eyes:08` 같은 별칭 표기는 거절한다 — 같은 파츠를 두 번 팔지 않기 위해서다.
+- `reason`: `ok` | `already_owned` | `insufficient_coins` | `invalid_item`.
+  (형식이 아예 틀리거나 필드가 없으면 pydantic 422 — 위 4가지 밖이다.)
+- **가격은 서버가 정한다.** 요청 본문에 `price`/`coins` 를 끼워 넣어도 무시된다.
+  서버 가격표는 `apps/api/app/game/shop_prices.json` 이고 프런트 카탈로그에서 생성된다
+  (`pnpm shop:prices` — 자세한 건 DEPLOYMENT.md Phase 4).
+- `coins`/`owned_items` 는 **구매 후 확정 상태**다. 클라이언트는 그대로 덮어쓰면 된다.
 
 ---
 
@@ -38,7 +90,7 @@
 
 | type | payload | 설명 |
 |---|---|---|
-| `join` | `{"nickname":str,"customization":Customization,"coins":int}` | 입장(최초 1회) |
+| `join` | `{"nickname":str,"customization":Customization,"coins":int,"token"?:str}` | 입장(최초 1회). `token` 이 유효하면 서버가 `coins` 를 무시하고 **계정 잔액**을 쓴다. WS 는 헤더를 못 붙이므로 토큰을 본문으로 받는다 |
 | `input` | `{"left":bool,"right":bool,"jump":bool,"block":bool}` | 이동/가드 입력 (변경 시에만 전송) |
 | `aim` | `{"x":float,"y":float}` | 마우스 월드 좌표 (최대 30Hz 스로틀) |
 | `shoot` | `{}` | 일반 사격 |
@@ -46,7 +98,9 @@
 | `strong_release` | `{}` | 강공격 발사 |
 | `pick_card` | `{"card_id":str}` | 카드 선택 (패자만 유효) |
 | `chat` | `{"text":str}` | 채팅 (서버에서 200자 제한만 적용) |
-| `set_map` | `{"map_id":str}` | 방장이 맵 선택 (`waiting`/`finished` 에서만, 방장 아니면 무시) |
+| `set_map` | `{"map_id":str}` | 방장이 맵 선택 (`waiting`/`finished` 에서만, 방장 아니면 무시). 편집한 배치는 버려진다 |
+| `set_platforms` | `{"platforms":[Platform]}` | 방장의 맵 에디터 저장. 서버가 좌표/종류를 다시 검증하고 못 쓰는 항목은 버린다 (최대 40개, 빈 배치는 거절) |
+| `reset_platforms` | `{}` | 편집한 배치를 버리고 맵 원본 지형으로 (방장 전용) |
 | `start_game` | `{}` | 방장이 게임 시작 |
 | `restart` | `{}` | 종료 후 대기실로 되돌리기 |
 | `rematch` | `{"accept":bool}` | 종료 후 "한 판 더?" 투표. 전원 동의 시 즉시 새 매치, 한 명이라도 거절하면 대기실로 |
@@ -56,7 +110,7 @@
 
 | type | payload |
 |---|---|
-| `welcome` | `{"player_id":str,"room":RoomState}` |
+| `welcome` | `{"player_id":str,"account_id":str\|null,"room":RoomState}` — `account_id` 가 null 이면 비로그인(이번 판 진행이 저장되지 않는다) |
 | `room_state` | `{"room":RoomState}` |
 | `state` | `Snapshot` (60Hz) |
 | `chat` | `{"message":ChatMessage}` |
@@ -92,7 +146,8 @@ MapInfo = {
 RoomState = {
   "code": "123456", "mode": "pvp", "max_players": 2, "phase": "waiting",
   "map_id": "random",               // 방장이 고른 값. "random" 일 수 있다
-  "map": MapInfo,                   // 지금 실제로 깔려 있는 맵
+  "map": MapInfo,                   // 지금 실제로 깔려 있는 맵(platforms 는 편집 결과가 반영된 값)
+  "custom_map": false,              // 발판이 맵 원본이 아니라 방장이 에디터로 짠 배치인가
   "players": [ { "id": "...", "nickname": "익명", "customization": Customization, "coins": 0 } ]
 }
 // phase: "waiting" | "playing" | "round_over" | "picking" | "finished"
@@ -126,7 +181,20 @@ BulletSnap = { "id": int, "x": f, "y": f, "size": f, "owner": str, "color": str 
 ZoneSnap = { "type": str, "x": f, "y": f, "radius": f }
 // type: heal|toxic|static|emp|frost|implode|shockwave|radiance|chilling
 
-Platform = { "x": f, "y": f, "width": f, "height": f }
+Platform = {
+  "x": f, "y": f, "width": f, "height": f,
+  "type": "jump",                   // 생략되면 "solid". solid|jump|mover|ice|hazard
+  "power": f,                       // jump 만: 위로 튀는 속도
+  "axis": "x"                       // mover 만: 왕복 축 ("x" | "y")
+}
+// 블럭 효과(app/game/blocks.py)
+//   solid  일반 블럭 — 위/아래/옆 전부 막힌다
+//   jump   점프대   — 위에서 밟으면 power 만큼 튀고 공중 점프가 다시 찬다
+//   mover  이동발판 — 축을 따라 왕복하고, 올라탄 사람을 같이 나른다
+//   ice    빙판     — 마찰이 거의 없다
+//   hazard 가시     — 닿아 있는 동안 피해를 입고 튕겨난다
+// span/speed/phase/ox/oy 는 서버 내부 값이라 스냅샷에 실리지 않는다
+// (에디터가 set_platforms 로 보낼 때만 span/speed 를 쓴다).
 
 CardInfo = { "id","name","desc","category","color","emoji" }
 // category: attack|survival|utility|movement|special
@@ -232,6 +300,17 @@ def get(map_id) -> GameMap                      # 모르는 id 면 기본 맵
 def is_valid_selection(map_id) -> bool          # 실제 맵이거나 "random"
 def resolve(map_id, current=None) -> str        # "random" -> 실제 id
 def apply(room, map_id) -> GameMap              # 방에 발판을 깔고 active_map_id 기록
+                                                # room.custom_layout 이 있으면 그걸 우선 깐다
+def rect/jump/mover/ice/spike(...) -> Rect      # 블럭 생성자(app.game.blocks 위임)
+
+# app/game/blocks.py  (블럭 종류와 효과 — constants 외에 아무것도 import 하지 않는다)
+TYPES = ("solid", "jump", "mover", "ice", "hazard"); MAX_BLOCKS = 40
+def make(x, y, w, h, kind="solid", **opts) -> Rect   # 종류별 기본값을 채운 블럭
+def normalize_all(raw) -> list[Rect]                 # 클라이언트 페이로드 검증
+def snap(block) -> Rect                              # 스냅샷용(내부 필드 제외)
+def update_movers(room) -> None                      # 엔티티 물리보다 먼저 호출한다
+def carry(entity, room) -> None                      # 올라탄 이동발판을 따라간다
+def on_contact(entity, block, side, index) -> float  # 충돌 직후 효과. 입은 피해를 반환
 def spawn_points(room=None) -> list[tuple[float, float]]
 
 # app/game/rooms.py  (RoomManager)
@@ -244,7 +323,9 @@ class RoomManager:
 # app/game/engine.py
 def tick_room(room: Room) -> None        # 1틱 시뮬레이션(플레이어/봇/총알/존/라운드판정)
 def snapshot(room: Room) -> dict         # PROTOCOL 3장 Snapshot 그대로
-def set_map(room, map_id) -> bool        # 방장 선택(waiting/finished 에서만)
+def set_map(room, map_id) -> bool        # 방장 선택(waiting/finished 에서만). custom_layout 을 버린다
+def set_platforms(room, raw) -> bool     # 맵 에디터 저장(검증은 blocks.normalize_all)
+def clear_platforms(room) -> bool        # 맵 원본 지형으로 되돌리기
 def prepare_map(room) -> None            # 라운드 시작 전 맵 확정("random" 이면 리롤)
 
 # app/game/serialize.py
