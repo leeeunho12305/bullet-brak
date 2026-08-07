@@ -168,6 +168,17 @@ class SetMapMsg(BaseModel):
     map_id: str = Field(default="classic", max_length=32)
 
 
+class SetPlatformsMsg(BaseModel):
+    """방장의 맵 에디터 저장(PROTOCOL §2.1 set_platforms).
+
+    좌표/종류 검증은 game.blocks.normalize_all 이 맡는다(월드 밖·이상한 종류는 잘려 나간다).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    platforms: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
+
+
 class ChatMsg(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -208,6 +219,8 @@ PAYLOAD_MODELS: dict[str, type[BaseModel] | None] = {
     "rematch": RematchMsg,
     "avatar": AvatarMsg,
     "set_map": SetMapMsg,
+    "set_platforms": SetPlatformsMsg,
+    "reset_platforms": None,
 }
 
 

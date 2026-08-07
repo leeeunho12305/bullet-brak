@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.game import blocks
 from app.game import constants as C
 from app.game import maps, training
 from app.game.cards import card_info
@@ -155,7 +156,7 @@ def snapshot(room: Room) -> dict[str, Any]:
         "bots": [bot_snap(b) for b in room.bots.values()],
         "bullets": [bullet_snap(b) for b in room.bullets if b.active],
         "zones": [zone_snap(z) for z in room.zones],
-        "platforms": [dict(p) for p in room.platforms],
+        "platforms": [blocks.snap(p) for p in room.platforms],
         "loser_to_pick": room.loser_to_pick,
         "available_cards": _available_cards(room),
         "winner_id": room.winner_id,
@@ -167,6 +168,10 @@ def snapshot(room: Room) -> dict[str, Any]:
 
 def room_state(room: Room) -> dict[str, Any]:
     """로비/대기실용 경량 상태(PROTOCOL §3 RoomState)."""
+    # 이름/테마/스폰은 고른 맵의 것이지만, 발판은 지금 방에 실제로 깔린 것을 보낸다.
+    # 맵 에디터로 고친 배치가 대기실 미리보기에 그대로 보여야 하기 때문이다.
+    game_map = maps.get(room.active_map_id).to_dict()
+    game_map["platforms"] = [blocks.snap(p, full=True) for p in room.platforms]
     return {
         "code": room.code,
         "mode": room.mode,
@@ -174,7 +179,9 @@ def room_state(room: Room) -> dict[str, Any]:
         "phase": room.phase,
         # map_id 는 방장이 고른 값("random" 일 수 있고), map 은 지금 깔린 실제 맵이다.
         "map_id": room.map_id,
-        "map": maps.get(room.active_map_id).to_dict(),
+        "map": game_map,
+        #: 발판이 맵 원본이 아니라 방장이 에디터로 짠 배치인가
+        "custom_map": room.custom_layout is not None,
         "players": [
             {
                 "id": p.id,

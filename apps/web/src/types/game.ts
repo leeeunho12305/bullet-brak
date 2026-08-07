@@ -71,8 +71,10 @@ export interface RoomState {
   phase: Phase;
   /** 방장이 고른 값. 'random' 일 수 있다. */
   map_id: string;
-  /** 지금 실제로 깔려 있는 맵 */
+  /** 지금 실제로 깔려 있는 맵. platforms 는 에디터로 고친 결과가 반영된 값이다. */
   map: MapInfo;
+  /** 발판이 맵 원본이 아니라 방장이 맵 에디터로 짠 배치인가 */
+  custom_map: boolean;
   players: RoomPlayer[];
 }
 
@@ -160,11 +162,37 @@ export interface ZoneSnap {
   radius: number;
 }
 
+/**
+ * 발판 종류 (서버 game/blocks.py 의 TYPES 와 같은 값이어야 한다).
+ *  solid  일반 블럭 · jump 점프대 · mover 이동발판 · ice 빙판 · hazard 가시
+ */
+export type BlockType = 'solid' | 'jump' | 'mover' | 'ice' | 'hazard';
+
+export const BLOCK_TYPES: BlockType[] = ['solid', 'jump', 'mover', 'ice', 'hazard'];
+
+/** 팔레트/범례용 표시 정보. 색은 renderer 와 MapPreview 가 공유한다. */
+export const BLOCK_INFO: Record<BlockType, { name: string; emoji: string; color: string; desc: string }> = {
+  solid: { name: '일반 블럭', emoji: '⬛', color: '#8d99ae', desc: '평범한 발판. 위아래·옆 모두 막힌다.' },
+  jump: { name: '점프대', emoji: '🔼', color: '#51cf66', desc: '밟으면 높이 튀어오른다. 공중 점프도 다시 채워진다.' },
+  mover: { name: '이동 발판', emoji: '↔️', color: '#4dabf7', desc: '정해진 구간을 왕복한다. 올라타면 같이 실려 간다.' },
+  ice: { name: '빙판', emoji: '🧊', color: '#99e9f2', desc: '마찰이 거의 없다. 멈추기 어렵다.' },
+  hazard: { name: '가시', emoji: '🔺', color: '#ff6b6b', desc: '닿으면 피해를 입고 튕겨난다.' },
+};
+
 export interface Platform {
   x: number;
   y: number;
   width: number;
   height: number;
+  /** 없으면 'solid' (서버가 일반 블럭에서는 생략한다) */
+  type?: BlockType;
+  /** 점프대 위력(위로 향하는 속도) */
+  power?: number;
+  /** 이동발판이 왕복하는 축 */
+  axis?: 'x' | 'y';
+  /** 이동발판 왕복 폭 / 속도 — 에디터에서만 쓰고 스냅샷에는 실리지 않는다. */
+  span?: number;
+  speed?: number;
 }
 
 export interface CardInfo {
@@ -258,4 +286,8 @@ export type ClientMessage =
   | { type: 'rematch'; accept: boolean }
   | { type: 'avatar'; customization: Customization }
   /** 방장 전용. 서버가 방장이 아닌 요청은 조용히 무시한다. */
-  | { type: 'set_map'; map_id: string };
+  | { type: 'set_map'; map_id: string }
+  /** 방장 전용. 맵 에디터로 짠 배치를 저장한다(대기실에서만 유효). */
+  | { type: 'set_platforms'; platforms: Platform[] }
+  /** 방장 전용. 맵 원본 지형으로 되돌린다. */
+  | { type: 'reset_platforms' };

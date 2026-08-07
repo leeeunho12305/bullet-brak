@@ -2,7 +2,7 @@
 // 인게임 캔버스와 같은 좌표계라 실제 지형과 1:1 로 대응한다.
 import { memo } from 'react';
 import type { JSX } from 'react';
-import { WORLD_HEIGHT, WORLD_WIDTH } from '@/types/game';
+import { BLOCK_INFO, WORLD_HEIGHT, WORLD_WIDTH } from '@/types/game';
 import type { MapInfo } from '@/types/game';
 
 interface Props {
@@ -23,18 +23,23 @@ function MapPreviewInner({ map, showSpawns = true, className }: Props): JSX.Elem
       aria-label={`${map.name} 맵 미리보기`}
     >
       <rect x={0} y={0} width={WORLD_WIDTH} height={WORLD_HEIGHT} fill={theme.bg} />
-      {platforms.map((p, i) => (
-        <rect
-          key={`p${i}`}
-          x={p.x}
-          y={p.y}
-          width={p.width}
-          height={p.height}
-          fill={theme.platform}
-          stroke={theme.edge}
-          strokeWidth={4}
-        />
-      ))}
+      {/* 특수 블럭(점프대·이동발판·빙판·가시)은 자기 색으로 칠해 썸네일에서도 구분되게 한다. */}
+      {platforms.map((p, i) => {
+        const special = p.type && p.type !== 'solid' ? BLOCK_INFO[p.type] : null;
+        return (
+          <rect
+            key={`p${i}`}
+            x={p.x}
+            y={p.y}
+            width={p.width}
+            height={p.height}
+            fill={special ? special.color : theme.platform}
+            fillOpacity={special ? 0.8 : 1}
+            stroke={special ? special.color : theme.edge}
+            strokeWidth={4}
+          />
+        );
+      })}
       {showSpawns
         ? spawns.map((s, i) => (
             <circle key={`s${i}`} cx={s.x + 15} cy={s.y + 15} r={13} fill={theme.edge} opacity={0.55} />

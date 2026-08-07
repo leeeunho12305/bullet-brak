@@ -15,19 +15,50 @@ import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.game import blocks as B
 from app.game import constants as C
 
 if TYPE_CHECKING:  # 순환 import 방지 (런타임에는 필요 없음)
     from app.game.models import Room
 
-Rect = dict[str, float]
+Rect = dict[str, Any]
 
 #: 방장이 "무작위"를 골랐을 때 쓰는 특수 id. 실제 맵이 아니다.
 RANDOM_ID = "random"
 
 
 def rect(x: float, y: float, width: float, height: float) -> Rect:
-    return {"x": float(x), "y": float(y), "width": float(width), "height": float(height)}
+    """일반 블럭. 종류가 있는 블럭은 아래 jump/mover/ice/spike 를 쓴다."""
+    return B.make(x, y, width, height, B.SOLID)
+
+
+def jump(x: float, y: float, width: float, height: float = 16.0, power: float | None = None) -> Rect:
+    """점프대. 위에서 밟으면 튀어오른다(power 는 위로 향하는 속도)."""
+    return B.make(x, y, width, height, B.JUMP, power=power)
+
+
+def mover(
+    x: float,
+    y: float,
+    width: float,
+    height: float = 18.0,
+    axis: str = "x",
+    span: float = B.DEFAULT_SPAN,
+    speed: float = B.DEFAULT_SPEED,
+    phase: float = 0.0,
+) -> Rect:
+    """이동발판. (x, y) 를 중심으로 axis 축을 따라 ±span 만큼 왕복한다."""
+    return B.make(x, y, width, height, B.MOVER, axis=axis, span=span, speed=speed, phase=phase)
+
+
+def ice(x: float, y: float, width: float, height: float = 20.0) -> Rect:
+    """빙판. 밟으면 미끄러진다."""
+    return B.make(x, y, width, height, B.ICE)
+
+
+def spike(x: float, y: float, width: float, height: float = 16.0) -> Rect:
+    """가시. 닿아 있는 동안 피해를 입고 튕겨난다."""
+    return B.make(x, y, width, height, B.HAZARD)
 
 
 @dataclass(frozen=True)
@@ -61,7 +92,7 @@ class GameMap:
             "emoji": self.emoji,
             "desc": self.desc,
             "theme": self.theme.to_dict(),
-            "platforms": [dict(p) for p in self.platforms],
+            "platforms": [B.snap(p, full=True) for p in self.platforms],
             "spawns": [{"x": x, "y": y} for x, y in self.spawns],
         }
 
@@ -89,7 +120,7 @@ _MAPS: tuple[GameMap, ...] = (
         id="towers",
         name="쌍둥이 탑",
         emoji="🏙️",
-        desc="양쪽 탑과 연결 다리. 높이 싸움이 전부다.",
+        desc="양쪽 탑과 연결 다리. 바닥으로 떨어져도 점프대로 다시 올라간다.",
         theme=Theme("#0d0a1c", "rgba(177, 151, 252, 0.07)", "#241d3d", "rgba(177, 151, 252, 0.5)"),
         platforms=(
             rect(0, 550, 800, 50),
@@ -98,6 +129,10 @@ _MAPS: tuple[GameMap, ...] = (
             rect(260, 300, 280, 20),
             rect(50, 190, 160, 20),
             rect(590, 190, 160, 20),
+            # 탑과 탑 사이 바닥의 복귀용 점프대. 다리(x 260~540)에 머리를 박지 않도록
+            # 다리 양옆의 빈 통로에 놓는다 — 한 번 밟으면 탑 꼭대기까지 닿는다.
+            jump(215, 534, 45),
+            jump(540, 534, 45),
         ),
         spawns=((70, 120), (680, 120), (390, 200), (390, 60)),
     ),
@@ -105,15 +140,19 @@ _MAPS: tuple[GameMap, ...] = (
         id="chasm",
         name="협곡",
         emoji="🌋",
-        desc="한가운데가 뚫려 있다. 발을 헛디디면 그대로 낙사.",
+        desc="한가운데가 뚫려 있다. 가시를 피하고 점프대로 건너라.",
         theme=Theme("#160a0a", "rgba(255, 143, 77, 0.06)", "#33201a", "rgba(255, 143, 77, 0.5)"),
         platforms=(
             rect(0, 520, 300, 80),
             rect(500, 520, 300, 80),
+            # 협곡 한가운데 기둥 위의 점프대 — 건너편으로 넘어가는 유일한 지름길.
+            jump(365, 414, 70, power=19.0),
             rect(370, 430, 60, 40),
             rect(60, 360, 180, 20),
             rect(560, 360, 180, 20),
             rect(330, 250, 140, 20),
+            spike(0, 504, 90),
+            spike(710, 504, 90),
         ),
         spawns=((110, 300), (640, 300), (380, 150), (170, 180)),
     ),
@@ -155,7 +194,7 @@ _MAPS: tuple[GameMap, ...] = (
         id="skylands",
         name="부유섬",
         emoji="☁️",
-        desc="바닥이 없다. 섬과 섬 사이는 전부 허공.",
+        desc="바닥이 없다. 떠다니는 발판과 점프대만 믿어라.",
         theme=Theme("#04101f", "rgba(77, 171, 247, 0.07)", "#12263f", "rgba(77, 171, 247, 0.55)"),
         platforms=(
             rect(280, 420, 240, 24),
@@ -165,6 +204,11 @@ _MAPS: tuple[GameMap, ...] = (
             rect(510, 200, 140, 20),
             rect(40, 520, 120, 20),
             rect(640, 520, 120, 20),
+            # 허공을 가로지르는 나룻배. 아래쪽 섬 사이를 천천히 오간다.
+            mover(400, 530, 110, 18, axis="x", span=130, speed=0.7),
+            # 아래쪽 섬에서 중앙 단상으로 복귀하는 점프대
+            jump(45, 504, 110, power=19.0),
+            jump(645, 504, 110, power=19.0),
         ),
         spawns=((330, 340), (450, 340), (110, 250), (630, 250)),
     ),
@@ -205,7 +249,7 @@ _MAPS: tuple[GameMap, ...] = (
         id="rooftop",
         name="옥상",
         emoji="🌃",
-        desc="건물 두 채와 하늘다리. 아래로 떨어져도 죽지는 않는다.",
+        desc="건물 두 채와 얼어붙은 하늘다리. 다리 위에서는 멈춰 서기 어렵다.",
         theme=Theme("#081413", "rgba(32, 201, 151, 0.06)", "#14302b", "rgba(32, 201, 151, 0.5)"),
         platforms=(
             rect(0, 560, 800, 40),
@@ -213,10 +257,29 @@ _MAPS: tuple[GameMap, ...] = (
             rect(540, 380, 200, 180),
             rect(100, 240, 120, 18),
             rect(580, 240, 120, 18),
-            rect(300, 300, 200, 18),
+            ice(300, 300, 200, 18),
             rect(330, 470, 140, 18),
         ),
         spawns=((150, 300), (650, 300), (400, 210), (400, 380)),
+    ),
+    GameMap(
+        id="factory",
+        name="공장",
+        emoji="⚙️",
+        desc="점프대·이동발판·빙판·가시가 전부 모여 있다. 지형이 먼저 공격한다.",
+        theme=Theme("#0f0a04", "rgba(255, 169, 77, 0.07)", "#2b1f12", "rgba(255, 169, 77, 0.5)"),
+        platforms=(
+            rect(0, 550, 800, 50),
+            jump(60, 534, 90),
+            spike(340, 534, 120),
+            jump(650, 534, 90),
+            ice(0, 430, 220, 20),
+            mover(400, 400, 120, 18, axis="x", span=150, speed=0.8),
+            mover(730, 380, 70, 18, axis="y", span=90, speed=1.1, phase=1.5),
+            rect(590, 300, 210, 20),
+            rect(120, 250, 180, 20),
+        ),
+        spawns=((60, 300), (700, 200), (390, 180), (200, 120)),
     ),
 )
 
@@ -270,10 +333,15 @@ def resolve(map_id: str, current: str | None = None) -> str:
 
 
 def apply(room: "Room", map_id: str) -> GameMap:
-    """방에 맵을 실제로 적용한다(발판 교체 + active_map_id 기록)."""
+    """방에 맵을 실제로 적용한다(발판 교체 + active_map_id 기록).
+
+    방장이 맵 에디터로 배치를 짜 뒀다면(`room.custom_layout`) 맵의 기본 발판 대신 그걸 깐다.
+    테마/스폰은 그대로 고른 맵의 것을 쓴다.
+    """
     game_map = get(map_id)
     room.active_map_id = game_map.id
-    room.platforms = [dict(p) for p in game_map.platforms]
+    layout = getattr(room, "custom_layout", None) or game_map.platforms
+    room.platforms = [dict(p) for p in layout]
     return game_map
 
 

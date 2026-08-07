@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import AvatarEditor from '@/components/AvatarEditor';
+import ControlsGuide from '@/components/ControlsGuide';
+import Tutorial from '@/components/Tutorial';
 import { ApiError, api } from '@/api/client';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
@@ -29,6 +31,7 @@ export default function LobbyScreen() {
   const [maps, setMaps] = useState<MapInfo[]>([]);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [tutorial, setTutorial] = useState(false);
 
   // 시작 맵. 방을 만든 뒤 대기실에서 방장이 언제든 바꿀 수 있다.
   useEffect(() => {
@@ -105,8 +108,13 @@ export default function LobbyScreen() {
     <div className="screen">
       <header className="brand">
         <h1>BULLET BRAK</h1>
+        <button type="button" className="btn btn-ghost" onClick={() => setTutorial(true)}>
+          📖 튜토리얼
+        </button>
         <span className="badge">💰 {coins}</span>
       </header>
+
+      {tutorial ? <Tutorial onClose={() => setTutorial(false)} /> : null}
 
       {message ? (
         <div className="alert" role="alert">
@@ -135,6 +143,18 @@ export default function LobbyScreen() {
 
           {/* 외형 편집기(동료 컴포넌트) — store 의 customization 을 직접 갱신한다 */}
           <AvatarEditor />
+
+          <div className="divider" />
+
+          {/* 예전에는 인게임 캔버스 위에 겹쳐 있었는데 시야를 가려서 여기로 내렸다. */}
+          <ControlsGuide />
+          <button
+            type="button"
+            className="btn btn-ghost btn-block"
+            onClick={() => setTutorial(true)}
+          >
+            📖 처음이신가요? 튜토리얼 보기
+          </button>
         </section>
 
         <section className="panel">

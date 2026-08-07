@@ -500,3 +500,265 @@ textarea {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ==========================================================================
+   조작법 안내 (로비)
+   예전에는 인게임 캔버스 위에 겹쳐 놨는데 시야를 가려서 로비로 옮겼다.
+   ========================================================================== */
+.controls-guide {
+  margin-top: 4px;
+}
+.controls-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 5px 14px;
+}
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+.controls-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+}
+.controls-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.controls-row.is-hl {
+  color: var(--accent-2);
+}
+.controls-row.is-hl kbd {
+  border-color: rgba(0, 229, 255, 0.45);
+  color: var(--accent-2);
+}
+.key-combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.key-sep {
+  font-style: normal;
+  opacity: 0.45;
+}
+.controls-guide kbd {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--text, #e8ecff);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   공용 모달 (튜토리얼 · 맵 에디터)
+   ========================================================================== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(4, 6, 14, 0.78);
+  backdrop-filter: blur(4px);
+}
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 640px);
+  max-height: min(92vh, 760px);
+  background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.modal-head h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 1.05rem;
+  margin: 0;
+}
+.modal-x {
+  flex: none;
+  padding: 4px 10px;
+}
+.modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- 튜토리얼 ---------- */
+.tut-body {
+  min-height: 260px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.tut-body p {
+  margin: 0 0 10px;
+}
+.tut-list,
+.tut-blocks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.tut-list li {
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+.tut-blocks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.tut-block-chip {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border-radius: 4px;
+}
+.tut-dots {
+  display: flex;
+  gap: 6px;
+}
+.tut-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line);
+  transition: background 0.15s ease;
+}
+.tut-dot.is-on {
+  background: var(--accent-2);
+}
+
+/* ---------- 맵 에디터 ---------- */
+.modal.editor {
+  width: min(100%, 1020px);
+}
+.editor-sub {
+  font-weight: 400;
+}
+.editor-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+.editor-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.editor-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.editor-brush {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.editor-brush:hover {
+  border-color: var(--accent-2);
+}
+.editor-brush.selected {
+  border-color: var(--accent-2);
+  box-shadow: inset 0 0 0 1px var(--accent-2);
+}
+.editor-swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+.editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.editor-field input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-2);
+}
+.editor-stage {
+  min-width: 0;
+}
+.editor-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  touch-action: none;
+  cursor: crosshair;
+}
+.editor-count {
+  margin: 6px 0 0;
+  text-align: right;
+}
+
+@media (max-width: 780px) {
+  .editor-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .editor-palette {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .modal-foot {
+    flex-wrap: wrap;
+  }
+}

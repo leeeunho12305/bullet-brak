@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 
+from app.game import blocks
 from app.game import bullets as _bullets
 from app.game import constants as C
 from app.game.bots import fall_check as bot_fall_check
@@ -97,12 +98,17 @@ def update_player(room: Room, p: Player) -> None:
     speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0)
     p.vx = clamp(p.vx, -speed, speed)
     if not inp.left and not inp.right:
-        p.vx *= C.FRICTION
+        # 빙판 위에서는 거의 멈추지 못한다(직전 틱의 접촉 판정을 쓴다).
+        p.vx *= blocks.ICE_FRICTION if p.on_ice else C.FRICTION
+
+    # 올라타 있던 이동발판을 따라간다(발판은 engine 이 이미 이번 틱 위치로 옮겨 뒀다).
+    blocks.carry(p, room)
 
     p.vy += C.GRAVITY
     p.x += p.vx
     p.y += p.vy
     p.grounded = False
+    p.on_ice = False
 
     if p.x < 0:
         p.x, p.vx = 0.0, 0.0
@@ -113,8 +119,16 @@ def update_player(room: Room, p: Player) -> None:
     if p.y < 0:
         p.y, p.vy = 0.0, 0.0
 
-    for plat in room.platforms:
-        resolve_platform_collision(p, plat)
+    damage = 0.0
+    for index, plat in enumerate(room.platforms):
+        side = resolve_platform_collision(p, plat)
+        damage += blocks.on_contact(p, plat, side, index)
+    if damage > 0:
+        p.hp -= damage
+        if p.hp <= 0:
+            handle_lethal(p)  # 가시로도 PHOENIX(revives) 는 발동한다
+            if not p.alive:
+                return
 
     if p.has("chilling_presence") and room.tick % 10 == 0:
         room.zones.append(Zone("chilling", p.cx, p.cy, 150.0, 12, p.id))

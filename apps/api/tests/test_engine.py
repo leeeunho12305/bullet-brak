@@ -478,7 +478,16 @@ def test_room_state_shape(manager: RoomManager) -> None:
     room = manager.create("pvp", 2)
     _add_player(room, "a")
     state = room_state(room)
-    assert set(state) == {"code", "mode", "max_players", "phase", "map_id", "map", "players"}
+    assert set(state) == {
+        "code",
+        "mode",
+        "max_players",
+        "phase",
+        "map_id",
+        "map",
+        "custom_map",
+        "players",
+    }
     assert set(state["players"][0]) == {"id", "nickname", "customization", "coins"}
 
 

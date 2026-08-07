@@ -10,7 +10,7 @@ from __future__ import annotations
 import random
 from typing import Any, Literal
 
-from app.game import constants as C
+from app.game import blocks, constants as C
 from app.game import maps, sim, training
 from app.game.bullets import update_bullets
 from app.game.cards import apply_card, random_cards, reset_card_state
@@ -38,6 +38,8 @@ def tick_room(room: Room) -> None:
     room.tick += 1
 
     if room.phase in ACTIVE_PHASES:
+        # 이동발판이 먼저 움직여야 올라탄 사람을 같은 틱에 실어 나를 수 있다.
+        blocks.update_movers(room)
         for player in room.players.values():
             sim.update_player(room, player)
         sim.update_bots(room)
@@ -195,14 +197,46 @@ def prepare_map(room: Room) -> None:
 
 
 def set_map(room: Room, map_id: str) -> bool:
-    """방장의 맵 선택. 대기실 / 매치 종료 상태에서만 바꿀 수 있다."""
+    """방장의 맵 선택. 대기실 / 매치 종료 상태에서만 바꿀 수 있다.
+
+    맵을 다시 고르면 에디터로 짠 배치는 버린다(고른 맵의 원본 지형으로 돌아간다).
+    """
     if room.phase not in ("waiting", "finished"):
         return False
     if not maps.is_valid_selection(map_id):
         return False
     room.map_id = map_id
+    room.custom_layout = None
     if map_id != maps.RANDOM_ID:
         maps.apply(room, map_id)
+    else:
+        maps.apply(room, room.active_map_id)  # 원본 지형 복구(미리보기용)
+    return True
+
+
+def set_platforms(room: Room, raw: Any) -> bool:
+    """방장이 맵 에디터에서 저장한 배치를 방에 적용한다.
+
+    편집한 순간 맵은 지금 깔린 맵으로 고정된다 — "무작위"인 채로 두면 다음 라운드에
+    남의 맵 위에 내 배치가 얹혀서 뜻이 통하지 않는다.
+    """
+    if room.phase not in ("waiting", "finished"):
+        return False
+    layout = blocks.normalize_all(raw)
+    if not layout:
+        return False
+    room.custom_layout = layout
+    room.map_id = room.active_map_id
+    maps.apply(room, room.active_map_id)
+    return True
+
+
+def clear_platforms(room: Room) -> bool:
+    """맵 에디터 초기화. 지금 맵의 원본 지형으로 되돌린다."""
+    if room.phase not in ("waiting", "finished"):
+        return False
+    room.custom_layout = None
+    maps.apply(room, room.active_map_id)
     return True
 
 

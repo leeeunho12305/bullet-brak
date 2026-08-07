@@ -12,7 +12,6 @@ import ChatBox from '@/components/ChatBox';
 import GameOverOverlay from '@/components/GameOverOverlay';
 import RoundResult from '@/components/RoundResult';
 import InfoPanel from '@/components/InfoPanel';
-import KeyLegend from '@/components/KeyLegend';
 import PlayerLeftNotice from '@/components/PlayerLeftNotice';
 import type { Phase, RoomState } from '@/types/game';
 import '@/styles/game.css';
@@ -31,7 +30,8 @@ interface BannerState {
   text: string;
 }
 
-const CONTROLS = 'Tab 을 누르고 있으면 내 대미지·스탯·카드를 볼 수 있습니다';
+// 조작키 전체 안내는 로비(ControlsGuide)로 옮겼다 — 캔버스를 가리지 않게.
+const CONTROLS = 'Tab: 정보 보기';
 
 export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -103,7 +103,6 @@ export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.El
               {banner.text && <div className="game-banner">{banner.text}</div>}
               <RoundResult />
               <InfoPanel />
-              <KeyLegend />
               <CardPicker />
               <GameOverOverlay onLeave={handleLeave} />
               {/* 3~4인 방에서는 한 명이 나가도 경기가 이어진다 — 캔버스 위에 토스트로 알린다 */}

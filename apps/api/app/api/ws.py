@@ -26,6 +26,7 @@ from app.schemas.messages import (
     PickCardMsg,
     RematchMsg,
     SetMapMsg,
+    SetPlatformsMsg,
     parse_client_message,
 )
 from app.services import chat as chat_service
@@ -181,6 +182,15 @@ async def _handle(room: Room, player: Player, msg_type: str, payload: Any) -> No
     elif msg_type == "set_map" and isinstance(payload, SetMapMsg):
         # 맵은 방장(가장 먼저 들어온 사람)만 바꾼다.
         if _is_host(room, player) and engine.set_map(room, payload.map_id):
+            await hub.broadcast(room.code, {"type": "room_state", "room": room_state(room)})
+
+    elif msg_type == "set_platforms" and isinstance(payload, SetPlatformsMsg):
+        # 맵 에디터도 방장 전용.
+        if _is_host(room, player) and engine.set_platforms(room, payload.platforms):
+            await hub.broadcast(room.code, {"type": "room_state", "room": room_state(room)})
+
+    elif msg_type == "reset_platforms":
+        if _is_host(room, player) and engine.clear_platforms(room):
             await hub.broadcast(room.code, {"type": "room_state", "room": room_state(room)})
 
     elif msg_type == "start_game":

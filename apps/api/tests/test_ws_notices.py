@@ -193,3 +193,57 @@ def test_leaving_clears_that_players_rematch_vote(client: TestClient) -> None:
         _await_message(host, "player_left")
         assert room.rematch_votes == set(), "나간 사람의 표가 남으면 다음 매치가 혼자 시작된다"
         assert list(room.players) != [guest_welcome["player_id"]]
+
+
+# --------------------------------------------------------------------------
+# 맵 에디터 (set_platforms / reset_platforms)
+# --------------------------------------------------------------------------
+
+_LAYOUT = [
+    {"x": 0, "y": 560, "width": 800, "height": 40},
+    {"x": 300, "y": 400, "width": 120, "height": 16, "type": "jump", "power": 20},
+]
+
+
+def test_host_can_edit_the_map_layout(client: TestClient) -> None:
+    code = _new_room(client)
+    with client.websocket_connect(f"/ws/{code}") as host:
+        _join(host, "호스트")
+        host.send_json({"type": "set_platforms", "platforms": _LAYOUT})
+        room = room_manager.get(code)
+        assert room is not None
+        _await_state(lambda: room.custom_layout is not None, "배치 저장")
+
+        # 입장 때 온 room_state 가 이미 큐에 있으므로, 편집이 반영된 것이 나올 때까지 넘긴다.
+        state = None
+        for _ in range(10):
+            msg = _await_message(host, "room_state")
+            if msg is not None and msg["room"]["custom_map"]:
+                state = msg
+                break
+        assert state is not None, "편집 결과가 담긴 room_state 가 오지 않았다"
+        # 대기실 미리보기가 편집 결과를 그대로 보여줘야 한다.
+        platforms = state["room"]["map"]["platforms"]
+        assert len(platforms) == 2
+        assert platforms[1]["type"] == "jump"
+
+        host.send_json({"type": "reset_platforms"})
+        _await_state(lambda: room.custom_layout is None, "원본 지형 복구")
+
+
+def test_guest_cannot_edit_the_map_layout(client: TestClient) -> None:
+    """맵 에디터는 방장 전용 — 게스트 요청은 조용히 무시된다."""
+    code = _new_room(client)
+    with client.websocket_connect(f"/ws/{code}") as host:
+        _join(host, "호스트")
+        with client.websocket_connect(f"/ws/{code}") as guest:
+            _join(guest, "게스트")
+            room = room_manager.get(code)
+            assert room is not None
+            before = len(room.platforms)
+
+            guest.send_json({"type": "set_platforms", "platforms": _LAYOUT})
+            # 무시되므로 방송이 없다 — 상태를 폴링해서 "안 바뀌었음"을 확인한다.
+            time.sleep(0.2)
+            assert room.custom_layout is None
+            assert len(room.platforms) == before

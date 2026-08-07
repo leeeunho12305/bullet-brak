@@ -16,15 +16,19 @@ def clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
-def resolve_platform_collision(entity: Entity, rect: Rect) -> None:
-    """AABB 최소 관통축 밀어내기. 착지하면 grounded=True, Player 면 jumps=0."""
+def resolve_platform_collision(entity: Entity, rect: Rect) -> str | None:
+    """AABB 최소 관통축 밀어내기. 착지하면 grounded=True, Player 면 jumps=0.
+
+    밀어낸 면을 돌려준다("top" 은 위에서 밟았다는 뜻). 블럭 효과(점프대·빙판·가시)를
+    붙이려면 어느 면에 닿았는지 알아야 해서, 겹치지 않았으면 None 이다.
+    """
     ex, ey = entity.x, entity.y
     ew, eh = entity.width, entity.height
     rx, ry = float(rect["x"]), float(rect["y"])
     rw, rh = float(rect["width"]), float(rect["height"])
 
     if not (ex < rx + rw and ex + ew > rx and ey < ry + rh and ey + eh > ry):
-        return
+        return None
 
     overlap_bottom = ey + eh - ry
     overlap_top = ry + rh - ey
@@ -44,15 +48,21 @@ def resolve_platform_collision(entity: Entity, rect: Rect) -> None:
         entity.grounded = True
         if hasattr(entity, "jumps"):
             entity.jumps = 0
-    elif smallest == overlap_top and entity.vy < 0:
+        return "top"
+    if smallest == overlap_top and entity.vy < 0:
         entity.y = ry + rh
         entity.vy = 0.0
-    elif smallest == overlap_right:
+        return "bottom"
+    if smallest == overlap_right:
         entity.x = rx - ew
         entity.vx = 0.0
-    elif smallest == overlap_left:
+        return "right"
+    if smallest == overlap_left:
         entity.x = rx + rw
         entity.vx = 0.0
+        return "left"
+    # 겹쳤지만 진행 방향이 반대라 밀어내지 않은 경우(예: 상승 중 바닥면 접촉).
+    return "inside"
 
 
 def bullet_hits_rect(bullet, rect: Rect) -> bool:

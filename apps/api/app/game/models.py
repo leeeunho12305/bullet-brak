@@ -48,6 +48,10 @@ class Player:
     grounded: bool = False
     jumps: int = 0
     max_jumps: int = 1
+    #: 올라타 있는 이동발판의 room.platforms 인덱스(-1 = 없음). blocks 가 관리한다.
+    ride: int = -1
+    #: 직전 틱에 빙판을 밟았는가(마찰이 거의 없어진다).
+    on_ice: bool = False
 
     # 스탯
     hp: float = C.MAX_HP
@@ -118,6 +122,9 @@ class Bot:
     speed: float = 3.5
     jump_power: float = -14.0
     grounded: bool = False
+    #: 플레이어와 같은 블럭 상태(이동발판 탑승 / 빙판). blocks 가 관리한다.
+    ride: int = -1
+    on_ice: bool = False
     cooldown: float = 0.0
     customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
     # AI
@@ -230,7 +237,9 @@ class Room:
     map_id: str = M.DEFAULT_ID
     #: 지금 실제로 깔려 있는 맵. random 선택은 게임 시작 때 여기로 확정된다.
     active_map_id: str = M.DEFAULT_ID
-    platforms: list[dict[str, float]] = field(default_factory=lambda: M.platforms_of(M.DEFAULT_ID))
+    platforms: list[dict[str, Any]] = field(default_factory=lambda: M.platforms_of(M.DEFAULT_ID))
+    #: 맵 에디터로 방장이 직접 짠 배치. None 이 아니면 맵의 기본 발판 대신 이걸 깐다.
+    custom_layout: list[dict[str, Any]] | None = None
 
     scores: dict[str, int] = field(default_factory=dict)
     round_wins: dict[str, int] = field(default_factory=dict)

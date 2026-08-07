@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import random
 
+from app.game import blocks
 from app.game import constants as C
 from app.game.models import Bot, Player, Room
 from app.game.physics import resolve_platform_collision
@@ -224,7 +225,7 @@ def _jump(bot: Bot) -> None:
     bot.jump_cooldown = 40
 
 
-def _physics(bot: Bot, platforms: list[dict[str, float]]) -> None:
+def _physics(bot: Bot, room: Room) -> None:
     if bot.dir == -1:
         bot.vx -= 1.2
     elif bot.dir == 1:
@@ -232,12 +233,15 @@ def _physics(bot: Bot, platforms: list[dict[str, float]]) -> None:
 
     bot.vx = max(-bot.speed, min(bot.speed, bot.vx))
     if bot.dir == 0:
-        bot.vx *= C.FRICTION
+        bot.vx *= blocks.ICE_FRICTION if bot.on_ice else C.FRICTION
+
+    blocks.carry(bot, room)
 
     bot.vy += C.GRAVITY
     bot.x += bot.vx
     bot.y += bot.vy
     bot.grounded = False
+    bot.on_ice = False
 
     if bot.x < 0:
         bot.x = 0.0
@@ -250,8 +254,15 @@ def _physics(bot: Bot, platforms: list[dict[str, float]]) -> None:
         bot.y = 0.0
         bot.vy = 0.0
 
-    for plat in platforms:
-        resolve_platform_collision(bot, plat)
+    # 블럭 효과(점프대/빙판/가시)는 플레이어와 같은 규칙으로 봇에게도 적용된다.
+    damage = 0.0
+    for index, plat in enumerate(room.platforms):
+        side = resolve_platform_collision(bot, plat)
+        damage += blocks.on_contact(bot, plat, side, index)
+    if damage > 0:
+        bot.hp -= damage
+        if bot.hp <= 0:
+            kill_bot(bot)
 
 
 # --------------------------------------------------------------------------
@@ -291,7 +302,7 @@ def update_bot(room: Room, bot: Bot) -> None:
         bot.aim.x, bot.aim.y = bot.cx, bot.cy
         _wander(bot)
 
-    _physics(bot, room.platforms)
+    _physics(bot, room)
 
 
 def fall_check(room: Room) -> None:
