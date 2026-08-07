@@ -1,5 +1,7 @@
 # 빌드 컨텍스트: apps/api
-#   docker build -f apps/api/Dockerfile apps/api
+#   docker build -f apps/api/Dockerfile --target runtime apps/api
+#
+# 이 이미지는 배포 전용이다. 로컬 개발은 도커 없이 `make dev` 로 한다.
 
 FROM python:3.11-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -8,14 +10,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-
-# ── 개발: 소스는 볼륨으로 마운트, --reload ────────────────────
-FROM base AS dev
-COPY requirements-dev.txt ./
-RUN pip install --no-cache-dir -r requirements-dev.txt
-COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # ── 운영 ─────────────────────────────────────────────────────
 FROM base AS runtime

@@ -1,5 +1,9 @@
-# Bullet Brak — 개발/운영 엔트리포인트
+# Bullet Brak — 개발/배포 엔트리포인트
 # 사용법: make <target>  (그냥 `make` 만 치면 목록이 나온다)
+#
+# ⚠ 도커는 배포 전용이다. 로컬 개발은 `make dev` (python venv + vite dev server) 하나뿐이다.
+#   docker-compose.yml 은 배포 스택(api + db + nginx)이고, `make up` 은 그걸 띄운다.
+#   개발용 compose 스택과 Dockerfile 의 dev 스테이지는 전부 제거했다.
 #
 # 설치:
 #   Windows : winget install ezwinports.make   (Git for Windows 가 이미 있어야 한다)
@@ -11,8 +15,8 @@ WEB_DIR  := apps/web
 # pnpm 이 PATH 에 없으면 corepack 으로 대신 부른다(`corepack enable pnpm` 을 안 한 환경).
 # package.json 에 packageManager 필드가 없어서 corepack 에 버전을 직접 준다.
 PNPM     ?= $(shell command -v pnpm >/dev/null 2>&1 && echo pnpm || echo corepack pnpm@9.15.4)
+# compose 파일은 docker-compose.yml 하나뿐이다(= 배포 스택).
 COMPOSE  ?= docker compose
-PROD     := $(COMPOSE) -f docker-compose.prod.yml
 
 ifeq ($(OS),Windows_NT)
 # Windows make 의 기본 셸은 cmd.exe 라서 grep/awk/rm/find 가 없다.
@@ -40,15 +44,20 @@ VENV_PY  := $(VENV_BIN)/python
 
 .DEFAULT_GOAL := help
 .PHONY: help setup setup-api setup-web dev dev-api dev-web test test-api typecheck build \
-        up down restart logs ps images prod-up prod-down clean
+        up down restart logs ps images clean \
+        migrate migration migrate-down db-shell db-dump
 
 help: ## 사용 가능한 타깃 목록
 	@echo "Bullet Brak"
+	@# Windows make 는 recipe 명령줄을 ANSI 로 변환해 넘긴다 — 여기 한글을 쓰면 깨진다. ASCII 로만 쓸 것.
+	@echo "  local dev : make setup && make dev   (no docker)"
+	@echo "  deploy    : make up                  (docker-compose.yml)"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
-## ── 로컬 개발 (컨테이너 없이) ─────────────────────────────────
+## ── 로컬 개발 (도커 없음 — 유일한 개발 경로) ──────────────────
+# 처음이라면: make setup  →  make dev
 
 setup: setup-api setup-web ## 백엔드 venv + 프론트 의존성 한 번에 설치
 
@@ -83,33 +92,50 @@ typecheck: ## 프론트 타입 검사
 build: ## 프론트 프로덕션 번들 생성
 	$(PNPM) --filter @bullet-brak/web build
 
-## ── docker compose ──────────────────────────────────────────
+## ── docker compose (배포 스택 전용) ──────────────────────────
+# 도커는 배포에만 쓴다. 아래 타깃은 전부 docker-compose.yml = 배포 스택을 가리킨다.
+# POSTGRES_PASSWORD 가 없으면 compose 가 기동을 거부한다(.env 또는 환경변수로 넣을 것).
 
-up: ## 개발 스택 기동 (http://localhost:5173)
+up: ## 배포 스택 기동 (api+db+nginx, 단일 진입점 :8080)
 	$(COMPOSE) up -d --build
-	@echo "web  -> http://localhost:5173"
-	@echo "api  -> http://localhost:8000/api/health"
+	@echo "web  -> http://localhost:$${WEB_PROD_PORT:-8080}"
+	@echo "api  -> http://localhost:$${WEB_PROD_PORT:-8080}/api/health  (nginx 프록시 경유)"
 
-down: ## 개발 스택 종료
+down: ## 배포 스택 종료
 	$(COMPOSE) down
 
-restart: down up ## 개발 스택 재기동
+restart: down up ## 배포 스택 재기동
 
-logs: ## 로그 따라가기 (make logs s=api 로 서비스 지정 가능)
+logs: ## 배포 스택 로그 따라가기 (make logs s=api 로 서비스 지정 가능)
 	$(COMPOSE) logs -f $(s)
 
-ps: ## 컨테이너 상태
+ps: ## 배포 스택 컨테이너 상태
 	$(COMPOSE) ps
 
-images: ## 운영 이미지 빌드만 수행
-	$(PROD) build
+images: ## 배포 이미지 빌드만 수행
+	$(COMPOSE) build
 
-prod-up: ## 운영 스택 기동 (nginx 단일 진입점, http://localhost:8080)
-	$(PROD) up -d --build
-	@echo "web  -> http://localhost:8080"
+## ── DB ──────────────────────────────────────────────────────
+# Postgres 는 배포 스택(docker-compose.yml)에만 있다. `make dev` 는 DB 없이 인메모리로 돈다.
+# 평소엔 아래를 칠 일이 없다 — api 가 기동할 때 alembic upgrade head 를 스스로 돌린다.
+# 리비전을 새로 만들거나 데이터를 직접 들여다볼 때만 쓴다(스택이 떠 있어야 한다).
 
-prod-down: ## 운영 스택 종료
-	$(PROD) down
+migrate: ## 마이그레이션 적용 (배포 스택 컨테이너 안에서 alembic upgrade head)
+	$(COMPOSE) exec api alembic upgrade head
+
+migration: ## 모델 변경으로 리비전 생성 (make migration m="설명")
+	@test -n "$(m)" || { echo 'm= 로 설명을 넘길 것. 예: make migration m="add ranking"'; exit 1; }
+	$(COMPOSE) exec api alembic revision --autogenerate -m "$(m)"
+	@echo "생성된 파일을 반드시 눈으로 확인할 것 — autogenerate 는 완벽하지 않다."
+
+migrate-down: ## 마이그레이션 한 단계 되돌리기
+	$(COMPOSE) exec api alembic downgrade -1
+
+db-shell: ## psql 접속
+	$(COMPOSE) exec db psql -U $${POSTGRES_USER:-bulletbrak} -d $${POSTGRES_DB:-bulletbrak}
+
+db-dump: ## DB 덤프를 stdout 으로 (make db-dump > backup.sql)
+	@$(COMPOSE) exec -T db pg_dump -U $${POSTGRES_USER:-bulletbrak} -d $${POSTGRES_DB:-bulletbrak}
 
 ## ── 정리 ────────────────────────────────────────────────────
 
