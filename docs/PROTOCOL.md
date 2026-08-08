@@ -161,8 +161,7 @@ PlayerSnap = {
   "aim": {"x": f, "y": f},
   "cooldown": f, "max_cooldown": f,
   // 가드는 게이지가 아니라 "라운드당 남은 횟수"다(§4 참고).
-  "block_uses": int, "block_uses_max": int,   // 남은 횟수 / 라운드당 총 횟수
-  "block_timer": int, "block_duration": int,  // 펼쳐져 있는 남은 틱 / 한 번의 지속 틱
+  "block_meter": f, "block_meter_max": f,     // 남은 가드 게이지 / 라운드당 최대치(150)
   "blocking": bool,
   "charging": bool, "charge": f,          // 강공격 (0~60)
   "score": int, "round_wins": int, "coins": int,
@@ -171,7 +170,7 @@ PlayerSnap = {
   // Tab 오버레이용 — 아래 두 필드는 대전 중 0.5초(30틱)에 한 번만 실린다.
   // 없는 틱에는 클라이언트가 마지막으로 받은 값을 그대로 유지한다.
   "stats": { "damage_mult","max_hp","speed","cooldown","bullet_speed","bullet_size",
-             "bounces","knockback","block_uses","block_seconds","shots_per_fire" },  // 전부 number, optional
+             "bounces","knockback","block_meter","block_seconds","shots_per_fire" },  // 전부 number, optional
   "damage_table": [ { "distance": 0, "damage": 30.0 }, ... ]  // 0,100,200,400,600,800px, optional
 }
 
@@ -252,11 +251,13 @@ Snapshot = {
 - 월드 경계: 좌우 벽과 **천장(`y = 0`)은 막혀 있다**(플레이어/봇 모두 `vy` 가 0으로 끊긴다).
   바닥만 뚫려 있다 — 낙사가 협곡·부유섬 맵의 규칙이기 때문이다. 탄환은 네 면 모두에서 튕긴다.
 - 낙사: `y > HEIGHT + 100` 이면 즉사.
-- 가드: 게이지가 아니라 **라운드당 정해진 횟수**다(`BLOCK_USES` = 1, DEFENDER 가 +1).
-  누른 순간 1회를 쓰고 `BLOCK_DURATION`(45틱 = 0.75초, SHIELDS UP 이 +30틱) 동안만 펼쳐진다.
-  라운드 안에서는 다시 채워지지 않고, `reset_round`(훈련장은 `start_wave`)에서만 복구된다.
-  누르고 있어도 한 번만 발동한다(`Inputs.block_consumed`). 펼쳐진 동안 닿은 총알은 반사된다
-  (×-1.35, 소유권 이전). 가드 장판·톱날·순간이동은 **가드를 시작한 틱에 한 번만** 생성된다.
+- 가드: **라운드당 게이지**다(`BLOCK_METER_MAX` = 150, DEFENDER 가 +75).
+  누르고 있는 동안만 `BLOCK_DRAIN`(= 150 / 30초 / 60틱) 씩 줄고, 손을 떼면 그 자리에서 멈춘다 —
+  언제든 끊었다 다시 쓸 수 있다. 가득 찬 게이지를 계속 눌러 다 쓰면 `BLOCK_DRAIN_SECONDS`(30초).
+  SHIELDS UP 은 `block_drain` 을 ×0.7 로 줄인다(같은 게이지로 약 43초).
+  라운드 안에서는 회복되지 않고, `reset_round`(훈련장은 `start_wave`/부활)에서만 채워진다.
+  펼쳐진 동안 닿은 총알은 반사된다(×-1.35, 소유권 이전). 가드 장판·톱날·순간이동은
+  **가드를 시작한 틱에 한 번만** 생성된다.
 - 폭발(`apply_explosion`)은 **터뜨린 본인에게는 닿지 않는다**. 연출용 `blast` 장판을 남긴다.
 - 강공격: `strong_start`~`strong_release` 차징(0~60), 발사 후 쿨다운 180틱.
 - **training 모드(훈련장)**: 웨이브 방식. 라운드/점수/매치 승리가 없다.

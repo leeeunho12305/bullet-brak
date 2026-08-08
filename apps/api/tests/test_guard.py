@@ -1,7 +1,7 @@
-"""가드(라운드당 횟수 제한)와 가드/장판 효과 검증.
+"""가드(라운드당 게이지)와 가드/장판 효과 검증.
 
-가드는 게이지가 아니다 — 누른 순간 1회를 쓰고 BLOCK_DURATION 동안만 펼쳐지며,
-라운드가 다시 시작될 때만 채워진다.
+가드는 게이지다 — 누르고 있는 동안만 줄고 손을 떼면 그 자리에서 멈춘다.
+가득 찬 게이지(150)를 계속 눌러 다 쓰는 데 30초가 걸리고, 라운드가 다시 시작될 때만 채워진다.
 """
 
 from __future__ import annotations
@@ -21,75 +21,84 @@ def _room() -> tuple[Room, Player]:
 
 
 # --------------------------------------------------------------------------
-# 가드 = 라운드당 횟수
+# 가드 = 라운드당 게이지
 # --------------------------------------------------------------------------
 
+#: 게이지를 끝까지 쓰는 데 걸리는 틱(= 30초)
+_FULL_GUARD_TICKS = int(C.BLOCK_DRAIN_SECONDS * C.TICK_RATE)
 
-def test_guard_lasts_a_fixed_time_and_does_not_refill_in_a_round() -> None:
+
+def test_full_guard_gauge_lasts_thirty_seconds() -> None:
     room, p = _room()
+    assert p.block_meter == C.BLOCK_METER_MAX == 150.0
     p.inputs.block = True
 
+    for _ in range(_FULL_GUARD_TICKS - 1):
+        sim.update_player(room, p)
+    assert p.blocking, "30초가 되기 전에 가드가 풀렸다"
+    assert p.block_meter > 0
+
+    sim.update_player(room, p)
+    assert p.block_meter == 0.0
+
+    # 바닥나면 계속 누르고 있어도 다시 켜지지 않는다(라운드 안에서는 회복되지 않는다).
+    sim.update_player(room, p)
+    assert not p.blocking
+
+
+def test_guard_can_be_released_midway_and_the_rest_is_kept() -> None:
+    """중간에 끊을 수 있어야 한다 — 남은 게이지는 그대로 아껴 둔다."""
+    room, p = _room()
+    p.inputs.block = True
+    for _ in range(300):  # 5초만 쓴다
+        sim.update_player(room, p)
+    left = p.block_meter
+    assert left == pytest.approx(C.BLOCK_METER_MAX - C.BLOCK_DRAIN * 300)
+
+    p.inputs.block = False
+    for _ in range(120):
+        sim.update_player(room, p)
+    assert not p.blocking, "키를 뗐는데도 가드가 유지됐다"
+    assert p.block_meter == left, "가드를 끊었는데 게이지가 계속 줄었다"
+
+    # 남은 만큼 다시 쓸 수 있다.
+    p.inputs.block = True
     sim.update_player(room, p)
     assert p.blocking
-    assert p.block_uses == 0
-    assert p.block_timer == C.BLOCK_DURATION
-
-    # 지속 시간이 끝나면 풀린다. 계속 누르고 있어도 다시 켜지지 않는다.
-    for _ in range(C.BLOCK_DURATION + 60):
-        sim.update_player(room, p)
-    assert not p.blocking
-    assert p.block_uses == 0
-
-    # 키를 뗐다 다시 눌러도 마찬가지다 — 라운드 안에서는 회복되지 않는다.
-    p.inputs.block = False
-    sim.update_player(room, p)
-    p.inputs.block = True
-    sim.update_player(room, p)
-    assert not p.blocking
-
-
-def test_holding_the_key_only_triggers_one_guard() -> None:
-    """누르고 있는 내내 다시 발동하면 횟수 제한이 의미가 없다."""
-    room, p = _room()
-    p.block_uses_max = p.block_uses = 3
-    p.inputs.block = True
-
-    for _ in range(C.BLOCK_DURATION * 2 + 10):
-        sim.update_player(room, p)
-
-    assert p.block_uses == 2, "한 번 누르고 있는 동안 여러 번 소모됐다"
+    assert p.block_meter < left
 
 
 def test_round_reset_refills_guard() -> None:
     room, p = _room()
     room.players["b"] = Player(id="b", x=400.0, y=300.0)
-    p.block_uses = 0
-    p.block_timer = 10
+    p.block_meter = 0.0
 
     engine.reset_round(room)
 
-    assert p.block_uses == p.block_uses_max == C.BLOCK_USES
-    assert p.block_timer == 0
-    assert not p.inputs.block_consumed
+    assert p.block_meter == p.block_meter_max == C.BLOCK_METER_MAX
 
 
-def test_defender_adds_a_use_and_shields_up_extends_the_duration() -> None:
+def test_defender_adds_gauge_and_shields_up_slows_the_drain() -> None:
     _, p = _room()
     cards.apply_card(p, "defender")
     cards.apply_card(p, "shields_up")
 
-    assert p.block_uses_max == C.BLOCK_USES + 1
-    assert p.block_uses == C.BLOCK_USES + 1
-    assert p.block_duration == C.BLOCK_DURATION + 30
+    assert p.block_meter_max == C.BLOCK_METER_MAX + 75.0
+    assert p.block_meter == C.BLOCK_METER_MAX + 75.0
+    assert p.block_drain == pytest.approx(C.BLOCK_DRAIN * 0.7)
 
 
 def test_empower_boosts_only_the_first_shot_after_a_guard() -> None:
     room, p = _room()
     cards.apply_card(p, "empower")
     p.inputs.block = True
-    for _ in range(C.BLOCK_DURATION + 2):
+    for _ in range(30):
         sim.update_player(room, p)
-    assert p.empower_ready, "가드가 끝났는데 강화가 준비되지 않았다"
+    assert not p.empower_ready, "가드 중인데 벌써 강화가 준비됐다"
+
+    p.inputs.block = False  # 중간에 끊는다
+    sim.update_player(room, p)
+    assert p.empower_ready, "가드를 끊었는데 강화가 준비되지 않았다"
 
     p.cooldown = 0.0
     bullets.fire(room, p)
@@ -113,7 +122,7 @@ def test_guard_zones_spawn_once_per_guard() -> None:
     cards.apply_card(p, "healing_field")
     p.inputs.block = True
 
-    for _ in range(C.BLOCK_DURATION):
+    for _ in range(180):  # 3초 동안 계속 누르고 있어도 한 장뿐이어야 한다
         sim.update_player(room, p)
 
     assert len([z for z in room.zones if z.type == "heal"]) == 1

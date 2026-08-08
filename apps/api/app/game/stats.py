@@ -55,7 +55,9 @@ def stat_summary(player: Player) -> dict[str, float]:
         "bullet_size": round(player.bullet_size, 1),
         "bounces": float(player.max_bounces),
         "knockback": round(player.knockback_mult, 2),
-        "block_uses": float(player.block_uses_max),
-        "block_seconds": round(player.block_duration / C.TICK_RATE, 2),
+        "block_meter": round(player.block_meter_max, 1),
+        "block_seconds": round(
+            player.block_meter_max / max(1e-6, player.block_drain) / C.TICK_RATE, 1
+        ),
         "shots_per_fire": float(shots * (3 if player.burst else 1)),
     }

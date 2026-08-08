@@ -77,37 +77,34 @@ def update_player(room: Room, p: Player) -> None:
     stunned = p.dazzle_timer > 0
     inp = p.inputs
 
-    # 가드는 게이지가 아니라 "라운드당 남은 횟수"다. 누른 순간 1회를 쓰고 block_duration
-    # 틱 동안만 펼쳐진다 — 라운드가 끝날 때까지 다시 채워지지 않는다.
-    started = False
-    if p.block_timer > 0:
-        p.block_timer -= 1
-        if p.block_timer == 0 and p.has("empower"):
-            p.empower_ready = True  # EMPOWER: 가드가 끝난 직후 한 발이 강화된다
-    elif inp.block and not inp.block_consumed and not stunned and p.block_uses > 0:
-        p.block_uses -= 1
-        p.block_timer = p.block_duration
-        inp.block_consumed = True
-        started = True
-    if not inp.block:
-        inp.block_consumed = False
-
-    blocking = p.block_timer > 0 and not stunned
+    # 가드는 게이지다. 누르고 있는 동안만 줄고, 손을 떼면 그 자리에서 멈춘다 —
+    # 언제든 끊을 수 있다. 라운드가 끝날 때까지 다시 채워지지는 않는다.
+    blocking = bool(inp.block) and p.block_meter > 0 and not stunned
+    started = blocking and not p.blocking
+    ended = p.blocking and not blocking
     p.blocking = blocking
 
     if blocking:
         p.vx *= 0.5
+        p.block_meter -= p.block_drain
+        # 부동소수 찌꺼기(1e-13)가 남으면 게이지를 다 썼는데도 한 틱 더 막아 준다.
+        if p.block_meter < 1e-6:
+            p.block_meter = 0.0
         _guard_effects(room, p, started)
-    elif not stunned:
-        if inp.left:
-            p.vx -= C.ACCEL
-        if inp.right:
-            p.vx += C.ACCEL
-        if inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
-            p.vy = p.jump_power
-            p.grounded = False
-            p.jumps += 1
-            inp.jump_consumed = True
+    else:
+        # EMPOWER: 가드를 끊은(또는 게이지가 바닥난) 직후 한 발이 강화된다.
+        if ended and p.has("empower"):
+            p.empower_ready = True
+        if not stunned:
+            if inp.left:
+                p.vx -= C.ACCEL
+            if inp.right:
+                p.vx += C.ACCEL
+            if inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
+                p.vy = p.jump_power
+                p.grounded = False
+                p.jumps += 1
+                inp.jump_consumed = True
     if not inp.jump:
         inp.jump_consumed = False
 
@@ -241,7 +238,7 @@ def kill(p: Player) -> None:
     p.blocking = False
     p.charging = False
     p.charge = 0.0
-    p.block_timer = 0
+    p.block_meter = 0.0
     p.silence_timer = 0
     p.poison = 0
 

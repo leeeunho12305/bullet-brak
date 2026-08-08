@@ -91,9 +91,9 @@ export interface PlayerStats {
   bullet_size: number;
   bounces: number;
   knockback: number;
-  /** 라운드당 쓸 수 있는 가드 횟수 */
-  block_uses: number;
-  /** 가드 한 번이 펼쳐져 있는 시간(초) */
+  /** 라운드마다 채워지는 가드 게이지 */
+  block_meter: number;
+  /** 그 게이지를 계속 눌러 다 쓰는 데 걸리는 시간(초) */
   block_seconds: number;
   shots_per_fire: number;
 }
@@ -119,13 +119,9 @@ export interface PlayerSnap {
   aim: Vec;
   cooldown: number;
   max_cooldown: number;
-  /** 이번 라운드에 남은 가드 횟수. 게이지가 아니라서 라운드 안에서는 다시 차지 않는다. */
-  block_uses: number;
-  block_uses_max: number;
-  /** 가드가 펼쳐져 있는 남은 틱(0이면 가드 중이 아니다) */
-  block_timer: number;
-  /** 가드 한 번이 유지되는 틱 */
-  block_duration: number;
+  /** 이번 라운드에 남은 가드 게이지. 누르고 있는 동안만 줄고, 라운드 안에서는 차지 않는다. */
+  block_meter: number;
+  block_meter_max: number;
   blocking: boolean;
   charging: boolean;
   charge: number;

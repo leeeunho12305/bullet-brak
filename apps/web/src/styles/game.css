@@ -203,16 +203,20 @@
 .hud-meter span { display: block; height: 100%; border-radius: 999px; transition: width 0.1s linear; }
 .hud-sub { display: flex; flex-direction: column; gap: 3px; }
 .hud-sub .hud-meter { height: 4px; }
-/* 가드는 게이지가 아니라 라운드당 남은 횟수다 — 칸 하나가 1회. */
-.hud-guard { display: flex; align-items: center; gap: 3px; height: 4px; }
+/* 가드 게이지 — 막대 옆에 남은 양을 숫자로도 적는다. */
+.hud-guard { display: flex; align-items: center; gap: 6px; }
 .hud-side.right .hud-guard { flex-direction: row-reverse; }
-.hud-pip {
-  flex: 1;
-  height: 100%;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+.hud-guard-text {
+  flex: none;
+  min-width: 52px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
-.hud-pip.on { background: #4dabf7; box-shadow: 0 0 6px rgba(77, 171, 247, 0.7); }
+.hud-side.right .hud-guard-text { text-align: left; }
+/* 가드를 쓰는 동안에는 숫자도 같이 밝아진다(줄어드는 게 눈에 띄어야 한다). */
+.hud-guard.is-on .hud-guard-text { color: #00e5ff; }
 .hud-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 /* 라운드 승수 원: 1승이면 반쪽, 2승이면 꽉 참. 색은 그 플레이어 색(--orb). */
 .score-orb { flex: none; opacity: 0.38; transition: opacity 0.18s ease; }
@@ -309,15 +313,15 @@
   30% { opacity: 1; transform: translateY(-3px); }
 }
 
-.card-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.card-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
 
 /* 카드는 3D 뒤집기 상자다. 버튼 자신은 투명한 틀이고, 실제 그림은 .card-face 두 장이 그린다.
-   높이를 고정해야 앞/뒤 면을 겹쳐 놓을 수 있다. 카드 설명이 수치까지 적는 문장(최대 44자,
-   4줄)으로 바뀌면서 이름 2줄 + 설명 4줄이 들어가도록 넓혔다 — 5장이 딱 한 줄에 들어간다. */
+   높이를 고정해야 앞/뒤 면을 겹쳐 놓을 수 있다. 이름 2줄 + 설명 4줄이 들어가는 선에서
+   가장 작게 잡았다 — 5장이 한 줄에 들어가고 게임 화면을 덜 가린다. */
 .card-item {
   position: relative;
-  width: 152px;
-  height: 250px;
+  width: 118px;
+  height: 194px;
   padding: 0;
   border: 0;
   background: none;
@@ -356,8 +360,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 16px 10px 12px;
+  gap: 4px;
+  padding: 14px 7px 9px;
   border: 2px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
@@ -375,7 +379,7 @@
     linear-gradient(150deg, var(--panel-2), var(--panel));
 }
 .card-rear-mark {
-  font-size: 2.4rem;
+  font-size: 1.9rem;
   font-weight: 800;
   color: var(--muted);
   opacity: 0.65;
@@ -396,8 +400,8 @@
 .card-stripe { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
 .card-key {
   position: absolute;
-  top: 7px;
-  left: 8px;
+  top: 5px;
+  left: 6px;
   padding: 0 4px;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -405,15 +409,15 @@
   font-weight: 800;
   color: var(--muted);
 }
-.card-category { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.14em; }
-.card-emoji { font-size: 2rem; line-height: 1; margin: 4px 0; }
+.card-category { font-size: 0.55rem; font-weight: 800; letter-spacing: 0.12em; }
+.card-emoji { font-size: 1.5rem; line-height: 1; margin: 2px 0; }
 /* 카드 이름은 영문 한 단어가 길 수 있다(PRISTINE PERSISTENCE 등) — 고정 높이라 넘치면 잘린다 */
-.card-name { font-weight: 700; font-size: 0.95rem; line-height: 1.2; overflow-wrap: anywhere; }
-.card-desc { font-size: 0.74rem; color: var(--muted); line-height: 1.35; overflow-wrap: anywhere; }
+.card-name { font-weight: 700; font-size: 0.78rem; line-height: 1.18; overflow-wrap: anywhere; }
+.card-desc { font-size: 0.63rem; color: var(--muted); line-height: 1.3; overflow-wrap: anywhere; }
 /* 내 차례가 아닐 때 보여주는 뒷면 카드. .card-rear 와 같은 무늬를 써서 같은 물건으로 읽히게 한다 */
 .card-back {
-  width: 96px;
-  min-height: 138px;
+  width: 76px;
+  min-height: 108px;
   display: grid;
   place-items: center;
   border: 2px dashed var(--line);
@@ -422,7 +426,7 @@
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 8px, transparent 8px 16px),
     linear-gradient(150deg, var(--panel-2), var(--panel));
   color: var(--muted);
-  font-size: 1.8rem;
+  font-size: 1.4rem;
   font-weight: 800;
   opacity: 0.75;
   animation: card-in 0.24s ease both;

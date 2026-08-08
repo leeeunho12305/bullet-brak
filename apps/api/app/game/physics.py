@@ -123,7 +123,7 @@ def handle_lethal(player: "Player") -> None:
     player.blocking = False
     player.charging = False
     player.charge = 0.0
-    player.block_timer = 0
+    player.block_meter = 0.0
     player.silence_timer = 0
     player.poison = 0
 

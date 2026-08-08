@@ -472,21 +472,14 @@ function drawBar(
 }
 
 /**
- * 머리 위 가드 표시. 게이지가 아니라 **이번 라운드에 남은 횟수**다.
- * 가드를 펼치고 있는 동안에는 그 자리에 남은 지속 시간을 막대로 보여 준다.
+ * 머리 위 가드 게이지. 이번 라운드에 남은 양이다(누르고 있는 동안만 줄어든다).
+ * 가드를 펼치고 있는 동안에는 색이 밝아져서 지금 쓰고 있다는 걸 알린다.
  */
 function drawGuard(ctx: CanvasRenderingContext2D, p: PlayerSnap, x: number, y: number, w: number): void {
-  if (p.block_timer > 0) {
-    drawBar(ctx, x, y, w, 3, p.block_timer / Math.max(1, p.block_duration), '#00e5ff');
-    return;
-  }
-  const max = Math.max(1, p.block_uses_max);
-  const gap = 2;
-  const pw = (w - gap * (max - 1)) / max;
-  for (let i = 0; i < max; i += 1) {
-    ctx.fillStyle = i < p.block_uses ? '#4dabf7' : 'rgba(255,255,255,0.14)';
-    ctx.fillRect(x + i * (pw + gap), y, pw, 3);
-  }
+  const ratio = p.block_meter / Math.max(1, p.block_meter_max);
+  ctx.fillStyle = 'rgba(255,255,255,0.14)';
+  ctx.fillRect(x, y, w, 3);
+  drawBar(ctx, x, y, w, 3, ratio, p.blocking ? '#00e5ff' : '#4dabf7');
 }
 
 /** 상태이상(침묵/독/냉기) 표시 */

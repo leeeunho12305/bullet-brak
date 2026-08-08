@@ -77,11 +77,9 @@ def player_snap(room: Room, p: Player, loadout: bool = True) -> dict[str, Any]:
         "aim": {"x": p.aim.x, "y": p.aim.y},
         "cooldown": p.cooldown,
         "max_cooldown": p.max_cooldown,
-        # 가드는 게이지가 아니라 라운드당 남은 횟수 + 펼쳐져 있는 남은 틱이다.
-        "block_uses": p.block_uses,
-        "block_uses_max": p.block_uses_max,
-        "block_timer": p.block_timer,
-        "block_duration": p.block_duration,
+        # 가드 게이지. 라운드가 시작될 때만 채워지고, 누르고 있는 동안만 줄어든다.
+        "block_meter": p.block_meter,
+        "block_meter_max": p.block_meter_max,
         "blocking": p.blocking,
         "charging": p.charging,
         "charge": p.charge,

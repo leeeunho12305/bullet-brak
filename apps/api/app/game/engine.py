@@ -265,15 +265,13 @@ def reset_round(room: Room) -> None:
         p.grounded = False
         p.jumps = 0
         p.blocking = False
-        # 가드는 라운드가 시작될 때만 채워진다(라운드 안에서는 다시 차지 않는다).
-        p.block_uses = p.block_uses_max
-        p.block_timer = 0
+        # 가드 게이지는 라운드가 시작될 때만 채워진다(라운드 안에서는 다시 차지 않는다).
+        p.block_meter = p.block_meter_max
         p.empower_ready = False
         p.poison = 0
         p.cold_timer = p.dazzle_timer = p.silence_timer = 0
         p.echo_cooldown = p.blood_timer = 0
         p.inputs.jump_consumed = False
-        p.inputs.block_consumed = False
 
     if room.mode == "training":
         # 훈련장을 처음부터 다시 시작한다(다음 틱에 1웨이브가 스폰된다).
@@ -310,10 +308,9 @@ def reset_match(room: Room) -> None:
         p.bullet_speed_mult = 1.0
         p.max_bounces = 0
         p.width = p.height = C.PLAYER_SIZE
-        p.block_uses_max = C.BLOCK_USES
-        p.block_uses = C.BLOCK_USES
-        p.block_duration = C.BLOCK_DURATION
-        p.block_timer = 0
+        p.block_meter_max = C.BLOCK_METER_MAX
+        p.block_meter = C.BLOCK_METER_MAX
+        p.block_drain = C.BLOCK_DRAIN
         p.charging = False
         p.charge = 0.0
         p.cards.clear()

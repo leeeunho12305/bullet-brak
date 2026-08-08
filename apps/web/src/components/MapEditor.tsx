@@ -17,6 +17,15 @@ const MIN_SIZE = 10;
 /** 격자 칸 크기(월드 px). 클릭 한 번이면 이 크기의 블럭 하나가 놓인다. */
 const GRID = 20;
 
+/** 크기 조절 손잡이(하얀 네모)의 한 변. 블럭이 작으면 같이 작아진다 —
+ *  고정 크기로 두면 최소 크기(10px) 블럭을 손잡이가 통째로 덮어 버려서 안 보인다. */
+const HANDLE_MAX = 9;
+const HANDLE_MIN = 4;
+/** 보이는 크기와 별개로, 마우스로 집을 수 있는 범위. 작아져도 잡기 힘들면 안 된다. */
+const HANDLE_GRAB = 15;
+/** 변 가운데 손잡이를 보여 줄 최소 변 길이. 이보다 짧으면 모서리 손잡이와 겹친다. */
+const MID_HANDLE_MIN_SIDE = 44;
+
 /** 팔레트에서 고르는 도구 = 블럭 종류 + 지우개 */
 type Tool = BlockType | 'eraser';
 /** 선택한 블럭의 크기 조절 손잡이 */
@@ -392,6 +401,16 @@ export default function MapEditor({
     x: block.x + (handle.includes('w') ? 0 : handle.includes('e') ? block.width : block.width / 2),
     y: block.y + (handle.includes('n') ? 0 : handle.includes('s') ? block.height : block.height / 2),
   });
+  /** 손잡이 한 변. 작은 블럭에서는 블럭이 보이도록 같이 줄어든다. */
+  const handleSize = (block: Platform): number =>
+    clamp(Math.min(block.width, block.height) * 0.45, HANDLE_MIN, HANDLE_MAX);
+  /** 변 가운데 손잡이(n/s/e/w)는 그만한 여유가 있을 때만 그린다. */
+  const visibleHandles = (block: Platform): Handle[] =>
+    handles.filter((h) => {
+      if (h === 'n' || h === 's') return block.width >= MID_HANDLE_MIN_SIDE;
+      if (h === 'e' || h === 'w') return block.height >= MID_HANDLE_MIN_SIDE;
+      return true;
+    });
 
   const store = useCallback(() => {
     const name = slotName.trim() || `${map.name} 배치`;
@@ -635,21 +654,35 @@ export default function MapEditor({
               })}
               {current ? (
                 <g>
-                  {handles.map((h) => {
+                  {visibleHandles(current).map((h) => {
                     const at = handleAt(current, h);
+                    const s = handleSize(current);
                     return (
-                      <rect
+                      <g
                         key={h}
-                        x={at.x - 7}
-                        y={at.y - 7}
-                        width={14}
-                        height={14}
-                        fill="#ffffff"
-                        stroke="#0b0d17"
-                        strokeWidth={2}
                         style={{ cursor: `${h}-resize` }}
                         onPointerDown={(e) => startResize(e, h)}
-                      />
+                      >
+                        {/* 보이는 네모는 작게 — 크면 최소 크기 블럭을 통째로 가린다 */}
+                        <rect
+                          x={at.x - s / 2}
+                          y={at.y - s / 2}
+                          width={s}
+                          height={s}
+                          fill="#ffffff"
+                          stroke="#0b0d17"
+                          strokeWidth={1.5}
+                          pointerEvents="none"
+                        />
+                        {/* 집는 범위는 보이는 크기와 따로 넓게 둔다 */}
+                        <rect
+                          x={at.x - HANDLE_GRAB / 2}
+                          y={at.y - HANDLE_GRAB / 2}
+                          width={HANDLE_GRAB}
+                          height={HANDLE_GRAB}
+                          fill="transparent"
+                        />
+                      </g>
                     );
                   })}
                 </g>

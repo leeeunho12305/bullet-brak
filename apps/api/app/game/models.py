@@ -29,8 +29,6 @@ class Inputs:
     jump: bool = False
     block: bool = False
     jump_consumed: bool = False
-    #: 가드는 "누른 순간" 한 번만 발동한다. 눌러 놓고 있어도 다시 켜지지 않게 하는 빗장.
-    block_consumed: bool = False
 
 
 @dataclass
@@ -78,14 +76,12 @@ class Player:
     burst: int = 0
 
     # 가드 / 강공격
-    #: 이번 라운드에 남은 가드 횟수. 게이지가 아니다 — 라운드 안에서는 다시 차지 않고,
-    #: 라운드가 시작될 때만 block_uses_max 로 채워진다.
-    block_uses: int = C.BLOCK_USES
-    block_uses_max: int = C.BLOCK_USES
-    #: 가드가 펼쳐져 있는 남은 틱(0 이면 가드 중이 아니다).
-    block_timer: int = 0
-    #: 한 번 가드가 유지되는 틱. SHIELDS UP 이 늘린다.
-    block_duration: int = C.BLOCK_DURATION
+    #: 이번 라운드에 남은 가드 게이지. 누르고 있는 동안만 줄고, 라운드가 시작될 때만
+    #: block_meter_max 로 채워진다(라운드 안에서는 회복되지 않는다).
+    block_meter: float = C.BLOCK_METER_MAX
+    block_meter_max: float = C.BLOCK_METER_MAX
+    #: 가드 1틱당 소모량. SHIELDS UP 이 줄여서 같은 게이지로 더 오래 버티게 한다.
+    block_drain: float = C.BLOCK_DRAIN
     blocking: bool = False
     charging: bool = False
     charge: float = 0.0

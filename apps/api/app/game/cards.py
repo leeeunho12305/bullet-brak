@@ -82,17 +82,17 @@ def _sneaky(p: Player) -> None:
 
 
 def _shields_up(p: Player) -> None:
-    """가드 한 번이 더 오래 펼쳐진다(+0.5초)."""
+    """가드 게이지가 30% 천천히 닳는다(30초 -> 약 43초)."""
     p.flags["shields_up"] = True
-    p.block_duration += 30
+    p.block_drain *= 0.7
 
 
 def _defender(p: Player) -> None:
-    """라운드당 가드 횟수가 한 번 더 늘어난다."""
+    """가드 게이지가 늘어난다(+75 = +15초)."""
     p.max_hp += 30
     p.hp += 30
-    p.block_uses_max += 1
-    p.block_uses += 1
+    p.block_meter_max += 75.0
+    p.block_meter += 75.0
 
 
 def _combine(p: Player) -> None:
@@ -157,7 +157,7 @@ CARDS: list[Card] = [
     Card('refresh', 'REFRESH', '적을 맞히면 사격 쿨다운 -8틱', 'utility', '#63e6be', '♻️', _flag('refresh')),
     Card('healing_field', 'HEALING FIELD', '가드하는 순간 반경 120 회복 장판이 1.5초간 생긴다 (최대 약 40 회복)', 'survival', '#51cf66', '➕', _flag('healing_field')),
     Card('shockwave', 'SHOCKWAVE', '가드하는 순간 반경 130 안의 적을 강하게 밀쳐낸다', 'utility', '#ff922b', '〰️', _flag('shockwave')),
-    Card('shields_up', 'SHIELDS UP', '가드 한 번의 지속 시간 +0.5초 (0.75 → 1.25초)', 'survival', '#3b5bdb', '🪖', _shields_up),
+    Card('shields_up', 'SHIELDS UP', '가드 게이지가 30% 천천히 닳는다 (30 → 43초)', 'survival', '#3b5bdb', '🪖', _shields_up),
     Card('teleport', 'TELEPORT', '가드하는 순간 조준 방향으로 110px 순간이동한다', 'special', '#be4bdb', '🌀', _flag('teleport')),
     Card('explosive_bullet', 'EXPLOSIVE BULLET', '적중하는 순간 반경 85 폭발 (대미지 55%). 내가 맞지는 않는다', 'attack', '#ff6b6b', '🧨', _flag('explosive')),
     Card('decay', 'DECAY', '매 틱 탄속 ×0.985, 대미지 ×0.99 로 점점 약해진다', 'attack', '#845ef7', '🕳️', _flag('decay')),
@@ -174,7 +174,7 @@ CARDS: list[Card] = [
     Card('wind_up', 'WIND UP', '가만히 서서 모은 게이지만큼 대미지 최대 ×1.75', 'attack', '#fab005', '🌀', _flag('wind_up')),
     Card('careful_planning', 'CAREFUL PLANNING', '0.33초 이상 멈춰 있다가 쏘면 대미지 ×1.2', 'utility', '#c0eb75', '🧠', _flag('careful_planning')),
     Card('tank', 'TANK', '최대 체력 +100, 대신 이동 속도 -2', 'survival', '#228be6', '🛡️', _add(max_hp=100, hp=100, speed=-2)),
-    Card('defender', 'DEFENDER', '최대 체력 +30, 라운드당 가드 횟수 +1', 'survival', '#3b5bdb', '🧱', _defender),
+    Card('defender', 'DEFENDER', '최대 체력 +30, 가드 게이지 +75 (라운드당 +15초)', 'survival', '#3b5bdb', '🧱', _defender),
     Card('burst', 'BURST', '한 번 쏠 때 3발이 연달아 점사로 나간다', 'attack', '#74c0fc', '〰️', _add(burst=2)),
     Card('drill_ammo', 'DRILL AMMO', '탄환이 적 1명을 관통하고 계속 날아간다', 'attack', '#adb5bd', '🪛', _flag('drill_ammo')),
     Card('implode', 'IMPLODE', '가드하는 순간 반경 170 안의 적을 1초간 끌어당긴다', 'utility', '#ae3ec9', '🕳️', _flag('implode')),
@@ -275,10 +275,9 @@ def reset_card_state(player: Player) -> None:
     player.jumps = 0
 
     # 가드 / 강공격
-    player.block_uses_max = C.BLOCK_USES
-    player.block_uses = C.BLOCK_USES
-    player.block_duration = C.BLOCK_DURATION
-    player.block_timer = 0
+    player.block_meter_max = C.BLOCK_METER_MAX
+    player.block_meter = C.BLOCK_METER_MAX
+    player.block_drain = C.BLOCK_DRAIN
     player.empower_ready = False
     player.blocking = False
     player.charging = False

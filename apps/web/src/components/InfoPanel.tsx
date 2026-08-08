@@ -27,8 +27,8 @@ const STAT_ROWS: { key: keyof PlayerStats; label: string; suffix?: string }[] = 
   { key: 'bounces', label: '도탄', suffix: '회' },
   { key: 'knockback', label: '넉백', suffix: '×' },
   { key: 'speed', label: '이동 속도' },
-  { key: 'block_uses', label: '가드 횟수', suffix: '회/라운드' },
-  { key: 'block_seconds', label: '가드 지속', suffix: '초' },
+  { key: 'block_meter', label: '가드 게이지', suffix: '/라운드' },
+  { key: 'block_seconds', label: '가드 시간', suffix: '초' },
 ];
 
 /** 같은 값이면 setState 를 건너뛰기 위한 얕은 비교 */
