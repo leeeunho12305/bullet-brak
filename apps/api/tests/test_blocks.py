@@ -254,6 +254,102 @@ def test_spikes_hurt_and_bounce(manager: RoomManager) -> None:
     assert player.y < 520, "가시를 밟았는데 튕겨나지 않았다"
 
 
+def test_spikes_cost_a_flat_50_per_step(manager: RoomManager) -> None:
+    """가시는 밟을 때마다 50 이다 — 닿아 있는 동안 조금씩 갈리는 게 아니다."""
+    room = manager.create("pvp", 2)
+    engine.set_platforms(room, [maps.spike(0, 550, 800, 50)])
+    _add_player(room, "a")
+    _add_player(room, "b")
+    engine.start_game(room)
+
+    player = room.players["a"]
+    player.x, player.y = 100.0, 500.0
+    player.vx = player.vy = 0.0
+    before = player.hp
+
+    # 튕겨 오르고 다시 떨어지기 전까지는 한 번만 깎인다.
+    _run(room, 20)
+    assert before - player.hp == pytest.approx(blocks.HAZARD_DAMAGE)
+
+    # 무적 시간이 지나고 다시 밟으면 또 한 번.
+    _run(room, blocks.HAZARD_GRACE + 30)
+    assert before - player.hp == pytest.approx(blocks.HAZARD_DAMAGE * 2)
+
+
+def test_spawn_points_never_land_on_spikes(manager: RoomManager) -> None:
+    """가시 위에 스폰되면 시작하자마자 50 을 잃는다 — 맵이든 에디터 배치든 막는다."""
+    room = manager.create("pvp", 2, map_id="factory")
+    for x, y in maps.spawn_points(room):
+        assert maps._landing_kind(room.platforms, x, y) != blocks.HAZARD
+
+    # 에디터로 바닥 전체를 가시로 덮고 한쪽만 안전하게 남겨도 그쪽으로 밀려나야 한다.
+    engine.set_platforms(
+        room, [maps.spike(0, 550, 620, 50), maps.rect(620, 550, 180, 50)]
+    )
+    for x, y in maps.spawn_points(room):
+        assert maps._landing_kind(room.platforms, x, y) != blocks.HAZARD
+
+
+# --------------------------------------------------------------------------
+# 바닥에 박아 넣는 점프대
+# --------------------------------------------------------------------------
+
+
+def test_flush_jump_pad_does_not_block_the_walk(manager: RoomManager) -> None:
+    """바닥과 같은 높이의 점프대는 옆면이 없다 — 달려오다 걸려 멈추면 안 된다."""
+    room = manager.create("pvp", 2)
+    engine.set_platforms(room, [maps.rect(0, 550, 800, 50), maps.jump(400, 550, 100)])
+    _add_player(room, "a")
+    _add_player(room, "b")
+    engine.start_game(room)
+
+    player = room.players["a"]
+    player.x, player.y = 300.0, 520.0
+    player.vx = player.vy = 0.0
+    player.inputs.right = True
+
+    launched = False
+    for _ in range(60):
+        engine.tick_room(room)
+        launched = launched or player.vy < -10
+    assert player.x > 420.0, "점프대에 걸려 앞으로 나아가지 못했다"
+    assert launched, "점프대 위를 지나갔는데 튀어오르지 않았다"
+
+
+def test_flush_jump_pad_launches_a_walker(manager: RoomManager) -> None:
+    """바닥에 박힌 점프대 위에 서 있기만 해도 튀어오른다."""
+    room = manager.create("pvp", 2)
+    engine.set_platforms(room, [maps.rect(0, 550, 800, 50), maps.jump(300, 550, 100)])
+    _add_player(room, "a")
+    _add_player(room, "b")
+    engine.start_game(room)
+
+    player = room.players["a"]
+    player.x, player.y = 330.0, 520.0
+    player.vx = player.vy = 0.0
+    top = _min_y(room, player, 120)
+
+    plain_jump_height = C.JUMP_POWER**2 / (2 * C.GRAVITY)
+    assert 520 - top > plain_jump_height * 1.3
+
+
+def test_bullets_pass_through_jump_pads(manager: RoomManager) -> None:
+    """점프대는 실체가 없다 — 탄환도 걸리지 않는다."""
+    from app.game.bullets import spawn_bullet
+
+    room = manager.create("pvp", 2)
+    engine.set_platforms(room, [maps.jump(300, 300, 200, 40)])
+    _add_player(room, "a")
+    _add_player(room, "b")
+    engine.start_game(room)
+
+    shooter = room.players["a"]
+    shooter.x, shooter.y = 100.0, 300.0
+    room.bullets.append(spawn_bullet(room, shooter, 0.0))
+    _run(room, 30)
+    assert room.bullets and room.bullets[0].x > 500.0
+
+
 # --------------------------------------------------------------------------
 # 맵 에디터 (set_platforms)
 # --------------------------------------------------------------------------

@@ -5,6 +5,10 @@ export const WORLD_HEIGHT = 600;
 export const MAX_CHARGE = 60;
 /** 라운드 2승 = 1점 (서버 constants.ROUNDS_TO_SCORE 와 같아야 한다) */
 export const ROUNDS_TO_SCORE = 2;
+/** 라운드 승리 보상 (서버 constants.COINS_ROUND_WIN) */
+export const COINS_ROUND_WIN = 10;
+/** 매치 승리 보상 (서버 constants.COINS_MATCH_WIN) */
+export const COINS_MATCH_WIN = 100;
 
 export type Phase = 'waiting' | 'playing' | 'round_over' | 'picking' | 'finished';
 export type Mode = 'pvp' | 'training';
@@ -87,7 +91,10 @@ export interface PlayerStats {
   bullet_size: number;
   bounces: number;
   knockback: number;
-  block_meter_max: number;
+  /** 라운드당 쓸 수 있는 가드 횟수 */
+  block_uses: number;
+  /** 가드 한 번이 펼쳐져 있는 시간(초) */
+  block_seconds: number;
   shots_per_fire: number;
 }
 
@@ -112,8 +119,13 @@ export interface PlayerSnap {
   aim: Vec;
   cooldown: number;
   max_cooldown: number;
-  block_meter: number;
-  block_meter_max: number;
+  /** 이번 라운드에 남은 가드 횟수. 게이지가 아니라서 라운드 안에서는 다시 차지 않는다. */
+  block_uses: number;
+  block_uses_max: number;
+  /** 가드가 펼쳐져 있는 남은 틱(0이면 가드 중이 아니다) */
+  block_timer: number;
+  /** 가드 한 번이 유지되는 틱 */
+  block_duration: number;
   blocking: boolean;
   charging: boolean;
   charge: number;
@@ -155,11 +167,17 @@ export interface BulletSnap {
   color: string;
 }
 
+/** 폭발 섬광(zone type 'blast')이 남아 있는 틱. 서버 constants.BLAST_TICKS 와 같아야 한다. */
+export const BLAST_TICKS = 12;
+
 export interface ZoneSnap {
+  /** heal|toxic|static|emp|frost|implode|shockwave|radiance|chilling|blast */
   type: string;
   x: number;
   y: number;
   radius: number;
+  /** 남은 틱. blast 는 이 값으로 퍼지는 정도를 그린다. */
+  d: number;
 }
 
 /**
@@ -173,10 +191,15 @@ export const BLOCK_TYPES: BlockType[] = ['solid', 'jump', 'mover', 'ice', 'hazar
 /** 팔레트/범례용 표시 정보. 색은 renderer 와 MapPreview 가 공유한다. */
 export const BLOCK_INFO: Record<BlockType, { name: string; emoji: string; color: string; desc: string }> = {
   solid: { name: '일반 블럭', emoji: '⬛', color: '#8d99ae', desc: '평범한 발판. 위아래·옆 모두 막힌다.' },
-  jump: { name: '점프대', emoji: '🔼', color: '#51cf66', desc: '밟으면 높이 튀어오른다. 공중 점프도 다시 채워진다.' },
+  jump: {
+    name: '점프대',
+    emoji: '🔼',
+    color: '#51cf66',
+    desc: '바닥에 박아 넣는 발판. 걸려 넘어지지 않고 지나가면 그대로 튀어오른다.',
+  },
   mover: { name: '이동 발판', emoji: '↔️', color: '#4dabf7', desc: '정해진 구간을 왕복한다. 올라타면 같이 실려 간다.' },
   ice: { name: '빙판', emoji: '🧊', color: '#99e9f2', desc: '마찰이 거의 없다. 멈추기 어렵다.' },
-  hazard: { name: '가시', emoji: '🔺', color: '#ff6b6b', desc: '닿으면 피해를 입고 튕겨난다.' },
+  hazard: { name: '가시', emoji: '🔺', color: '#ff6b6b', desc: '한 번 밟을 때마다 50 피해를 입고 튕겨난다.' },
 };
 
 export interface Platform {
@@ -221,7 +244,13 @@ export interface Snapshot {
   bots: BotSnap[];
   bullets: BulletSnap[];
   zones: ZoneSnap[];
+  /**
+   * 지금 깔린 발판. 서버는 LAYOUT_INTERVAL(0.5초)마다만 전부 실어 보낸다 —
+   * connection.ts 가 직전 목록을 기억했다가 채워 넣으므로 렌더러에서는 항상 채워져 있다.
+   */
   platforms: Platform[];
+  /** 그 사이 틱의 이동발판 좌표만. i 는 platforms 의 인덱스다. */
+  movers?: { i: number; x: number; y: number }[];
   loser_to_pick: string | null;
   available_cards: CardInfo[];
   winner_id: string | null;

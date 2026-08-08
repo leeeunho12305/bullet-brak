@@ -257,6 +257,9 @@ def _physics(bot: Bot, room: Room) -> None:
     # 블럭 효과(점프대/빙판/가시)는 플레이어와 같은 규칙으로 봇에게도 적용된다.
     damage = 0.0
     for index, plat in enumerate(room.platforms):
+        if not blocks.is_solid(plat):
+            blocks.touch(bot, plat)  # 점프대: 밀어내지 않고 튀어오르게만 한다
+            continue
         side = resolve_platform_collision(bot, plat)
         damage += blocks.on_contact(bot, plat, side, index)
     if damage > 0:
@@ -278,6 +281,8 @@ def update_bot(room: Room, bot: Bot) -> None:
         bot.jump_cooldown -= 1
     if bot.reaction_timer > 0:
         bot.reaction_timer -= 1
+    if bot.spike_grace > 0:
+        bot.spike_grace -= 1
 
     target = _nearest_player(room, bot)
     fights = target is not None and bot.trait("fire_cooldown") > 0

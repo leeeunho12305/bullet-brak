@@ -69,6 +69,12 @@ def start_wave(room: Room, wave: int) -> None:
     room.bullets.clear()
     room.zones.clear()
 
+    # 웨이브가 훈련장의 라운드다 — 가드 횟수는 여기서 다시 채워진다.
+    for player in room.players.values():
+        player.block_uses = player.block_uses_max
+        player.block_timer = 0
+        player.inputs.block_consumed = False
+
     tiers = wave_tiers(wave)
     scale = wave_hp_scale(wave)
     for tier in tiers:
@@ -148,11 +154,15 @@ def _tick_respawn(room: Room, state: TrainingState, player: Any) -> None:
     player.cooldown = 0.0
     player.charging = False
     player.charge = 0.0
-    player.block_meter = player.block_meter_max
+    # 훈련장에는 라운드가 없다 — 부활할 때가 가드 횟수를 다시 채워 주는 자리다.
+    player.block_uses = player.block_uses_max
+    player.block_timer = 0
+    player.empower_ready = False
     player.poison = 0
     player.cold_timer = player.dazzle_timer = player.silence_timer = 0
     player.echo_cooldown = player.blood_timer = 0
     player.inputs.jump_consumed = False
+    player.inputs.block_consumed = False
     state.survived_ticks = 0
     start_wave(room, state.wave)
 

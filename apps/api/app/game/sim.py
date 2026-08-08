@@ -16,25 +16,30 @@ from app.game.bots import update_bot
 from app.game.models import Bot, Player, Room, Zone
 from app.game.physics import clamp, handle_lethal, resolve_platform_collision
 
-#: 가드 중 생성되는 장판: (카드 플래그, 존 타입, 반경, 지속틱)
+#: 가드를 **시작한 틱에 한 번만** 생성되는 장판: (카드 플래그, 존 타입, 반경, 지속틱)
 GUARD_ZONES: tuple[tuple[str, str, float, int], ...] = (
-    ("radiance", "radiance", 100.0, 18),
-    ("healing_field", "heal", 120.0, 60),
-    ("shockwave", "shockwave", 110.0, 1),
-    ("implode", "implode", 140.0, 30),
+    ("radiance", "radiance", 110.0, 45),
+    ("healing_field", "heal", 120.0, 90),
+    ("shockwave", "shockwave", 130.0, 1),
+    ("implode", "implode", 170.0, 60),
     ("static_field", "static", 130.0, 45),
-    ("emp", "emp", 120.0, 12),
-    ("frost_slam", "frost", 120.0, 14),
+    ("emp", "emp", 130.0, 24),
+    ("frost_slam", "frost", 140.0, 20),
 )
 
 #: 소유자에게는 적용하지 않는 장판 타입
 HARMFUL_ZONES = frozenset({"toxic", "static", "emp", "frost", "implode", "shockwave", "chilling"})
 
-#: 가드 장판/톱날 생성 주기(레거시는 매 틱 생성 → 장판 폭증. 성능상 6틱마다로 제한)
-GUARD_PERIOD = 6
+#: 소유자에게만 적용하는 장판 타입. 내 회복 장판이 그 위에 선 상대까지 살려 주면 안 된다.
+OWNER_ONLY_ZONES = frozenset({"heal", "radiance"})
+
+#: 게임에 아무 영향도 주지 않는 연출용 장판(폭발 섬광). 클라이언트만 쓴다.
+EFFECT_ZONES = frozenset({"blast"})
 
 #: 상태이상 타이머(매 틱 1 감소)
-_TIMERS = ("blood_timer", "cold_timer", "dazzle_timer", "silence_timer", "echo_cooldown")
+_TIMERS = (
+    "blood_timer", "cold_timer", "dazzle_timer", "silence_timer", "echo_cooldown", "spike_grace",
+)
 
 
 # --------------------------------------------------------------------------
@@ -71,31 +76,43 @@ def update_player(room: Room, p: Player) -> None:
 
     stunned = p.dazzle_timer > 0
     inp = p.inputs
-    blocking = bool(inp.block) and p.block_meter > 0 and not stunned
+
+    # 가드는 게이지가 아니라 "라운드당 남은 횟수"다. 누른 순간 1회를 쓰고 block_duration
+    # 틱 동안만 펼쳐진다 — 라운드가 끝날 때까지 다시 채워지지 않는다.
+    started = False
+    if p.block_timer > 0:
+        p.block_timer -= 1
+        if p.block_timer == 0 and p.has("empower"):
+            p.empower_ready = True  # EMPOWER: 가드가 끝난 직후 한 발이 강화된다
+    elif inp.block and not inp.block_consumed and not stunned and p.block_uses > 0:
+        p.block_uses -= 1
+        p.block_timer = p.block_duration
+        inp.block_consumed = True
+        started = True
+    if not inp.block:
+        inp.block_consumed = False
+
+    blocking = p.block_timer > 0 and not stunned
     p.blocking = blocking
 
     if blocking:
         p.vx *= 0.5
-        _guard_effects(room, p)
-        p.block_meter = max(0.0, p.block_meter - (0.75 if p.has("shields_up") else C.BLOCK_DRAIN))
-    else:
-        if not stunned:
-            if inp.left:
-                p.vx -= C.ACCEL
-            if inp.right:
-                p.vx += C.ACCEL
-            if inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
-                p.vy = p.jump_power
-                p.grounded = False
-                p.jumps += 1
-                inp.jump_consumed = True
-        regen = 1.25 if p.has("shields_up") else C.BLOCK_REGEN
-        p.block_meter = min(p.block_meter_max, p.block_meter + regen)
+        _guard_effects(room, p, started)
+    elif not stunned:
+        if inp.left:
+            p.vx -= C.ACCEL
+        if inp.right:
+            p.vx += C.ACCEL
+        if inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
+            p.vy = p.jump_power
+            p.grounded = False
+            p.jumps += 1
+            inp.jump_consumed = True
     if not inp.jump:
         inp.jump_consumed = False
 
-    # 이동 / 중력 / 경계 / 발판
-    speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0)
+    # 이동 / 중력 / 경계 / 발판 (TASTE OF BLOOD 는 여기서 속도를 올린다)
+    speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0) * (1.35 if p.blood_timer > 0 else 1.0)
     p.vx = clamp(p.vx, -speed, speed)
     if not inp.left and not inp.right:
         # 빙판 위에서는 거의 멈추지 못한다(직전 틱의 접촉 판정을 쓴다).
@@ -121,6 +138,9 @@ def update_player(room: Room, p: Player) -> None:
 
     damage = 0.0
     for index, plat in enumerate(room.platforms):
+        if not blocks.is_solid(plat):
+            blocks.touch(p, plat)  # 점프대: 밀어내지 않고 튀어오르게만 한다
+            continue
         side = resolve_platform_collision(p, plat)
         damage += blocks.on_contact(p, plat, side, index)
     if damage > 0:
@@ -134,8 +154,12 @@ def update_player(room: Room, p: Player) -> None:
         room.zones.append(Zone("chilling", p.cx, p.cy, 150.0, 12, p.id))
 
 
-def _guard_effects(room: Room, p: Player) -> None:
-    """가드 유지 중 발동하는 카드 효과(텔레포트/실드차지/장판/톱날 등)."""
+def _guard_effects(room: Room, p: Player, started: bool) -> None:
+    """가드 중 발동하는 카드 효과(텔레포트/실드차지/장판/톱날 등).
+
+    장판·톱날·순간이동은 **가드를 시작한 그 틱에 한 번만** 만든다. 예전처럼 가드가
+    유지되는 내내 뿌리면 같은 장판이 겹겹이 쌓여 회복량과 끌어당김이 몇 배로 뻥튀기된다.
+    """
     cx, cy = p.cx, p.cy
     dx, dy = p.aim.x - cx, p.aim.y - cy
     mag = math.hypot(dx, dy) or 1.0
@@ -144,17 +168,17 @@ def _guard_effects(room: Room, p: Player) -> None:
     if p.has("shield_charge"):
         p.vx += ux * 5
         p.vy += uy * 2
-    if p.has("teleport"):
-        p.x = clamp(cx + ux * 110, 0.0, C.WIDTH - p.width)
-        p.y = clamp(cy + uy * 50, 0.0, C.HEIGHT - p.height)
     if p.has("tactical_reload"):
         p.cooldown = max(0.0, p.cooldown - 8)
     if p.has("scavenger"):
         p.cooldown = max(0.0, p.cooldown - 4)
     # ECHO 반격탄은 bullets._reflect 가 player.has("echo")/echo_cooldown 으로 처리한다
 
-    if room.tick % GUARD_PERIOD:
+    if not started:
         return
+    if p.has("teleport"):
+        p.x = clamp(cx + ux * 110, 0.0, C.WIDTH - p.width)
+        p.y = clamp(cy + uy * 50, 0.0, C.HEIGHT - p.height)
     for flag, ztype, radius, duration in GUARD_ZONES:
         if p.has(flag):
             room.zones.append(Zone(ztype, cx, cy, radius, duration, p.id))
@@ -217,7 +241,7 @@ def kill(p: Player) -> None:
     p.blocking = False
     p.charging = False
     p.charge = 0.0
-    p.block_meter = 0.0
+    p.block_timer = 0
     p.silence_timer = 0
     p.poison = 0
 
@@ -254,9 +278,16 @@ def update_zones(room: Room) -> None:
     entities = room.entities()
     for zone in room.zones:
         zone.duration -= 1
+        if zone.type in EFFECT_ZONES:
+            continue  # 폭발 섬광 — 클라이언트 연출 전용이라 아무에게도 닿지 않는다
         harmful = zone.type in HARMFUL_ZONES
+        owner_only = zone.type in OWNER_ONLY_ZONES
         for entity in entities:
-            if not entity.alive or (harmful and zone.owner == entity.id):
+            if not entity.alive:
+                continue
+            if harmful and zone.owner == entity.id:
+                continue
+            if owner_only and zone.owner != entity.id:
                 continue
             _apply_zone(zone, entity)
     room.zones = [z for z in room.zones if z.duration > 0]
@@ -273,12 +304,13 @@ def _apply_zone(z: Zone, e: Player | Bot) -> None:
     is_player = isinstance(e, Player)
 
     if kind == "heal":
-        e.hp = min(e.max_hp, e.hp + 0.8 * power)
+        e.hp = min(e.max_hp, e.hp + 0.45 * power)
     elif kind == "radiance":
         e.hp = min(e.max_hp, e.hp + 0.25 * power)
     elif kind == "toxic":
-        e.hp -= 0.7 * power
-        if is_player:
+        # 한 방이 아니라 오래 갉는 장판이다. 독 중첩도 매 틱이 아니라 주기적으로만 쌓인다.
+        e.hp -= C.TOXIC_TICK_DAMAGE * power
+        if is_player and z.duration % C.TOXIC_STACK_PERIOD == 0:
             e.poison += 1
     elif kind in ("static", "emp"):
         if is_player:
@@ -288,8 +320,14 @@ def _apply_zone(z: Zone, e: Player | Bot) -> None:
         if is_player:
             e.cold_timer = max(e.cold_timer, 50)
     elif kind == "implode":
-        e.vx += (-dx / norm) * 0.35 * power
-        e.vy += (-dy / norm) * 0.35 * power
+        # 속도만 건드리면 마찰(FRICTION)과 이동 입력 clamp 에 그대로 지워져서 아무도
+        # 끌려오지 않았다. 위치를 직접 당기고 속도에도 같은 방향을 실어 준다.
+        # 가장자리에서도 최소한은 끌리도록 세기의 바닥을 40% 로 둔다.
+        pull = C.IMPLODE_PULL * (0.4 + 0.6 * power)
+        e.x -= (dx / norm) * pull
+        e.y -= (dy / norm) * pull
+        e.vx -= (dx / norm) * 0.6 * power
+        e.vy -= (dy / norm) * 0.6 * power
     elif kind == "shockwave":
         e.vx += (dx / norm) * 6 * power
         e.vy += (dy / norm) * 4 * power

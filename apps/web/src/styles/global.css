@@ -721,6 +721,81 @@ textarea {
   height: 14px;
   border-radius: 4px;
 }
+.editor-swatch-eraser {
+  border: 1px dashed var(--muted);
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    var(--muted) 3px,
+    var(--muted) 4px
+  );
+}
+.editor-nums {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.editor-num {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.editor-num .input {
+  width: 100%;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+.editor-save {
+  display: flex;
+  gap: 6px;
+}
+.editor-save .input {
+  min-width: 0;
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.editor-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.editor-slots li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.editor-slot {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.editor-slot:hover {
+  border-color: var(--accent-2);
+}
+.editor-slot-x {
+  flex: none;
+  padding: 4px 8px;
+  font-size: 12px;
+}
 .editor-field {
   display: flex;
   flex-direction: column;
@@ -744,6 +819,9 @@ textarea {
   background: var(--bg);
   touch-action: none;
   cursor: crosshair;
+}
+.editor-canvas.is-erasing {
+  cursor: cell;
 }
 .editor-count {
   margin: 6px 0 0;

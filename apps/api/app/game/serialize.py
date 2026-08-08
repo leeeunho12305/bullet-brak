@@ -77,8 +77,11 @@ def player_snap(room: Room, p: Player, loadout: bool = True) -> dict[str, Any]:
         "aim": {"x": p.aim.x, "y": p.aim.y},
         "cooldown": p.cooldown,
         "max_cooldown": p.max_cooldown,
-        "block_meter": p.block_meter,
-        "block_meter_max": p.block_meter_max,
+        # 가드는 게이지가 아니라 라운드당 남은 횟수 + 펼쳐져 있는 남은 틱이다.
+        "block_uses": p.block_uses,
+        "block_uses_max": p.block_uses_max,
+        "block_timer": p.block_timer,
+        "block_duration": p.block_duration,
         "blocking": p.blocking,
         "charging": p.charging,
         "charge": p.charge,
@@ -125,7 +128,8 @@ def bullet_snap(b: Bullet) -> dict[str, Any]:
 
 
 def zone_snap(z: Zone) -> dict[str, Any]:
-    return {"type": z.type, "x": z.x, "y": z.y, "radius": z.radius}
+    # d(남은 틱)는 폭발 섬광(blast)의 진행도를 클라이언트가 계산하는 데 쓴다.
+    return {"type": z.type, "x": z.x, "y": z.y, "radius": z.radius, "d": z.duration}
 
 
 def _available_cards(room: Room) -> list[dict[str, Any]]:
@@ -139,13 +143,17 @@ def _available_cards(room: Room) -> list[dict[str, Any]]:
 
 #: 대전 중 loadout 필드를 싣는 주기(틱). 60Hz 기준 0.5초.
 LOADOUT_INTERVAL = 30
+#: 발판 전체 목록을 다시 싣는 주기(틱). 그 사이에는 이동발판 좌표(movers)만 보낸다.
+#: 맵 에디터가 블럭을 백 개 넘게 깔 수 있으므로, 매 틱 전부 싣으면 지형만으로 대역폭이 찬다.
+LAYOUT_INTERVAL = 30
 
 
 def snapshot(room: Room) -> dict[str, Any]:
     """60Hz 로 브로드캐스트되는 전체 상태(PROTOCOL §3 Snapshot)."""
     # 전투 중이 아니면(대기/카드선택/종료) 트래픽이 한가하므로 매 틱 싣는다.
-    loadout = room.phase != "playing" or room.tick % LOADOUT_INTERVAL == 0
-    return {
+    idle = room.phase != "playing"
+    loadout = idle or room.tick % LOADOUT_INTERVAL == 0
+    data: dict[str, Any] = {
         "type": "state",
         "tick": room.tick,
         "phase": room.phase,
@@ -156,7 +164,6 @@ def snapshot(room: Room) -> dict[str, Any]:
         "bots": [bot_snap(b) for b in room.bots.values()],
         "bullets": [bullet_snap(b) for b in room.bullets if b.active],
         "zones": [zone_snap(z) for z in room.zones],
-        "platforms": [blocks.snap(p) for p in room.platforms],
         "loser_to_pick": room.loser_to_pick,
         "available_cards": _available_cards(room),
         "winner_id": room.winner_id,
@@ -164,6 +171,16 @@ def snapshot(room: Room) -> dict[str, Any]:
         "rematch": [pid for pid in room.players if pid in room.rematch_votes],
         "training": training.snap(room),
     }
+    if idle or room.tick % LAYOUT_INTERVAL == 0:
+        data["platforms"] = [blocks.snap(p) for p in room.platforms]
+    movers = [
+        {"i": i, "x": p["x"], "y": p["y"]}
+        for i, p in enumerate(room.platforms)
+        if p.get("type") == blocks.MOVER
+    ]
+    if movers:
+        data["movers"] = movers
+    return data
 
 
 def room_state(room: Room) -> dict[str, Any]:

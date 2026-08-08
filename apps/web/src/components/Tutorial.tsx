@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { JSX, ReactNode } from 'react';
 import ControlsGuide from '@/components/ControlsGuide';
-import { BLOCK_INFO, BLOCK_TYPES, ROUNDS_TO_SCORE } from '@/types/game';
+import { MAX_PART_PRICE, MIN_PAID_PRICE } from '@/game/avatars';
+import { BLOCK_INFO, BLOCK_TYPES, COINS_MATCH_WIN, COINS_ROUND_WIN, ROUNDS_TO_SCORE } from '@/types/game';
 
 interface Step {
   title: string;
@@ -50,8 +51,10 @@ const STEPS: Step[] = [
             <strong>강공격</strong> — 좌클릭을 꾹 눌러 링을 채운 뒤 놓습니다. 세지만 쿨타임이 깁니다.
           </li>
           <li>
-            <strong>가드</strong> — 우클릭. 조준 방향으로 방패가 펼쳐지고, 게이지를 씁니다. 카드에 따라
-            가드 중에 장판·반격탄이 나가기도 합니다.
+            <strong>가드</strong> — 우클릭. 누르는 순간 조준 방향으로 방패가{' '}
+            <strong>0.75초</strong>만 펼쳐지고, 그동안 날아온 탄을 그대로 튕겨냅니다.{' '}
+            <strong>한 라운드에 한 번</strong>뿐이고 라운드가 끝나야 다시 채워지니, 아무 때나 누르지
+            말고 맞기 직전에 쓰세요. 카드에 따라 가드하는 순간 장판·반격탄이 나가기도 합니다.
           </li>
           <li>
             <strong>낙사</strong> — 화면 아래로 떨어지면 즉사입니다. 협곡·부유섬에서는 이게 제일 무서워요.
@@ -98,6 +101,35 @@ const STEPS: Step[] = [
     ),
   },
   {
+    title: '코인 모으기',
+    emoji: '💰',
+    body: (
+      <>
+        <p>
+          코인은 <strong>친구와 하는 대전(방 만들기·참가)</strong>에서만 나옵니다. 이긴 만큼 쌓여요.
+        </p>
+        <ul className="tut-list">
+          <li>
+            <strong>라운드 승리</strong> — <strong>+{COINS_ROUND_WIN} 코인</strong>. 한 라운드 이길 때마다
+            바로 들어옵니다.
+          </li>
+          <li>
+            <strong>매치 승리</strong> — 먼저 5점을 채워 매치를 끝내면 <strong>+{COINS_MATCH_WIN} 코인</strong>{' '}
+            보너스.
+          </li>
+          <li>
+            <strong>훈련장은 코인이 나오지 않습니다.</strong> 봇 웨이브는 연습용이에요.
+          </li>
+        </ul>
+        <p>
+          모은 코인은 로비 <strong>아바타 꾸미기</strong>에서 파츠를 사는 데 씁니다(유료 파츠{' '}
+          {MIN_PAID_PRICE}~{MAX_PART_PRICE} 코인). 한 번 산 파츠는 계속 남습니다.
+        </p>
+        <p className="hint">지금 잔액은 로비 위쪽 💰 배지에서 볼 수 있어요.</p>
+      </>
+    ),
+  },
+  {
     title: '시작하기',
     emoji: '🚀',
     body: (
@@ -110,8 +142,8 @@ const STEPS: Step[] = [
             <strong>방 만들기</strong> — 6자리 코드를 친구에게 알려주면 됩니다.
           </li>
           <li>
-            대기실에서 방장이 <strong>맵</strong>을 고르고, <strong>맵 에디터</strong>로 점프대나 이동
-            발판을 얹을 수 있습니다.
+            대기실에서 방장이 <strong>맵</strong>을 고르고, <strong>맵 에디터</strong>로 지형을 통째로
+            새로 그릴 수 있습니다(원래 블럭도 지워집니다).
           </li>
         </ul>
         <p className="hint">준비됐다면 훈련장부터 한 판 돌려 보세요.</p>

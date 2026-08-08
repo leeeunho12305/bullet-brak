@@ -3,7 +3,13 @@
 // 60Hz 스냅샷(type:"state")은 React state 로 들어가지 않는다.
 // -> net.latest 에 mutable 로만 갱신하고, 렌더러가 rAF 로 읽는다.
 // -> store 에는 phase 가 바뀔 때만 반영한다.
-import type { ClientMessage, Customization, ServerMessage, Snapshot } from '@/types/game';
+import type {
+  ClientMessage,
+  Customization,
+  Platform,
+  ServerMessage,
+  Snapshot,
+} from '@/types/game';
 import { useGameStore } from '@/store/gameStore';
 import { loadToken } from '@/api/identity';
 
@@ -20,6 +26,11 @@ export interface ConnectProfile {
 let ws: WebSocket | null = null;
 /** store 갱신을 최소화하기 위한 마지막 phase */
 let lastPhase: string | null = null;
+/**
+ * 마지막으로 받은 발판 목록. 서버는 지형을 0.5초에 한 번만 통째로 보내고(대역폭),
+ * 그 사이에는 이동발판 좌표만 보낸다 — 렌더러가 매 틱 전체 목록을 볼 수 있게 여기서 잇는다.
+ */
+let terrain: Platform[] = [];
 
 /** 서버가 지정한 close code -> 한국어 안내 */
 function closeMessage(code: number): string | null {
@@ -45,12 +56,31 @@ function parseMessage(raw: string): ServerMessage | null {
   }
 }
 
+/**
+ * 스냅샷에 발판 목록을 채워 넣는다.
+ * 전체 목록이 실려 왔으면 그것을 기억하고, 아니면 기억해 둔 목록에 이동발판 좌표만 얹는다.
+ */
+function withTerrain(snap: Snapshot): Snapshot {
+  if (snap.platforms) {
+    terrain = snap.platforms;
+  } else if (snap.movers) {
+    // 좌표만 바뀌므로 바뀐 칸만 새 객체로 교체한다(렌더러는 읽기만 한다).
+    terrain = terrain.slice();
+    for (const m of snap.movers) {
+      const block = terrain[m.i];
+      if (block) terrain[m.i] = { ...block, x: m.x, y: m.y };
+    }
+  }
+  snap.platforms = terrain;
+  return snap;
+}
+
 function handleMessage(msg: ServerMessage): void {
   const store = useGameStore.getState();
 
   if (msg.type === 'state') {
     // 스냅샷은 mutable 갱신만.
-    net.latest = msg as Snapshot;
+    net.latest = withTerrain(msg as Snapshot);
     if (lastPhase !== msg.phase) {
       lastPhase = msg.phase;
       store.applyServerMessage(msg);
@@ -60,6 +90,8 @@ function handleMessage(msg: ServerMessage): void {
 
   if (msg.type === 'welcome' || msg.type === 'room_state') {
     lastPhase = msg.room.phase;
+    // 대기실 목록에는 지형이 늘 들어 있다. 첫 스냅샷을 기다리지 않고 여기서 채워 둔다.
+    if (msg.room.map) terrain = msg.room.map.platforms;
     store.applyServerMessage(msg);
     // 훈련 모드는 대기실 없이 바로 시작한다.
     if (msg.type === 'welcome' && msg.room.mode === 'training' && msg.room.phase === 'waiting') {
@@ -76,6 +108,7 @@ function handleClose(event: CloseEvent): void {
   ws = null;
   net.latest = null;
   lastPhase = null;
+  terrain = [];
 
   const store = useGameStore.getState();
   const serverError = store.error;
@@ -112,6 +145,7 @@ export const net = {
 
     net.latest = null;
     lastPhase = null;
+    terrain = [];
 
     const store = useGameStore.getState();
     store.reset();
@@ -164,6 +198,7 @@ export const net = {
   disconnect(): void {
     net.latest = null;
     lastPhase = null;
+    terrain = [];
     if (!ws) return;
     const socket = ws;
     ws = null; // 먼저 비워서 onclose 가 에러로 처리하지 않게 한다.

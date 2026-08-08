@@ -99,7 +99,7 @@
 | `pick_card` | `{"card_id":str}` | 카드 선택 (패자만 유효) |
 | `chat` | `{"text":str}` | 채팅 (서버에서 200자 제한만 적용) |
 | `set_map` | `{"map_id":str}` | 방장이 맵 선택 (`waiting`/`finished` 에서만, 방장 아니면 무시). 편집한 배치는 버려진다 |
-| `set_platforms` | `{"platforms":[Platform]}` | 방장의 맵 에디터 저장. 서버가 좌표/종류를 다시 검증하고 못 쓰는 항목은 버린다 (최대 40개, 빈 배치는 거절) |
+| `set_platforms` | `{"platforms":[Platform]}` | 방장의 맵 에디터 저장. 서버가 좌표/종류를 다시 검증하고 못 쓰는 항목은 버린다 (최대 160개, 빈 배치는 거절) |
 | `reset_platforms` | `{}` | 편집한 배치를 버리고 맵 원본 지형으로 (방장 전용) |
 | `start_game` | `{}` | 방장이 게임 시작 |
 | `restart` | `{}` | 종료 후 대기실로 되돌리기 |
@@ -160,7 +160,10 @@ PlayerSnap = {
   "hp": f, "max_hp": f, "alive": bool,
   "aim": {"x": f, "y": f},
   "cooldown": f, "max_cooldown": f,
-  "block_meter": f, "block_meter_max": f, "blocking": bool,
+  // 가드는 게이지가 아니라 "라운드당 남은 횟수"다(§4 참고).
+  "block_uses": int, "block_uses_max": int,   // 남은 횟수 / 라운드당 총 횟수
+  "block_timer": int, "block_duration": int,  // 펼쳐져 있는 남은 틱 / 한 번의 지속 틱
+  "blocking": bool,
   "charging": bool, "charge": f,          // 강공격 (0~60)
   "score": int, "round_wins": int, "coins": int,
   "cards": ["glass_cannon", ...],
@@ -168,7 +171,7 @@ PlayerSnap = {
   // Tab 오버레이용 — 아래 두 필드는 대전 중 0.5초(30틱)에 한 번만 실린다.
   // 없는 틱에는 클라이언트가 마지막으로 받은 값을 그대로 유지한다.
   "stats": { "damage_mult","max_hp","speed","cooldown","bullet_speed","bullet_size",
-             "bounces","knockback","block_meter_max","shots_per_fire" },   // 전부 number, optional
+             "bounces","knockback","block_uses","block_seconds","shots_per_fire" },  // 전부 number, optional
   "damage_table": [ { "distance": 0, "damage": 30.0 }, ... ]  // 0,100,200,400,600,800px, optional
 }
 
@@ -178,8 +181,12 @@ BotSnap = { "id","x","y","width","height","hp","max_hp","customization",
 
 BulletSnap = { "id": int, "x": f, "y": f, "size": f, "owner": str, "color": str }
 
-ZoneSnap = { "type": str, "x": f, "y": f, "radius": f }
-// type: heal|toxic|static|emp|frost|implode|shockwave|radiance|chilling
+ZoneSnap = { "type": str, "x": f, "y": f, "radius": f, "d": int }
+// type: heal|toxic|static|emp|frost|implode|shockwave|radiance|chilling|blast
+// d   : 남은 틱. blast(폭발 섬광)의 퍼지는 정도를 클라가 이 값으로 그린다
+// blast 는 apply_explosion 이 남기는 **연출 전용** 장판이다(sim.EFFECT_ZONES).
+//       BLAST_TICKS(12틱) 동안만 살아 있고 누구에게도 효과를 주지 않는다.
+// heal/radiance 는 소유자에게만 적용된다(sim.OWNER_ONLY_ZONES).
 
 Platform = {
   "x": f, "y": f, "width": f, "height": f,
@@ -189,10 +196,12 @@ Platform = {
 }
 // 블럭 효과(app/game/blocks.py)
 //   solid  일반 블럭 — 위/아래/옆 전부 막힌다
-//   jump   점프대   — 위에서 밟으면 power 만큼 튀고 공중 점프가 다시 찬다
+//   jump   점프대   — 실체가 없다(blocks.PASSABLE). 바닥 윗면과 같은 높이로 깔고,
+//                    지나가면 power 만큼 튀며 공중 점프가 다시 찬다. 탄환도 통과한다
 //   mover  이동발판 — 축을 따라 왕복하고, 올라탄 사람을 같이 나른다
 //   ice    빙판     — 마찰이 거의 없다
-//   hazard 가시     — 닿아 있는 동안 피해를 입고 튕겨난다
+//   hazard 가시     — 밟을 때마다 HAZARD_DAMAGE(50) 를 깎고 튕겨낸다.
+//                    HAZARD_GRACE(45틱) 동안은 다시 아프지 않다(한 번 밟음 = 한 번 피해)
 // span/speed/phase/ox/oy 는 서버 내부 값이라 스냅샷에 실리지 않는다
 // (에디터가 set_platforms 로 보낼 때만 span/speed 를 쓴다).
 
@@ -216,7 +225,9 @@ Snapshot = {
   "type": "state", "tick": int, "phase": str, "mode": str,
   "map_id": str,                    // 지금 깔린 맵. 이름/테마는 RoomState 로만 온다
   "players": [PlayerSnap], "bots": [BotSnap], "bullets": [BulletSnap],
-  "zones": [ZoneSnap], "platforms": [Platform],
+  "zones": [ZoneSnap],
+  "platforms": [Platform],          // LAYOUT_INTERVAL(30틱)마다 · 대기 중에는 매 틱. 없으면 직전 값을 쓴다
+  "movers": [{"i": int, "x": f, "y": f}],  // 그 사이 틱의 이동발판 좌표만(i = platforms 인덱스). 없으면 생략
   "loser_to_pick": str | null,
   "available_cards": [CardInfo],
   "winner_id": str | null,
@@ -241,7 +252,12 @@ Snapshot = {
 - 월드 경계: 좌우 벽과 **천장(`y = 0`)은 막혀 있다**(플레이어/봇 모두 `vy` 가 0으로 끊긴다).
   바닥만 뚫려 있다 — 낙사가 협곡·부유섬 맵의 규칙이기 때문이다. 탄환은 네 면 모두에서 튕긴다.
 - 낙사: `y > HEIGHT + 100` 이면 즉사.
-- 가드: `block_meter` 소모, 총알 반사(×-1.35, 소유권 이전).
+- 가드: 게이지가 아니라 **라운드당 정해진 횟수**다(`BLOCK_USES` = 1, DEFENDER 가 +1).
+  누른 순간 1회를 쓰고 `BLOCK_DURATION`(45틱 = 0.75초, SHIELDS UP 이 +30틱) 동안만 펼쳐진다.
+  라운드 안에서는 다시 채워지지 않고, `reset_round`(훈련장은 `start_wave`)에서만 복구된다.
+  누르고 있어도 한 번만 발동한다(`Inputs.block_consumed`). 펼쳐진 동안 닿은 총알은 반사된다
+  (×-1.35, 소유권 이전). 가드 장판·톱날·순간이동은 **가드를 시작한 틱에 한 번만** 생성된다.
+- 폭발(`apply_explosion`)은 **터뜨린 본인에게는 닿지 않는다**. 연출용 `blast` 장판을 남긴다.
 - 강공격: `strong_start`~`strong_release` 차징(0~60), 발사 후 쿨다운 180틱.
 - **training 모드(훈련장)**: 웨이브 방식. 라운드/점수/매치 승리가 없다.
   - 웨이브마다 정해진 구성의 봇이 스폰된다. 봇 티어는 3종:
@@ -304,14 +320,17 @@ def apply(room, map_id) -> GameMap              # 방에 발판을 깔고 active
 def rect/jump/mover/ice/spike(...) -> Rect      # 블럭 생성자(app.game.blocks 위임)
 
 # app/game/blocks.py  (블럭 종류와 효과 — constants 외에 아무것도 import 하지 않는다)
-TYPES = ("solid", "jump", "mover", "ice", "hazard"); MAX_BLOCKS = 40
+TYPES = ("solid", "jump", "mover", "ice", "hazard"); PASSABLE = {"jump"}; MAX_BLOCKS = 160
 def make(x, y, w, h, kind="solid", **opts) -> Rect   # 종류별 기본값을 채운 블럭
 def normalize_all(raw) -> list[Rect]                 # 클라이언트 페이로드 검증
 def snap(block) -> Rect                              # 스냅샷용(내부 필드 제외)
 def update_movers(room) -> None                      # 엔티티 물리보다 먼저 호출한다
 def carry(entity, room) -> None                      # 올라탄 이동발판을 따라간다
+def is_solid(block) -> bool                          # False 면 밀어내지 않는다(점프대)
+def touch(entity, block) -> bool                     # 실체 없는 블럭 효과(점프대 발동)
 def on_contact(entity, block, side, index) -> float  # 충돌 직후 효과. 입은 피해를 반환
 def spawn_points(room=None) -> list[tuple[float, float]]
+                                                # room 을 주면 가시 위 스폰을 옆으로 밀어낸다
 
 # app/game/rooms.py  (RoomManager)
 class RoomManager:

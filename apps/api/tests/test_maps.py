@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.game import constants as C
+from app.game import blocks, constants as C
 from app.game import engine, maps
 from app.game.models import Player
 from app.game.rooms import RoomManager
@@ -71,6 +71,33 @@ def test_spawns_are_usable(game_map: maps.GameMap) -> None:
             assert not _overlaps(x, y, size, size, rect), (
                 f"{game_map.id}: 스폰 ({x}, {y}) 이 발판 {rect} 속에 박혀 있다"
             )
+
+
+@pytest.mark.parametrize("game_map", maps.BY_ID.values(), ids=lambda m: m.id)
+def test_spawns_never_land_on_spikes(game_map: maps.GameMap) -> None:
+    """떨어지는 자리가 가시면 라운드 시작과 동시에 50 을 잃는다."""
+    platforms = list(game_map.platforms)
+    for x, y in game_map.spawns:
+        assert maps._landing_kind(platforms, x, y) != blocks.HAZARD, (
+            f"{game_map.id}: 스폰 ({x}, {y}) 이 가시 위다"
+        )
+
+
+@pytest.mark.parametrize("game_map", maps.BY_ID.values(), ids=lambda m: m.id)
+def test_jump_pads_sit_flush_with_a_floor(game_map: maps.GameMap) -> None:
+    """점프대는 실체가 없다 — 딛고 설 바닥의 윗면과 같은 높이여야 밟을 수 있다."""
+    floors = [p for p in game_map.platforms if blocks.is_solid(p)]
+    for pad in game_map.platforms:
+        if pad["type"] != blocks.JUMP:
+            continue
+        flush = [
+            f
+            for f in floors
+            if f["y"] == pad["y"]
+            and f["x"] < pad["x"] + pad["width"]
+            and f["x"] + f["width"] > pad["x"]
+        ]
+        assert flush, f"{game_map.id}: 점프대 {pad['x']},{pad['y']} 아래에 같은 높이의 바닥이 없다"
 
 
 @pytest.mark.parametrize("game_map", maps.BY_ID.values(), ids=lambda m: m.id)

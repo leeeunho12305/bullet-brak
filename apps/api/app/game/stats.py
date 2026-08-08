@@ -19,8 +19,14 @@ def falloff_at(distance: float) -> float:
 
 
 def bullet_falloff(bullet: Bullet) -> float:
-    """탄환이 발사 지점에서 지금까지 날아온 거리 기준 배율."""
-    return falloff_at(math.hypot(bullet.x - bullet.start_x, bullet.y - bullet.start_y))
+    """탄환이 발사 지점에서 지금까지 날아온 거리 기준 배율.
+
+    STEADY SHOT 은 이 감쇠를 절반만 받는다 — 근접에서 덜 세지는 대신 멀리서도 덜 약해진다.
+    """
+    mult = falloff_at(math.hypot(bullet.x - bullet.start_x, bullet.y - bullet.start_y))
+    if bullet.has("steady_shot"):
+        return 1.0 + (mult - 1.0) * 0.5
+    return mult
 
 
 def base_shot_damage(player: Player) -> float:
@@ -49,6 +55,7 @@ def stat_summary(player: Player) -> dict[str, float]:
         "bullet_size": round(player.bullet_size, 1),
         "bounces": float(player.max_bounces),
         "knockback": round(player.knockback_mult, 2),
-        "block_meter_max": round(player.block_meter_max, 0),
+        "block_uses": float(player.block_uses_max),
+        "block_seconds": round(player.block_duration / C.TICK_RATE, 2),
         "shots_per_fire": float(shots * (3 if player.burst else 1)),
     }

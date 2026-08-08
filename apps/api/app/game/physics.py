@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Union
 
+from app.game import constants as C
+
 if TYPE_CHECKING:  # 순환 import 방지 (런타임에는 필요 없음)
     from app.game.models import Bot, Player, Room
 
@@ -121,7 +123,7 @@ def handle_lethal(player: "Player") -> None:
     player.blocking = False
     player.charging = False
     player.charge = 0.0
-    player.block_meter = 0.0
+    player.block_timer = 0
     player.silence_timer = 0
     player.poison = 0
 
@@ -135,10 +137,21 @@ def apply_explosion(
     radius: float = 90.0,
     knockback: float = 14.0,
 ) -> None:
-    """거리 감쇠 폭발 피해 + 넉백을 플레이어/봇 모두에 적용한다."""
+    """거리 감쇠 폭발 피해 + 넉백을 플레이어/봇에 적용하고, 연출용 섬광을 남긴다.
+
+    **터뜨린 본인은 맞지 않는다.** 폭발 카드를 들면 코앞에서 터진 자기 탄환에 자기가
+    깎이던 버그가 있었다. 반사당한 탄환은 소유자가 반사한 쪽으로 넘어가므로, 그때는
+    원래 쏜 사람도 정상적으로 맞는다.
+    """
     from app.game import bots as bots_mod  # 순환 import 회피
+    from app.game.models import Zone
+
+    # 클라이언트 폭발 연출용. sim.EFFECT_ZONES 에 들어 있어 아무에게도 효과를 주지 않는다.
+    room.zones.append(Zone("blast", x, y, radius, C.BLAST_TICKS, owner_id))
 
     for target, distance, dx, dy in entities_in_radius(room, x, y, radius):
+        if target.id == owner_id:
+            continue
         power = 1.0 - distance / radius
         target.hp -= damage * power
         target.vx += (dx / distance) * knockback * power

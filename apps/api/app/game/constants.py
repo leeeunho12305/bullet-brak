@@ -30,14 +30,32 @@ DAMAGE_CLOSE_MULT = 1.5
 DAMAGE_FAR_MULT = 0.4
 DAMAGE_TABLE_DISTANCES = (0, 100, 200, 400, 600, 800)
 
-BLOCK_METER_MAX = 600.0
-BLOCK_DRAIN = 1.0
-BLOCK_REGEN = 1.0
+# --- 가드 -------------------------------------------------------------------
+# 가드는 게이지가 아니라 "라운드당 정해진 횟수"다. 누른 순간 1회를 쓰고 BLOCK_DURATION
+# 틱 동안만 펼쳐지며, 라운드가 끝날 때까지 다시 채워지지 않는다(예전의 매 틱 회복 없음).
+BLOCK_USES = 1
+BLOCK_DURATION = 45  # 0.75초
+
+# --- 폭발 / 장판 -------------------------------------------------------------
+#: 폭발 연출용 blast 장판이 남아 있는 틱. 클라 renderer 의 BLAST_TICKS 와 같아야 한다.
+BLAST_TICKS = 12
+#: IMPLODE 장판이 1틱에 끌어당기는 거리(px). 속도만 건드리면 마찰·이동 입력에 지워진다.
+IMPLODE_PULL = 3.0
+
+#: 독 구름(TOXIC CLOUD). 예전보다 훨씬 약하지만 훨씬 오래 깔려 있다.
+TOXIC_TICKS = 240  # 4초
+TOXIC_RADIUS = 85.0
+TOXIC_TICK_DAMAGE = 0.15  # 중심에서 1틱당 피해(= 초당 9)
+TOXIC_STACK_PERIOD = 30  # 이 주기마다 독 1 중첩
 
 ROUNDS_TO_SCORE = 2  # 라운드 2승 = 1점
 SCORE_TO_WIN = 5  # 5점 = 매치 승리
 ROUND_END_DELAY_TICKS = 120  # 2초
 CARD_CHOICES = 5
+
+# 코인 보상(PvP 전용). 튜토리얼 문구가 web/types/game.ts 의 같은 값을 쓴다.
+COINS_ROUND_WIN = 10
+COINS_MATCH_WIN = 100
 
 # --- 훈련장 -----------------------------------------------------------------
 # 봇 티어. 허수아비 → 견습 → 정예 순으로 조준/사격/회피가 붙는다.

@@ -6,6 +6,7 @@ import math
 import random
 from typing import Any
 
+from app.game import blocks
 from app.game import constants as C
 from app.game.models import Bot, Bullet, Player, Room, Vec, Zone
 from app.game.physics import (
@@ -21,8 +22,13 @@ from app.game.stats import bullet_falloff
 _INHERITED_FLAGS = (
     "explosive", "supernova", "bombs_away", "decay", "remote", "drill_ammo",
     "ricochet", "chase", "fast_forward", "grow", "silence", "cold", "poison",
-    "toxic_cloud", "target_bounce", "timed_detonation",
+    "toxic_cloud", "target_bounce", "timed_detonation", "dazzle", "steady_shot",
 )
+
+#: 유도 카드별 조향 세기(클수록 급하게 꺾는다). 여러 장이면 가장 센 것 하나만 쓴다.
+_STEER_BY_CARD = (("chase", 0.14), ("homing", 0.08), ("radar_shot", 0.05))
+#: TARGET BOUNCE 가 도탄한 뒤에 얻는 조향 세기(유도 카드가 없을 때의 기본값).
+_BOUNCE_STEER = 0.06
 
 # 수명/도탄 소진 시 폭발하는 플래그
 _BLAST_FLAGS = ("explosive", "supernova", "bombs_away", "timed_detonation")
@@ -43,9 +49,18 @@ def spawn_bullet(room: Room, player: Player, angle: float, **extra: Any) -> Bull
     shot_charge = clamp(player.windup, 0.0, C.MAX_CHARGE) / C.MAX_CHARGE
     careful = 1.2 if (player.has("careful_planning") and player.still_ticks >= 20) else 1.0
     wind_up = 1.0 + shot_charge * 0.75 if player.has("wind_up") else 1.0
+    ritual = 1.0 + shot_charge * 0.5 if player.has("ritual_countdown") else 1.0
     pristine = 1.2 if (player.has("pristine") and player.hp >= player.max_hp) else 1.0
+    pact = 1.35 if player.has("demonic_pact") else 1.0
     damage_mult = (
-        player.damage_mult * float(extra.get("damage_mult", 1.0)) * careful * wind_up * pristine
+        player.damage_mult
+        * float(extra.get("damage_mult", 1.0))
+        * careful
+        * wind_up
+        * ritual
+        * pristine
+        * pact
+        * _overpower_mult(room, player)
     )
 
     spread = float(extra.get("spread", 0.0))
@@ -66,15 +81,19 @@ def spawn_bullet(room: Room, player: Player, angle: float, **extra: Any) -> Bull
         vy *= 1.25
 
     flags: dict[str, Any] = {name: player.flags.get(name) for name in _INHERITED_FLAGS if player.has(name)}
-    # 유도는 homing/chase/radar_shot 중 아무거나 있으면 켜진다
-    if player.has("homing") or player.has("chase") or player.has("radar_shot"):
+    # 유도는 homing/chase/radar_shot 중 아무거나 있으면 켜지고, 가장 센 조향을 쓴다.
+    steer = next((value for card, value in _STEER_BY_CARD if player.has(card)), 0.0)
+    if steer:
         flags["homing"] = True
+        flags["steer"] = steer
     if player.has("radiance"):
         flags["radiance"] = True
     if player.has("decay"):
         flags["decay_rate"] = 0.985
 
     life = int(extra.get("life", 50 if player.has("fast_forward") else C.BASE_BULLET_LIFE))
+    if player.has("steady_shot"):
+        life = int(life * 1.5)
     pierce = int(extra.get("pierce", 1 if player.has("drill_ammo") else 0))
 
     return Bullet(
@@ -127,6 +146,28 @@ def _aim_angle(player: Player) -> float:
     return math.atan2(player.aim.y - player.cy, player.aim.x - player.cx)
 
 
+def _overpower_mult(room: Room, player: Player) -> float:
+    """OVERPOWER: 가장 약해진 적의 체력이 낮을수록 강해진다(빈사 상대에게 최대 ×1.5)."""
+    if not player.has("overpower"):
+        return 1.0
+    ratios = [
+        e.hp / e.max_hp
+        for e in room.entities()
+        if e.id != player.id and e.hp > 0 and e.max_hp > 0
+    ]
+    if not ratios:
+        return 1.0
+    return 1.0 + (1.0 - min(ratios)) * 0.5
+
+
+def _take_empower(player: Player) -> float:
+    """EMPOWER: 가드 직후 첫 사격 한 번만 강화된다(쓰면 바로 사라진다)."""
+    if not player.empower_ready:
+        return 1.0
+    player.empower_ready = False
+    return 1.6
+
+
 def _pay_shot_costs(player: Player) -> None:
     if player.has("demonic_pact"):
         player.hp = max(1.0, player.hp - 2)
@@ -140,13 +181,14 @@ def fire(room: Room, player: Player) -> None:
         return
 
     angle = _aim_angle(player)
+    empower = _take_empower(player)
     fire_count = player.buckshot + 1 if player.buckshot > 0 else (3 if player.has("barrage") else 1)
     burst_count = 3 if player.burst > 0 else 1
     total = fire_count * burst_count
 
     for i in range(total):
         spread = (i - (total - 1) / 2) * 0.08 if total > 1 else 0.0
-        room.bullets.append(spawn_bullet(room, player, angle, spread=spread))
+        room.bullets.append(spawn_bullet(room, player, angle, spread=spread, damage_mult=empower))
 
     _record(room, "shots", total)
     _pay_shot_costs(player)
@@ -164,7 +206,7 @@ def fire_strong(room: Room, player: Player) -> None:
             room,
             player,
             _aim_angle(player),
-            damage_mult=1.0 + ratio * 0.6,
+            damage_mult=(1.0 + ratio * 0.6) * _take_empower(player),
             size_bonus=2.0 + ratio * 4.0,
             damage=26.0 + ratio * 24.0,
             knockback=12.0 + ratio * 8.0,
@@ -190,9 +232,29 @@ def _record(room: Room, key: str, amount: float = 1) -> None:
 # --- 틱 처리 ---------------------------------------------------------------
 
 
+def _turn(bullet: Bullet, tx: float, ty: float, steer: float, speed: float) -> None:
+    """탄환을 (tx, ty) 방향으로 `steer` 만큼 꺾되 속력은 그대로 둔다.
+
+    두 벡터를 그냥 섞으면 많이 꺾일수록 합벡터가 짧아진다 — 적 코앞에서 크게 꺾이는
+    유도탄이 눈에 띄게 느려지던 원인이다. 섞은 뒤 원래 속력으로 다시 늘여 준다.
+    """
+    dist = math.hypot(tx, ty) or 1.0
+    vx = bullet.vx * (1 - steer) + (tx / dist) * speed * steer
+    vy = bullet.vy * (1 - steer) + (ty / dist) * speed * steer
+    scale = speed / (math.hypot(vx, vy) or 1.0)
+    bullet.vx = vx * scale
+    bullet.vy = vy * scale
+
+
 def _steer(room: Room, bullet: Bullet) -> None:
-    """리모트 조종 + 최근접 적 유도."""
-    if not (bullet.has("remote") or bullet.has("homing") or bullet.has("target_bounce")):
+    """리모트 조종 + 최근접 적 유도.
+
+    TARGET BOUNCE 는 여기서 아무 일도 하지 않는다 — 벽이나 발판에 튕긴 순간
+    `flags["homing"]` 이 붙고, 그때부터 아래 유도에 걸린다. 예전에는 `target_bounce`
+    플래그만 보고 곧장 유도를 걸어서, 한 번도 튕기지 않은 탄이 적을 쫓아갔다.
+    """
+    homing = bullet.has("homing")
+    if not (bullet.has("remote") or homing):
         return
 
     speed = math.hypot(bullet.vx, bullet.vy) or 1.0
@@ -201,12 +263,10 @@ def _steer(room: Room, bullet: Bullet) -> None:
         owner = room.players.get(bullet.owner)
         aim = bullet.owner_aim if bullet.owner_aim else (owner.aim if owner else None)
         if aim is not None:
-            tx = aim.x - bullet.x
-            ty = aim.y - bullet.y
-            dist = math.hypot(tx, ty) or 1.0
-            steer = 0.08
-            bullet.vx = bullet.vx * (1 - steer) + (tx / dist) * speed * steer
-            bullet.vy = bullet.vy * (1 - steer) + (ty / dist) * speed * steer
+            _turn(bullet, aim.x - bullet.x, aim.y - bullet.y, 0.08, speed)
+
+    if not homing:
+        return
 
     target = None
     closest = float("inf")
@@ -220,13 +280,8 @@ def _steer(room: Room, bullet: Bullet) -> None:
 
     if target is None:
         return
-    tx = target.cx - bullet.x
-    ty = target.cy - bullet.y
-    dist = math.hypot(tx, ty) or 1.0
-    speed = math.hypot(bullet.vx, bullet.vy) or 1.0
-    steer = 0.08 if bullet.has("homing") else 0.05
-    bullet.vx = bullet.vx * (1 - steer) + (tx / dist) * speed * steer
-    bullet.vy = bullet.vy * (1 - steer) + (ty / dist) * speed * steer
+    steer = float(bullet.flags.get("steer", _BOUNCE_STEER))
+    _turn(bullet, target.cx - bullet.x, target.cy - bullet.y, steer, speed)
 
 
 def _detonate(room: Room, bullet: Bullet, damage: float, radius: float, knockback: float) -> None:
@@ -242,28 +297,41 @@ def _expire(room: Room, bullet: Bullet, damage_ratio: float) -> None:
 
 
 def _bounce_walls(bullet: Bullet) -> None:
+    # 유도탄은 벽을 뚫고 가므로 월드 경계도 도탄으로 세지 않는다. 그래야 일반 탄과
+    # 똑같이 수명(life)만으로 사라진다.
+    counted = 0 if bullet.has("homing") else 1
+    hit = False
     if bullet.x < 0:
         bullet.x = 0.0
         bullet.vx *= -1
-        bullet.bounces += 1
+        bullet.bounces += counted
+        hit = True
     elif bullet.x > C.WIDTH:
         bullet.x = C.WIDTH
         bullet.vx *= -1
-        bullet.bounces += 1
+        bullet.bounces += counted
+        hit = True
     if bullet.y < 0:
         bullet.y = 0.0
         bullet.vy *= -1
-        bullet.bounces += 1
+        bullet.bounces += counted
+        hit = True
     elif bullet.y > C.HEIGHT:
         bullet.y = C.HEIGHT
         bullet.vy *= -1
-        bullet.bounces += 1
+        bullet.bounces += counted
+        hit = True
+    # TARGET BOUNCE: 발판뿐 아니라 월드 경계에 튕겨도 여기서 추적이 켜진다.
+    if hit and bullet.has("target_bounce"):
+        bullet.flags["homing"] = True
 
 
 def _hit_platforms(room: Room, bullet: Bullet) -> None:
     for plat in room.platforms:
         if not bullet.active or not bullet_hits_rect(bullet, plat):
             continue
+        if not blocks.is_solid(plat):
+            continue  # 점프대는 실체가 없다 — 탄환도 그냥 지나간다
         prev_y = bullet.y - bullet.vy
         from_top_or_bottom = prev_y < plat["y"] or prev_y > plat["y"] + plat["height"]
 
@@ -332,6 +400,8 @@ def _damage_player(room: Room, bullet: Bullet, player: Player) -> None:
         player.cold_timer = max(player.cold_timer, 60)
     if bullet.has("silence"):
         player.silence_timer = max(player.silence_timer, 60)
+    if bullet.has("dazzle"):
+        player.dazzle_timer = max(player.dazzle_timer, 25)
 
     # 소유자 보상
     if owner is not None:
@@ -359,7 +429,9 @@ def _damage_player(room: Room, bullet: Bullet, player: Player) -> None:
 
 def _spawn_hit_zones(room: Room, bullet: Bullet, hit_damage: float) -> None:
     if bullet.has("toxic_cloud"):
-        room.zones.append(Zone("toxic", bullet.x, bullet.y, 75.0, 35, bullet.owner))
+        room.zones.append(
+            Zone("toxic", bullet.x, bullet.y, C.TOXIC_RADIUS, C.TOXIC_TICKS, bullet.owner)
+        )
     if bullet.has("explosive") or bullet.has("supernova"):
         _detonate(room, bullet, hit_damage * 0.55, bullet.explode_radius, 16.0)
 
@@ -370,7 +442,7 @@ def _hit_players(room: Room, bullet: Bullet) -> None:
             continue
         if not entity_hit(bullet, player):
             continue
-        if player.blocking and player.block_meter > 0:
+        if player.blocking:
             _reflect(room, bullet, player)
         else:
             _damage_player(room, bullet, player)
@@ -435,7 +507,10 @@ def update_bullets(room: Room) -> None:
             _expire(room, bullet, 0.6)
             continue
 
-        _hit_platforms(room, bullet)
+        # 유도탄은 벽을 뚫는다. 적을 쫓다 지형에 부딪혀 먼저 사라지면 "유도"가 아니라
+        # 곡선으로 날아가는 일반 탄이 된다.
+        if not bullet.has("homing"):
+            _hit_platforms(room, bullet)
         if not bullet.active:
             continue
 

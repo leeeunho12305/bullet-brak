@@ -29,6 +29,8 @@ class Inputs:
     jump: bool = False
     block: bool = False
     jump_consumed: bool = False
+    #: 가드는 "누른 순간" 한 번만 발동한다. 눌러 놓고 있어도 다시 켜지지 않게 하는 빗장.
+    block_consumed: bool = False
 
 
 @dataclass
@@ -76,13 +78,21 @@ class Player:
     burst: int = 0
 
     # 가드 / 강공격
-    block_meter: float = C.BLOCK_METER_MAX
-    block_meter_max: float = C.BLOCK_METER_MAX
+    #: 이번 라운드에 남은 가드 횟수. 게이지가 아니다 — 라운드 안에서는 다시 차지 않고,
+    #: 라운드가 시작될 때만 block_uses_max 로 채워진다.
+    block_uses: int = C.BLOCK_USES
+    block_uses_max: int = C.BLOCK_USES
+    #: 가드가 펼쳐져 있는 남은 틱(0 이면 가드 중이 아니다).
+    block_timer: int = 0
+    #: 한 번 가드가 유지되는 틱. SHIELDS UP 이 늘린다.
+    block_duration: int = C.BLOCK_DURATION
     blocking: bool = False
     charging: bool = False
     charge: float = 0.0
     windup: float = 0.0
     still_ticks: int = 0
+    #: EMPOWER: 가드가 끝나 다음 사격 한 번이 강화된 상태.
+    empower_ready: bool = False
 
     # 상태이상 타이머(틱)
     poison: int = 0
@@ -91,6 +101,8 @@ class Player:
     silence_timer: int = 0
     echo_cooldown: int = 0
     blood_timer: int = 0
+    #: 가시를 다시 밟아 아플 때까지 남은 틱(blocks.HAZARD_GRACE). 한 번 밟음 = 한 번 피해.
+    spike_grace: int = 0
 
     aim: Vec = field(default_factory=Vec)
     inputs: Inputs = field(default_factory=Inputs)
@@ -130,6 +142,8 @@ class Bot:
     #: 플레이어와 같은 블럭 상태(이동발판 탑승 / 빙판). blocks 가 관리한다.
     ride: int = -1
     on_ice: bool = False
+    #: 플레이어와 같은 가시 무적 시간(blocks.HAZARD_GRACE)
+    spike_grace: int = 0
     cooldown: float = 0.0
     customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
     # AI

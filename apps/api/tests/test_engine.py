@@ -331,7 +331,6 @@ SNAPSHOT_KEYS = {
     "bots",
     "bullets",
     "zones",
-    "platforms",
     "loser_to_pick",
     "available_cards",
     "winner_id",
@@ -355,8 +354,10 @@ PLAYER_KEYS = {
     "aim",
     "cooldown",
     "max_cooldown",
-    "block_meter",
-    "block_meter_max",
+    "block_uses",
+    "block_uses_max",
+    "block_timer",
+    "block_duration",
     "blocking",
     "charging",
     "charge",
@@ -382,16 +383,38 @@ def test_snapshot_shape(manager: RoomManager) -> None:
     engine.tick_room(room)
 
     snap = snapshot(room)
-    assert set(snap) == SNAPSHOT_KEYS
+    # platforms/movers 는 조건부다(아래 test_snapshot_layout_is_periodic).
+    assert set(snap) - {"platforms", "movers"} == SNAPSHOT_KEYS
     assert snap["type"] == "state"
     assert snap["tick"] == room.tick
-    assert len(snap["platforms"]) == len(C.PLATFORMS)
 
     player = snap["players"][0]
     assert set(player) == PLAYER_KEYS  # 대전 중 대부분의 틱에는 loadout 이 빠진다
     assert player["score"] == 2 and player["round_wins"] == 1
     assert set(player["customization"]) == {"eye", "mouth", "detail", "detail2", "color", "offsets"}
     assert "flags" not in player and "inputs" not in player
+
+
+def test_snapshot_layout_is_periodic(manager: RoomManager) -> None:
+    """발판 전체 목록은 0.5초에 한 번만. 그 사이에는 이동발판 좌표만 실린다(대역폭)."""
+    room = manager.create("pvp", 2, map_id="factory")
+    room.phase = "playing"
+    _add_player(room, "a")
+
+    room.tick = serialize_mod.LAYOUT_INTERVAL
+    full = snapshot(room)
+    assert len(full["platforms"]) == len(room.platforms)
+
+    room.tick = serialize_mod.LAYOUT_INTERVAL + 1
+    between = snapshot(room)
+    assert "platforms" not in between
+    # 움직이는 발판만 인덱스와 함께 실린다.
+    moving = [i for i, p in enumerate(room.platforms) if p.get("type") == "mover"]
+    assert [m["i"] for m in between["movers"]] == moving
+
+    # 대기실처럼 한가한 상태에서는 매 틱 전부 보낸다(첫 화면이 늦게 뜨면 안 된다).
+    room.phase = "waiting"
+    assert "platforms" in snapshot(room)
 
 
 def test_snapshot_loadout_is_periodic(manager: RoomManager) -> None:

@@ -203,6 +203,16 @@
 .hud-meter span { display: block; height: 100%; border-radius: 999px; transition: width 0.1s linear; }
 .hud-sub { display: flex; flex-direction: column; gap: 3px; }
 .hud-sub .hud-meter { height: 4px; }
+/* 가드는 게이지가 아니라 라운드당 남은 횟수다 — 칸 하나가 1회. */
+.hud-guard { display: flex; align-items: center; gap: 3px; height: 4px; }
+.hud-side.right .hud-guard { flex-direction: row-reverse; }
+.hud-pip {
+  flex: 1;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.hud-pip.on { background: #4dabf7; box-shadow: 0 0 6px rgba(77, 171, 247, 0.7); }
 .hud-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 /* 라운드 승수 원: 1승이면 반쪽, 2승이면 꽉 참. 색은 그 플레이어 색(--orb). */
 .score-orb { flex: none; opacity: 0.38; transition: opacity 0.18s ease; }
@@ -302,11 +312,12 @@
 .card-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
 
 /* 카드는 3D 뒤집기 상자다. 버튼 자신은 투명한 틀이고, 실제 그림은 .card-face 두 장이 그린다.
-   높이를 고정해야 앞/뒤 면을 겹쳐 놓을 수 있다(가장 긴 카드 설명 3줄 + 이름 2줄 기준). */
+   높이를 고정해야 앞/뒤 면을 겹쳐 놓을 수 있다. 카드 설명이 수치까지 적는 문장(최대 44자,
+   4줄)으로 바뀌면서 이름 2줄 + 설명 4줄이 들어가도록 넓혔다 — 5장이 딱 한 줄에 들어간다. */
 .card-item {
   position: relative;
-  width: 138px;
-  height: 214px;
+  width: 152px;
+  height: 250px;
   padding: 0;
   border: 0;
   background: none;

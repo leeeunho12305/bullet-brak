@@ -86,7 +86,7 @@ def _check_round_over(room: Room) -> None:
     _ROUND_WINNER[room.code] = winner.id if winner else None
     if winner:
         room.round_wins[winner.id] = room.round_wins.get(winner.id, 0) + 1
-        winner.coins += 10
+        winner.coins += C.COINS_ROUND_WIN
 
 
 def open_card_pick(room: Room) -> None:
@@ -116,7 +116,7 @@ def _resolve_round_over(room: Room) -> None:
     if room.scores[winner.id] >= C.SCORE_TO_WIN:
         room.phase = "finished"
         room.winner_id = winner.id
-        winner.coins += 100
+        winner.coins += C.COINS_MATCH_WIN
         room.bullets.clear()
         room.zones.clear()
         room.loser_to_pick = None
@@ -265,11 +265,15 @@ def reset_round(room: Room) -> None:
         p.grounded = False
         p.jumps = 0
         p.blocking = False
-        p.block_meter = p.block_meter_max
+        # 가드는 라운드가 시작될 때만 채워진다(라운드 안에서는 다시 차지 않는다).
+        p.block_uses = p.block_uses_max
+        p.block_timer = 0
+        p.empower_ready = False
         p.poison = 0
         p.cold_timer = p.dazzle_timer = p.silence_timer = 0
         p.echo_cooldown = p.blood_timer = 0
         p.inputs.jump_consumed = False
+        p.inputs.block_consumed = False
 
     if room.mode == "training":
         # 훈련장을 처음부터 다시 시작한다(다음 틱에 1웨이브가 스폰된다).
@@ -306,8 +310,10 @@ def reset_match(room: Room) -> None:
         p.bullet_speed_mult = 1.0
         p.max_bounces = 0
         p.width = p.height = C.PLAYER_SIZE
-        p.block_meter_max = C.BLOCK_METER_MAX
-        p.block_meter = C.BLOCK_METER_MAX
+        p.block_uses_max = C.BLOCK_USES
+        p.block_uses = C.BLOCK_USES
+        p.block_duration = C.BLOCK_DURATION
+        p.block_timer = 0
         p.charging = False
         p.charge = 0.0
         p.cards.clear()

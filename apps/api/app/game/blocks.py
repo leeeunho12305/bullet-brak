@@ -5,10 +5,10 @@
 그대로 나간다) — 종류별 추가 필드는 아래 표가 단일 출처다.
 
   solid   일반 블럭 (기본값)
-  jump    점프대   : 위에서 밟으면 `power` 만큼 튀어오른다
+  jump    점프대   : 실체가 없다. 윗면을 지나가면 `power` 만큼 튀어오른다
   mover   이동발판 : `axis` 축으로 `span` 만큼 사인 왕복한다. 올라탄 사람을 같이 나른다
   ice     빙판     : 마찰이 거의 없다(미끄러진다)
-  hazard  가시     : 닿으면 아프다. 밟으면 위로 튕겨낸다
+  hazard  가시     : 밟을 때마다 HAZARD_DAMAGE 만큼 깎이고 튕겨난다
 
 constants 외에는 아무것도 import 하지 않는다(순수 데이터/수학 — maps 가 이 모듈을 쓴다).
 """
@@ -31,9 +31,15 @@ HAZARD = "hazard"
 #: 맵 에디터가 고를 수 있는 종류(순서가 팔레트 순서다)
 TYPES: tuple[str, ...] = (SOLID, JUMP, MOVER, ICE, HAZARD)
 
+#: 실체가 없는(밀어내지 않는) 종류. 바닥에 박아 넣어도 옆면에 걸리지 않는다.
+PASSABLE: frozenset[str] = frozenset({JUMP})
+
 #: 점프대 기본 위력(음수 = 위). -21 이면 약 367px 상승 — 탑 꼭대기까지 닿는다.
 DEFAULT_JUMP_POWER = 21.0
 MAX_JUMP_POWER = 34.0
+#: 점프대 발동 판정 여유(px). 윗면에서 이만큼 위/아래에 발이 있으면 밟은 것으로 본다.
+#: 실체가 없어 발이 한 틱에 통과해 버릴 수 있으므로 낙하 속도만큼 여유를 준다.
+JUMP_BAND = 16.0
 
 #: 이동발판 기본값
 DEFAULT_SPAN = 120.0
@@ -43,13 +49,16 @@ MAX_SPEED = 3.0
 
 #: 빙판 마찰(일반 FRICTION=0.8 대비 훨씬 잘 미끄러진다)
 ICE_FRICTION = 0.985
-#: 가시에 닿아 있는 동안의 초당 피해와 튕겨내는 속도
-HAZARD_DPS = 26.0
+#: 가시를 한 번 밟을 때마다 깎이는 체력(MAX_HP=120 기준 세 번이면 죽는다)과 튕겨내는 속도.
+#: 닿아 있는 동안 계속 깎지 않고, HAZARD_GRACE 틱이 지나야 다시 아프다 — 그래야 "한 번 밟음"이
+#: 정확히 한 번의 피해로 센다.
+HAZARD_DAMAGE = 50.0
+HAZARD_GRACE = 45
 HAZARD_BOUNCE = 9.0
 
 #: 에디터가 만들 수 있는 블럭 크기/개수 한계(악의적 페이로드 차단)
 MIN_SIZE = 10.0
-MAX_BLOCKS = 40
+MAX_BLOCKS = 160
 
 
 def _num(value: Any, fallback: float = 0.0) -> float:
@@ -207,6 +216,40 @@ def carry(entity: Any, room: Any) -> None:
 # --------------------------------------------------------------------------
 
 
+def is_solid(block: Rect) -> bool:
+    """이 블럭이 엔티티를 밀어내는가. 점프대는 아니다(바닥에 박아 넣는 발판이다)."""
+    return str(block.get("type", SOLID)) not in PASSABLE
+
+
+def touch(entity: Any, block: Rect) -> bool:
+    """실체 없는 블럭(점프대)의 효과. 발동했으면 True.
+
+    옆면/아랫면이 없으므로 걸리지 않는다. 바닥과 같은 높이로 깔아 두면 그냥 걸어 지나가다
+    튀어오른다 — 블럭처럼 튀어나와 앞을 막지 않는다.
+    """
+    if str(block.get("type", SOLID)) != JUMP:
+        return False
+    if entity.vy < 0:  # 이미 위로 뜨는 중이면 다시 밀어 올리지 않는다
+        return False
+
+    left = float(block["x"])
+    if entity.x + entity.width <= left or entity.x >= left + float(block["width"]):
+        return False
+
+    top = float(block["y"])
+    feet = entity.y + entity.height
+    # 윗면 바로 위(서 있음)부터 블럭 두께 안쪽(한 틱에 통과)까지를 "밟았다"로 본다.
+    if feet < top - JUMP_BAND or feet > top + float(block["height"]) + JUMP_BAND:
+        return False
+
+    entity.vy = -float(block.get("power", DEFAULT_JUMP_POWER))
+    entity.grounded = False
+    # 점프대로 뜬 뒤에도 공중 점프를 온전히 쓸 수 있다(밟자마자 0 으로 리셋된다).
+    if hasattr(entity, "jumps"):
+        entity.jumps = 0
+    return True
+
+
 def on_contact(entity: Any, block: Rect, side: str | None, index: int) -> float:
     """충돌 직후의 블럭 효과. 입은 피해를 돌려준다(가시만 0 이 아니다).
 
@@ -226,18 +269,16 @@ def on_contact(entity: Any, block: Rect, side: str | None, index: int) -> float:
         elif side in ("left", "right"):
             # "left" 는 왼쪽 면 안으로 파고들어 왼쪽으로 밀려난 것 — 그 방향으로 더 밀어낸다.
             entity.vx = HAZARD_BOUNCE * (1.0 if side == "left" else -1.0)
-        return HAZARD_DPS * C.TICK_SECONDS
+        # 튕겨나는 데 몇 틱이 걸리므로 그 사이에 여러 번 세지 않도록 무적 시간을 둔다.
+        if getattr(entity, "spike_grace", 0) > 0:
+            return 0.0
+        entity.spike_grace = HAZARD_GRACE
+        return HAZARD_DAMAGE
 
     if side != "top":
         return 0.0
 
-    if kind == JUMP:
-        entity.vy = -float(block.get("power", DEFAULT_JUMP_POWER))
-        entity.grounded = False
-        # 점프대로 뜬 뒤에도 공중 점프를 온전히 쓸 수 있다(밟자마자 0 으로 리셋된다).
-        if hasattr(entity, "jumps"):
-            entity.jumps = 0
-    elif kind == MOVER:
+    if kind == MOVER:
         entity.ride = index
     elif kind == ICE:
         entity.on_ice = True

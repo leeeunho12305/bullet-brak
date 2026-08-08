@@ -82,16 +82,17 @@ def _sneaky(p: Player) -> None:
 
 
 def _shields_up(p: Player) -> None:
+    """가드 한 번이 더 오래 펼쳐진다(+0.5초)."""
     p.flags["shields_up"] = True
-    p.block_meter_max = max(300.0, p.block_meter_max + 150)
-    p.block_meter = p.block_meter_max
+    p.block_duration += 30
 
 
 def _defender(p: Player) -> None:
+    """라운드당 가드 횟수가 한 번 더 늘어난다."""
     p.max_hp += 30
     p.hp += 30
-    p.block_meter_max = max(300.0, p.block_meter_max + 120)
-    p.block_meter = p.block_meter_max
+    p.block_uses_max += 1
+    p.block_uses += 1
 
 
 def _combine(p: Player) -> None:
@@ -122,75 +123,79 @@ def _fast_forward(p: Player) -> None:
 
 
 # --- 카드 목록 (JS CARDS 순서 유지) ----------------------------------------
+#
+# desc 규칙: "무슨 일이 일어나는가"를 **수치까지** 적는다. 분위기만 적어 두면 카드를
+# 고를 때 판단이 서지 않는다. 시간은 초, 그 외에는 게임 안의 숫자를 그대로 쓴다.
+# 여기 적힌 수치는 실제 구현(bullets/sim/stats)과 반드시 같아야 한다.
 
 CARDS: list[Card] = [
-    Card('empower', 'EMPOWER', '가드 후 다음 발이 강화됨', 'special', '#fcc419', '✨', _flag('empower')),
-    Card('radiance', 'RADIANCE', '가드 시 빛의 파동이 퍼짐', 'special', '#ffd43b', '🌟', _flag('radiance')),
-    Card('scavenger', 'SCAVENGER', '피해를 주면 재장전이 빨라짐', 'utility', '#845ef7', '🧲', _flag('scavenger')),
-    Card('poison', 'POISON', '적중한 적에게 독을 누적시킴', 'attack', '#2f9e44', '☠️', _flag('poison', 1)),
-    Card('mayhem', 'MAYHEM', '도탄이 많아지고 탄환이 더 난폭해짐', 'utility', '#d9480f', '💥', _mayhem),
-    Card('bombs_away', 'BOMBS AWAY', '도탄한 탄환이 폭발함', 'attack', '#fa5252', '💣', _flag('bombs_away')),
-    Card('pristine_persistence', 'PRISTINE PERSISTENCE', '체력이 가득할 때 더 강해짐', 'survival', '#4dabf7', '🫧', _flag('pristine')),
-    Card('phoenix', 'PHOENIX', '한 번 죽어도 다시 살아남음', 'survival', '#f76707', '🐦‍🔥', _add(revives=1)),
-    Card('quick_reload', 'QUICK RELOAD', '재사용 대기시간 감소', 'attack', '#74c0fc', '🔫', _quick_reload),
-    Card('grow', 'GROW', '탄환이 날아갈수록 커지고 강해짐', 'attack', '#ffd43b', '🌱', _flag('grow')),
-    Card('supernova', 'SUPERNOVA', '탄환이 터질 때 작은 폭발이 남음', 'attack', '#ff922b', '🌟', _flag('supernova')),
-    Card('spray', 'SPRAY', '연사 속도는 빨라지고 한 발의 힘은 약해짐', 'attack', '#4dabf7', '🚿', _spray),
-    Card('trickster', 'TRICKSTER', '발사가 조금 비틀려 예측이 어려워짐', 'utility', '#f06595', '🃏', _flag('trickster')),
-    Card('target_bounce', 'TARGET BOUNCE', '튀는 탄환이 다음 적을 노림', 'utility', '#20c997', '🎯', _flag('target_bounce')),
-    Card('timed_detonation', 'TIMED DETONATION', '시간이 지나면 탄환이 폭발함', 'attack', '#fd7e14', '⏱️', _flag('timed_detonation')),
-    Card('sneaky', 'SNEAKY', '탄환이 작고 빠르게 지나감', 'utility', '#adb5bd', '🥷', _sneaky),
-    Card('homing', 'HOMING', '탄환이 가장 가까운 적을 추적함', 'utility', '#bac8ff', '🧲', _flag('homing')),
-    Card('silence', 'SILENCE', '적중한 적의 발사를 잠시 막음', 'utility', '#9775fa', '🔇', _flag('silence')),
-    Card('taste_of_blood', 'TASTE OF BLOOD', '피해를 주면 이동 속도가 잠시 증가함', 'utility', '#c92a2a', '🩸', _flag('blood')),
-    Card('toxic_cloud', 'TOXIC CLOUD', '맞은 자리 주변에 독 구름이 남음', 'attack', '#40c057', '☁️', _flag('toxic_cloud')),
-    Card('echo', 'ECHO', '가드하면 반격 탄환이 하나 더 나감', 'utility', '#339af0', '📣', _flag('echo')),
-    Card('shield_charge', 'SHIELD CHARGE', '가드 중 전진 돌진이 발생함', 'utility', '#228be6', '🛡️', _flag('shield_charge')),
-    Card('tactical_reload', 'TACTICAL RELOAD', '가드 후 재사용 대기시간이 크게 줄어듦', 'utility', '#74b816', '🧰', _flag('tactical_reload')),
-    Card('bouncy', 'BOUNCY', '탄환이 벽과 발판에 더 많이 튕김', 'utility', '#20c997', '🪃', _add(max_bounces=2)),
-    Card('barrage', 'BARRAGE', '한 번 쏠 때 여러 발이 퍼져 나감', 'attack', '#f08c00', '🌧️', _flag('barrage')),
-    Card('refresh', 'REFRESH', '적중 시 쿨타임이 일부 회복됨', 'utility', '#63e6be', '♻️', _flag('refresh')),
-    Card('healing_field', 'HEALING FIELD', '가드하면 회복 장판이 생김', 'survival', '#51cf66', '➕', _flag('healing_field')),
-    Card('shockwave', 'SHOCKWAVE', '가드가 주변 적을 밀쳐냄', 'utility', '#ff922b', '〰️', _flag('shockwave')),
-    Card('shields_up', 'SHIELDS UP', '가드 게이지가 늘어남', 'survival', '#3b5bdb', '🪖', _shields_up),
-    Card('teleport', 'TELEPORT', '가드하면 바라보는 방향으로 짧게 이동함', 'special', '#be4bdb', '🌀', _flag('teleport')),
-    Card('explosive_bullet', 'EXPLOSIVE BULLET', '탄환이 맞는 순간 폭발함', 'attack', '#ff6b6b', '🧨', _flag('explosive')),
-    Card('decay', 'DECAY', '탄환이 오래 갈수록 힘을 잃음', 'attack', '#845ef7', '🕳️', _flag('decay')),
-    Card('emp', 'EMP', '가드 시 주변 적을 마비시킴', 'special', '#00c2ff', '⚡', _flag('emp')),
-    Card('lifestealer', 'LIFESTEALER', '준 피해의 일부를 체력으로 돌려받음', 'survival', '#b197fc', '🧛', _add(lifesteal=0.3)),
-    Card('parasite', 'PARASITE', '적에게 피해를 줄수록 더 버팀', 'survival', '#74c0fc', '🪱', _flag('parasite')),
-    Card('big_bullet', 'BIG BULLET', '탄환이 커지고 더 무거워짐', 'attack', '#ffa94d', '💣', _add(bullet_size=3, knockback_mult=0.5)),
-    Card('combine', 'COMBINE', '공격이 크게 강해지지만 느려짐', 'attack', '#fab005', '⚙️', _combine),
-    Card('glass_cannon', 'GLASS CANNON', '공격력은 높지만 생존력은 낮아짐', 'attack', '#f06595', '🥃', _glass_cannon),
-    Card('saw', 'SAW', '가드하면 톱날이 생겨 공격함', 'special', '#ff922b', '🪚', _flag('saw')),
-    Card('thruster', 'THRUSTER', '반동과 이동 속도가 더 강해짐', 'movement', '#845ef7', '🚀', _add(speed=1, knockback_mult=0.3)),
-    Card('radar_shot', 'RADAR SHOT', '탄환이 적을 향해 조금 더 잘 꺾임', 'utility', '#12b886', '📡', _flag('radar_shot')),
-    Card('fastball', 'FASTBALL', '탄환 속도가 크게 증가함', 'attack', '#fff9db', '⚾', _add(bullet_speed_mult=1.0)),
-    Card('wind_up', 'WIND UP', '천천히 준비할수록 더 강한 한 발', 'attack', '#fab005', '🌀', _flag('wind_up')),
-    Card('careful_planning', 'CAREFUL PLANNING', '신중하게 쏘면 더 정확하고 강함', 'utility', '#c0eb75', '🧠', _flag('careful_planning')),
-    Card('tank', 'TANK', '체력이 많아지지만 둔해짐', 'survival', '#228be6', '🛡️', _add(max_hp=100, hp=100, speed=-2)),
-    Card('defender', 'DEFENDER', '가드 게이지가 늘어남', 'survival', '#3b5bdb', '🧱', _defender),
-    Card('burst', 'BURST', '발사할 때 점사로 나감', 'attack', '#74c0fc', '〰️', _add(burst=2)),
-    Card('drill_ammo', 'DRILL AMMO', '탄환이 적을 관통함', 'attack', '#adb5bd', '🪛', _flag('drill_ammo')),
-    Card('implode', 'IMPLODE', '가드하면 적을 끌어당김', 'utility', '#ae3ec9', '🕳️', _flag('implode')),
-    Card('static_field', 'STATIC FIELD', '가드하면 정전기 장판이 생김', 'utility', '#339af0', '🌩️', _flag('static_field')),
-    Card('leech', 'LEECH', '피해를 줄 때 체력을 조금 회복함', 'survival', '#40c057', '🪱', _flag('leech')),
-    Card('huge', 'HUGE', '플레이어와 탄환이 전부 커짐', 'special', '#1098ad', '🐘', _huge),
-    Card('chase', 'CHASE', '탄환이 적을 더 집요하게 좇음', 'utility', '#ff6b6b', '🐾', _flag('chase')),
-    Card('quick_shot', 'QUICK SHOT', '발사 속도가 더 빨라짐', 'attack', '#ffd43b', '⚡', _quick_shot),
-    Card('steady_shot', 'STEADY SHOT', '탄환이 안정적으로 멀리 날아감', 'attack', '#ffe8cc', '🎯', _flag('steady_shot')),
-    Card('ritual_countdown', 'RITUAL COUNTDOWN', '가만히 있을수록 다음 발사가 강해짐', 'special', '#f06595', '⌛', _flag('ritual_countdown')),
-    Card('chilling_presence', 'CHILLING PRESENCE', '주변 적을 서서히 느리게 함', 'utility', '#4dabf7', '🧊', _flag('chilling_presence')),
-    Card('demonic_pact', 'DEMONIC PACT', '발사 시 체력을 약간 태워 공격력을 올림', 'special', '#ff0000', '😈', _flag('demonic_pact')),
-    Card('brawler', 'BRAWLER', '탄환이 더 묵직하고 가까운 싸움에 강함', 'attack', '#e03131', '🥊', _add(damage_mult=0.5, max_hp=20, hp=20)),
-    Card('overpower', 'OVERPOWER', '상대가 약할수록 더 강해짐', 'attack', '#c92a2a', '👊', _flag('overpower')),
-    Card('frost_slam', 'FROST SLAM', '가드 시 얼음 충격파가 퍼짐', 'utility', '#74c0fc', '❄️', _flag('frost_slam')),
-    Card('cold_bullets', 'COLD BULLETS', '적중한 적의 이동을 둔화시킴', 'utility', '#99e9f2', '❄️', _flag('cold')),
-    Card('dazzle', 'DAZZLE', '적중 시 짧게 기절시킴', 'utility', '#ae3ec9', '✨', _flag('dazzle')),
-    Card('ricochet', 'RICOCHET', '탄환이 벽을 한 번 더 세게 튕김', 'utility', '#ffd43b', '↩️', _ricochet),
-    Card('remote', 'REMOTE', '탄환을 조금 더 조종할 수 있음', 'special', '#868e96', '🎮', _flag('remote')),
-    Card('fast_forward', 'FAST FORWARD', '탄환 속도는 더 빠르지만 수명은 짧아짐', 'attack', '#fab005', '⏩', _fast_forward),
-    Card('buckshot', 'BUCKSHOT', '여러 발이 퍼져 나가는 산탄', 'special', '#f08c00', '🎇', _add(buckshot=3)),
+    Card('empower', 'EMPOWER', '가드가 끝나면 다음 사격 한 번이 대미지 ×1.6', 'special', '#fcc419', '✨', _flag('empower')),
+    Card('radiance', 'RADIANCE', '가드할 때와 적중할 때 빛 장판이 생겨 나만 조금씩 회복된다', 'special', '#ffd43b', '🌟', _flag('radiance')),
+    Card('scavenger', 'SCAVENGER', '적을 맞히면 사격 쿨다운 -4틱. 가드 중에도 매 틱 -4', 'utility', '#845ef7', '🧲', _flag('scavenger')),
+    Card('poison', 'POISON', '적중 시 독 10 중첩. 0.5초마다 1 피해를 주며 1씩 풀린다', 'attack', '#2f9e44', '☠️', _flag('poison', 1)),
+    Card('mayhem', 'MAYHEM', '도탄 +5회, 대신 대미지 ×0.85', 'utility', '#d9480f', '💥', _mayhem),
+    Card('bombs_away', 'BOMBS AWAY', '탄환이 발판에 튕길 때마다 반경 70 폭발 (대미지 35%)', 'attack', '#fa5252', '💣', _flag('bombs_away')),
+    Card('pristine_persistence', 'PRISTINE PERSISTENCE', '체력이 가득한 상태로 쏘면 대미지 ×1.2', 'survival', '#4dabf7', '🫧', _flag('pristine')),
+    Card('phoenix', 'PHOENIX', '쓰러져도 체력을 다 채우며 1회 부활 (낙사에는 발동하지 않음)', 'survival', '#f76707', '🐦‍🔥', _add(revives=1)),
+    Card('quick_reload', 'QUICK RELOAD', '사격 쿨다운 -5틱 (15 → 10, 최소 2)', 'attack', '#74c0fc', '🔫', _quick_reload),
+    Card('grow', 'GROW', '날아가는 동안 매 틱 대미지 +0.05, 크기 +0.01 로 자란다', 'attack', '#ffd43b', '🌱', _flag('grow')),
+    Card('supernova', 'SUPERNOVA', '적중해도 수명이 다해도 반경 85 폭발이 남는다', 'attack', '#ff922b', '🌟', _flag('supernova')),
+    Card('spray', 'SPRAY', '쿨다운이 3틱으로 고정된다. 대신 대미지 ×0.3', 'attack', '#4dabf7', '🚿', _spray),
+    Card('trickster', 'TRICKSTER', '발사 각도가 매번 ±0.08rad 무작위로 틀어진다', 'utility', '#f06595', '🃏', _flag('trickster')),
+    Card('target_bounce', 'TARGET BOUNCE', '도탄 +1회. 벽이나 발판에 한 번 튕긴 뒤부터 적을 추적한다', 'utility', '#20c997', '🎯', _flag('target_bounce')),
+    Card('timed_detonation', 'TIMED DETONATION', '수명(80틱)이 다하면 반경 85 폭발 (대미지 60%)', 'attack', '#fd7e14', '⏱️', _flag('timed_detonation')),
+    Card('sneaky', 'SNEAKY', '탄속 +15%, 탄 크기 -1 — 작고 빨라 눈에 잘 안 띈다', 'utility', '#adb5bd', '🥷', _sneaky),
+    Card('homing', 'HOMING', '가장 가까운 적을 추적한다(조향 0.08). 지형을 통과한다', 'utility', '#bac8ff', '🧲', _flag('homing')),
+    Card('silence', 'SILENCE', '적중한 적은 1초간 사격할 수 없다', 'utility', '#9775fa', '🔇', _flag('silence')),
+    Card('taste_of_blood', 'TASTE OF BLOOD', '적을 맞히면 0.75초간 내 이동 속도 ×1.35', 'utility', '#c92a2a', '🩸', _flag('blood')),
+    Card('toxic_cloud', 'TOXIC CLOUD', '적중 지점에 반경 85 독 구름이 4초간 남는다 (중심 초당 9 피해)', 'attack', '#40c057', '☁️', _flag('toxic_cloud')),
+    Card('echo', 'ECHO', '가드로 탄을 튕겨낼 때마다 반격탄 1발 (대미지 65%, 0.5초 간격)', 'utility', '#339af0', '📣', _flag('echo')),
+    Card('shield_charge', 'SHIELD CHARGE', '가드하는 동안 조준 방향으로 계속 밀려 나간다', 'utility', '#228be6', '🛡️', _flag('shield_charge')),
+    Card('tactical_reload', 'TACTICAL RELOAD', '가드하는 동안 사격 쿨다운이 매 틱 8씩 줄어든다', 'utility', '#74b816', '🧰', _flag('tactical_reload')),
+    Card('bouncy', 'BOUNCY', '도탄 +2회', 'utility', '#20c997', '🪃', _add(max_bounces=2)),
+    Card('barrage', 'BARRAGE', '한 번 쏠 때 3발이 부채꼴로 퍼져 나간다', 'attack', '#f08c00', '🌧️', _flag('barrage')),
+    Card('refresh', 'REFRESH', '적을 맞히면 사격 쿨다운 -8틱', 'utility', '#63e6be', '♻️', _flag('refresh')),
+    Card('healing_field', 'HEALING FIELD', '가드하는 순간 반경 120 회복 장판이 1.5초간 생긴다 (최대 약 40 회복)', 'survival', '#51cf66', '➕', _flag('healing_field')),
+    Card('shockwave', 'SHOCKWAVE', '가드하는 순간 반경 130 안의 적을 강하게 밀쳐낸다', 'utility', '#ff922b', '〰️', _flag('shockwave')),
+    Card('shields_up', 'SHIELDS UP', '가드 한 번의 지속 시간 +0.5초 (0.75 → 1.25초)', 'survival', '#3b5bdb', '🪖', _shields_up),
+    Card('teleport', 'TELEPORT', '가드하는 순간 조준 방향으로 110px 순간이동한다', 'special', '#be4bdb', '🌀', _flag('teleport')),
+    Card('explosive_bullet', 'EXPLOSIVE BULLET', '적중하는 순간 반경 85 폭발 (대미지 55%). 내가 맞지는 않는다', 'attack', '#ff6b6b', '🧨', _flag('explosive')),
+    Card('decay', 'DECAY', '매 틱 탄속 ×0.985, 대미지 ×0.99 로 점점 약해진다', 'attack', '#845ef7', '🕳️', _flag('decay')),
+    Card('emp', 'EMP', '가드하는 순간 반경 130 안의 적을 0.4초 기절 + 침묵', 'special', '#00c2ff', '⚡', _flag('emp')),
+    Card('lifestealer', 'LIFESTEALER', '적에게 준 피해의 30%를 체력으로 되돌려받는다', 'survival', '#b197fc', '🧛', _add(lifesteal=0.3)),
+    Card('parasite', 'PARASITE', '적을 맞힐 때마다 최대 체력 +1 (매치 내내 쌓인다)', 'survival', '#74c0fc', '🪱', _flag('parasite')),
+    Card('big_bullet', 'BIG BULLET', '탄 크기 +3, 넉백 ×1.5', 'attack', '#ffa94d', '💣', _add(bullet_size=3, knockback_mult=0.5)),
+    Card('combine', 'COMBINE', '대미지 ×3, 대신 사격 쿨다운도 ×3', 'attack', '#fab005', '⚙️', _combine),
+    Card('glass_cannon', 'GLASS CANNON', '대미지 배율 +1.0, 대신 최대 체력이 절반이 된다', 'attack', '#f06595', '🥃', _glass_cannon),
+    Card('saw', 'SAW', '가드하는 순간 톱날 탄환 1발 (대미지 70%, 3회 도탄, 느림)', 'special', '#ff922b', '🪚', _flag('saw')),
+    Card('thruster', 'THRUSTER', '이동 속도 +1, 넉백 ×1.3', 'movement', '#845ef7', '🚀', _add(speed=1, knockback_mult=0.3)),
+    Card('radar_shot', 'RADAR SHOT', '탄환이 적 쪽으로 약하게 꺾인다(조향 0.05). 지형을 통과한다', 'utility', '#12b886', '📡', _flag('radar_shot')),
+    Card('fastball', 'FASTBALL', '탄속 ×2 (배율 +1.0)', 'attack', '#fff9db', '⚾', _add(bullet_speed_mult=1.0)),
+    Card('wind_up', 'WIND UP', '가만히 서서 모은 게이지만큼 대미지 최대 ×1.75', 'attack', '#fab005', '🌀', _flag('wind_up')),
+    Card('careful_planning', 'CAREFUL PLANNING', '0.33초 이상 멈춰 있다가 쏘면 대미지 ×1.2', 'utility', '#c0eb75', '🧠', _flag('careful_planning')),
+    Card('tank', 'TANK', '최대 체력 +100, 대신 이동 속도 -2', 'survival', '#228be6', '🛡️', _add(max_hp=100, hp=100, speed=-2)),
+    Card('defender', 'DEFENDER', '최대 체력 +30, 라운드당 가드 횟수 +1', 'survival', '#3b5bdb', '🧱', _defender),
+    Card('burst', 'BURST', '한 번 쏠 때 3발이 연달아 점사로 나간다', 'attack', '#74c0fc', '〰️', _add(burst=2)),
+    Card('drill_ammo', 'DRILL AMMO', '탄환이 적 1명을 관통하고 계속 날아간다', 'attack', '#adb5bd', '🪛', _flag('drill_ammo')),
+    Card('implode', 'IMPLODE', '가드하는 순간 반경 170 안의 적을 1초간 끌어당긴다', 'utility', '#ae3ec9', '🕳️', _flag('implode')),
+    Card('static_field', 'STATIC FIELD', '가드하는 순간 반경 130 정전기 장판이 0.75초간 적을 기절·침묵시킨다', 'utility', '#339af0', '🌩️', _flag('static_field')),
+    Card('leech', 'LEECH', '적을 맞힐 때마다 체력 +2', 'survival', '#40c057', '🪱', _flag('leech')),
+    Card('huge', 'HUGE', '몸집 ×1.5, 탄 크기 +10 — 크게 때리고 크게 맞는다', 'special', '#1098ad', '🐘', _huge),
+    Card('chase', 'CHASE', '탄환이 적을 강하게 추적한다(조향 0.14). 지형을 통과한다', 'utility', '#ff6b6b', '🐾', _flag('chase')),
+    Card('quick_shot', 'QUICK SHOT', '사격 쿨다운 -7틱 (15 → 8, 최소 2)', 'attack', '#ffd43b', '⚡', _quick_shot),
+    Card('steady_shot', 'STEADY SHOT', '탄환 수명 ×1.5, 거리에 따른 대미지 감쇠 절반', 'attack', '#ffe8cc', '🎯', _flag('steady_shot')),
+    Card('ritual_countdown', 'RITUAL COUNTDOWN', '가만히 모은 게이지만큼 대미지 최대 ×1.5, 쏠 때마다 게이지 +8', 'special', '#f06595', '⌛', _flag('ritual_countdown')),
+    Card('chilling_presence', 'CHILLING PRESENCE', '항상 반경 150 냉기를 뿜어 주변 적의 이동을 둔하게 만든다', 'utility', '#4dabf7', '🧊', _flag('chilling_presence')),
+    Card('demonic_pact', 'DEMONIC PACT', '쏠 때마다 체력 2를 태우는 대신 대미지 ×1.35', 'special', '#ff0000', '😈', _flag('demonic_pact')),
+    Card('brawler', 'BRAWLER', '대미지 배율 +0.5, 최대 체력 +20', 'attack', '#e03131', '🥊', _add(damage_mult=0.5, max_hp=20, hp=20)),
+    Card('overpower', 'OVERPOWER', '상대 체력이 낮을수록 강해진다 — 빈사 상대에게 최대 ×1.5', 'attack', '#c92a2a', '👊', _flag('overpower')),
+    Card('frost_slam', 'FROST SLAM', '가드하는 순간 반경 140 얼음 충격파가 적을 0.85초 둔화시킨다', 'utility', '#74c0fc', '❄️', _flag('frost_slam')),
+    Card('cold_bullets', 'COLD BULLETS', '적중한 적은 1초간 이동 속도 ×0.65', 'utility', '#99e9f2', '❄️', _flag('cold')),
+    Card('dazzle', 'DAZZLE', '적중한 적을 0.4초간 기절시킨다 (이동·점프·가드 불가)', 'utility', '#ae3ec9', '✨', _flag('dazzle')),
+    Card('ricochet', 'RICOCHET', '도탄 +2회', 'utility', '#ffd43b', '↩️', _ricochet),
+    Card('remote', 'REMOTE', '발사한 탄환이 지금 조준하는 지점 쪽으로 계속 휘어진다', 'special', '#868e96', '🎮', _flag('remote')),
+    Card('fast_forward', 'FAST FORWARD', '탄속 크게 증가(배율 +0.4, 추가 ×1.25), 대신 수명 80 → 50틱', 'attack', '#fab005', '⏩', _fast_forward),
+    Card('buckshot', 'BUCKSHOT', '한 번 쏠 때 4발이 산탄으로 퍼져 나간다', 'special', '#f08c00', '🎇', _add(buckshot=3)),
 ]
 
 CARD_BY_ID: dict[str, Card] = {card.id: card for card in CARDS}
@@ -270,8 +275,11 @@ def reset_card_state(player: Player) -> None:
     player.jumps = 0
 
     # 가드 / 강공격
-    player.block_meter_max = C.BLOCK_METER_MAX
-    player.block_meter = C.BLOCK_METER_MAX
+    player.block_uses_max = C.BLOCK_USES
+    player.block_uses = C.BLOCK_USES
+    player.block_duration = C.BLOCK_DURATION
+    player.block_timer = 0
+    player.empower_ready = False
     player.blocking = False
     player.charging = False
     player.charge = 0.0

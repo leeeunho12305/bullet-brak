@@ -33,7 +33,12 @@ def rect(x: float, y: float, width: float, height: float) -> Rect:
 
 
 def jump(x: float, y: float, width: float, height: float = 16.0, power: float | None = None) -> Rect:
-    """점프대. 위에서 밟으면 튀어오른다(power 는 위로 향하는 속도)."""
+    """점프대. 지나가면 튀어오른다(power 는 위로 향하는 속도).
+
+    실체가 없으므로(blocks.PASSABLE) **딛고 선 바닥의 윗면과 같은 y** 에 깔아야 한다.
+    바닥 위에 얹으면 눈에만 두툼할 뿐 걸리지는 않지만, 바닥과 같은 높이여야 걸어 지나가다
+    자연스럽게 튀어오른다.
+    """
     return B.make(x, y, width, height, B.JUMP, power=power)
 
 
@@ -129,10 +134,13 @@ _MAPS: tuple[GameMap, ...] = (
             rect(260, 300, 280, 20),
             rect(50, 190, 160, 20),
             rect(590, 190, 160, 20),
-            # 탑과 탑 사이 바닥의 복귀용 점프대. 다리(x 260~540)에 머리를 박지 않도록
-            # 다리 양옆의 빈 통로에 놓는다 — 한 번 밟으면 탑 꼭대기까지 닿는다.
-            jump(215, 534, 45),
-            jump(540, 534, 45),
+            # 복귀용 점프대는 전부 바닥(y=550) 윗면에 박아 넣는다 — 걸어 지나가면 튀어오른다.
+            # 탑과 탑 사이: 다리(x 260~540)에 머리를 박지 않도록 다리 양옆 빈 통로에 놓는다.
+            jump(210, 550, 50),
+            jump(540, 550, 50),
+            # 맵 양쪽 끝. 위쪽 발판(x 50~210 / 590~750)이 없는 바깥 통로라 곧장 꼭대기까지 오른다.
+            jump(0, 550, 48),
+            jump(752, 550, 48),
         ),
         spawns=((70, 120), (680, 120), (390, 200), (390, 60)),
     ),
@@ -145,8 +153,10 @@ _MAPS: tuple[GameMap, ...] = (
         platforms=(
             rect(0, 520, 300, 80),
             rect(500, 520, 300, 80),
-            # 협곡 한가운데 기둥 위의 점프대 — 건너편으로 넘어가는 유일한 지름길.
-            jump(365, 414, 70, power=19.0),
+            # 낙사 구간(x 300~500)과 맞닿은 양쪽 벼랑 끝에만 점프대를 박아 넣는다.
+            # 뛰어내리려고 달려오면 그대로 튀어올라 중앙 발판/건너편으로 넘어간다.
+            jump(230, 520, 70, power=19.0),
+            jump(500, 520, 70, power=19.0),
             rect(370, 430, 60, 40),
             rect(60, 360, 180, 20),
             rect(560, 360, 180, 20),
@@ -206,9 +216,9 @@ _MAPS: tuple[GameMap, ...] = (
             rect(640, 520, 120, 20),
             # 허공을 가로지르는 나룻배. 아래쪽 섬 사이를 천천히 오간다.
             mover(400, 530, 110, 18, axis="x", span=130, speed=0.7),
-            # 아래쪽 섬에서 중앙 단상으로 복귀하는 점프대
-            jump(45, 504, 110, power=19.0),
-            jump(645, 504, 110, power=19.0),
+            # 아래쪽 섬에서 중앙 단상으로 복귀하는 점프대(섬 윗면에 박아 넣는다)
+            jump(40, 520, 120, power=19.0),
+            jump(640, 520, 120, power=19.0),
         ),
         spawns=((330, 340), (450, 340), (110, 250), (630, 250)),
     ),
@@ -270,16 +280,20 @@ _MAPS: tuple[GameMap, ...] = (
         theme=Theme("#0f0a04", "rgba(255, 169, 77, 0.07)", "#2b1f12", "rgba(255, 169, 77, 0.5)"),
         platforms=(
             rect(0, 550, 800, 50),
-            jump(60, 534, 90),
+            # 가시(x 340~460) 양옆의 뻥 뚫린 통로에 점프대를 박아 넣는다 — 달려오다 밟으면
+            # 가시를 넘어간다. 빙판(x 0~220)·선반(x 590~800) 밑에 두면 천장에 머리만 박는다.
+            jump(220, 550, 100),
             spike(340, 534, 120),
-            jump(650, 534, 90),
+            jump(470, 550, 110),
             ice(0, 430, 220, 20),
             mover(400, 400, 120, 18, axis="x", span=150, speed=0.8),
             mover(730, 380, 70, 18, axis="y", span=90, speed=1.1, phase=1.5),
             rect(590, 300, 210, 20),
             rect(120, 250, 180, 20),
         ),
-        spawns=((60, 300), (700, 200), (390, 180), (200, 120)),
+        # 가시(x 340~460) 바로 위에는 아무도 세우지 않는다 — 떨어지자마자 50 을 깎이면
+        # 라운드가 시작도 전에 기울어진다. spawn_points 가 한 번 더 검사한다.
+        spawns=((60, 300), (700, 200), (500, 190), (200, 120)),
     ),
 )
 
@@ -345,10 +359,62 @@ def apply(room: "Room", map_id: str) -> GameMap:
     return game_map
 
 
+#: 스폰 지점을 가시에서 밀어낼 때 한 번에 옮기는 거리와 시도 횟수
+_SHIFT_STEP = 55.0
+_SHIFT_TRIES = 12
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+def _landing_kind(platforms: list[Rect], x: float, y: float) -> str | None:
+    """(x, y) 에 세운 플레이어가 그대로 떨어졌을 때 처음 닿는 발판의 종류.
+
+    끝까지 아무것도 없으면 None(낙사 구간)이다. 이동발판은 지금 위치로 판단한다 —
+    스폰 직후 몇 틱 사이에 크게 움직이지 않는다.
+    """
+    left, right = x, x + C.PLAYER_SIZE
+    feet = y + C.PLAYER_SIZE
+    best_top: float | None = None
+    kind: str | None = None
+    for block in platforms:
+        bx = float(block["x"])
+        if bx >= right or bx + float(block["width"]) <= left:
+            continue
+        top = float(block["y"])
+        if top < feet - 1.0:  # 이미 발보다 위에 있는 발판은 밟지 않는다
+            continue
+        if best_top is None or top < best_top:
+            best_top, kind = top, str(block.get("type", B.SOLID))
+    return kind
+
+
+def _push_off_hazard(platforms: list[Rect], x: float, y: float) -> tuple[float, float]:
+    """스폰 지점이 가시 위면 좌우로 밀어 안전한 자리를 찾는다(못 찾으면 원래 자리)."""
+    if _landing_kind(platforms, x, y) != B.HAZARD:
+        return x, y
+    limit = C.WIDTH - C.PLAYER_SIZE
+    for step in range(1, _SHIFT_TRIES + 1):
+        for direction in (-1.0, 1.0):
+            moved = _clamp(x + direction * step * _SHIFT_STEP, 0.0, limit)
+            if _landing_kind(platforms, moved, y) not in (B.HAZARD, None):
+                return moved, y
+    return x, y
+
+
 def spawn_points(room: "Room | None" = None) -> list[tuple[float, float]]:
-    """맵의 스폰 지점 목록(없으면 클래식 기준)."""
+    """맵의 스폰 지점 목록(없으면 클래식 기준).
+
+    방에 실제로 깔린 발판을 알고 있으면 가시 위에 떨어지는 자리는 옆으로 밀어낸다.
+    맵 에디터로 가시를 아무 데나 깔아도 스폰 직후 피해를 입지 않는다.
+    """
     map_id = getattr(room, "active_map_id", None) if room is not None else None
-    return [(float(x), float(y)) for x, y in get(map_id).spawns]
+    points = [(float(x), float(y)) for x, y in get(map_id).spawns]
+    platforms = getattr(room, "platforms", None) if room is not None else None
+    if not platforms:
+        return points
+    return [_push_off_hazard(platforms, x, y) for x, y in points]
 
 
 def fallback_spawn() -> tuple[float, float]:

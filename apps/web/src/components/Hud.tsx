@@ -28,7 +28,11 @@ interface HudPlayer {
   alive: boolean;
   score: number;
   roundWins: number;
-  guard: number;
+  /** 라운드당 남은 가드 횟수 / 총 횟수 (게이지가 아니다) */
+  guardUses: number;
+  guardMax: number;
+  /** 가드를 펼치고 있는 동안의 남은 지속 시간(0~1). 0 이면 가드 중이 아니다. */
+  guardActive: number;
   cooldown: number;
   charge: number;
   charging: boolean;
@@ -48,7 +52,9 @@ function toHudPlayer(p: PlayerSnap): HudPlayer {
     alive: p.alive,
     score: p.score,
     roundWins: p.round_wins,
-    guard: p.block_meter_max > 0 ? p.block_meter / p.block_meter_max : 0,
+    guardUses: p.block_uses,
+    guardMax: Math.max(1, p.block_uses_max),
+    guardActive: p.block_timer > 0 ? p.block_timer / Math.max(1, p.block_duration) : 0,
     cooldown: p.max_cooldown > 0 ? p.cooldown / p.max_cooldown : 0,
     charge: Math.min(1, p.charge / MAX_CHARGE),
     charging: p.charging,
@@ -140,7 +146,17 @@ function PlayerSide({ p, mine, side }: SideProps): JSX.Element {
         </span>
       </div>
       <div className="hud-sub">
-        <Meter ratio={p.guard} color="#4dabf7" label="가드 게이지" />
+        {/* 가드는 게이지가 아니라 라운드당 남은 횟수다. 칸 하나 = 1회.
+            펼치고 있는 동안에는 같은 자리에 남은 지속 시간을 보여 준다. */}
+        <div className="hud-guard" title={`가드 ${p.guardUses}/${p.guardMax}회 — 라운드당 정해진 횟수`}>
+          {p.guardActive > 0 ? (
+            <Meter ratio={p.guardActive} color="#00e5ff" label="가드 유지 시간" />
+          ) : (
+            Array.from({ length: p.guardMax }, (_, i) => (
+              <span key={i} className={`hud-pip${i < p.guardUses ? ' on' : ''}`} aria-hidden />
+            ))
+          )}
+        </div>
         <Meter ratio={1 - p.cooldown} color="#adb5bd" label="사격 쿨다운" />
         <Meter
           ratio={p.charge}

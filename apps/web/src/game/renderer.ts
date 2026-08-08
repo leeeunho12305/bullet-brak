@@ -1,7 +1,7 @@
 // 순수 캔버스 렌더러 — React 에 의존하지 않는다.
 // renderFrame() 은 rAF 루프에서 매 프레임 호출된다. 객체 할당을 최소화한다.
-import { MAX_CHARGE, WORLD_HEIGHT, WORLD_WIDTH } from '@/types/game';
-import type { BotSnap, MapTheme, Platform, PlayerSnap, Snapshot } from '@/types/game';
+import { BLAST_TICKS, MAX_CHARGE, WORLD_HEIGHT, WORLD_WIDTH } from '@/types/game';
+import type { BotSnap, MapTheme, Platform, PlayerSnap, Snapshot, ZoneSnap } from '@/types/game';
 import { drawAvatar } from './avatars';
 
 const GRID = 40;
@@ -233,14 +233,15 @@ function decorateBlock(ctx: CanvasRenderingContext2D, p: Platform, t: number): v
 
   if (kind === 'jump') {
     // 위로 흐르는 쐐기 두 개. 밟으면 튄다는 걸 움직임으로 알린다.
+    // 점프대는 바닥 안에 박혀 있으므로(서버 blocks.PASSABLE) 쐐기는 윗면 **위로** 띄운다.
     const cx = p.x + p.width / 2;
     ctx.save();
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     for (let i = 0; i < 2; i += 1) {
-      const phase = ((t / 520 + i * 0.5) % 1);
-      const top = p.y + p.height * 0.75 - phase * (p.height * 0.6 + 10);
+      const phase = (t / 520 + i * 0.5) % 1;
+      const top = p.y + 4 - phase * 22;
       ctx.globalAlpha = 0.35 + (1 - phase) * 0.5;
       ctx.beginPath();
       ctx.moveTo(cx - 9, top + 7);
@@ -353,6 +354,59 @@ function drawPlatforms(ctx: CanvasRenderingContext2D, snap: Snapshot, t: number)
   }
 }
 
+/**
+ * 폭발 섬광. 서버가 apply_explosion 마다 남기는 'blast' 장판을 그린다 —
+ * 남은 틱(z.d)이 0 으로 줄어드는 동안 링이 퍼지면서 사라진다.
+ * 게임 판정에는 전혀 관여하지 않는 순수 연출이다.
+ */
+function drawBlast(ctx: CanvasRenderingContext2D, z: ZoneSnap): void {
+  const progress = Math.max(0, Math.min(1, 1 - (z.d ?? 0) / BLAST_TICKS));
+  const fade = 1 - progress;
+  const r = z.radius * (0.3 + 0.8 * progress);
+
+  ctx.save();
+  // 안쪽 섬광 — 하얗게 터졌다가 주황으로 식는다
+  const glow = ctx.createRadialGradient(z.x, z.y, 0, z.x, z.y, r);
+  glow.addColorStop(0, `rgba(255, 250, 220, ${0.9 * fade})`);
+  glow.addColorStop(0.45, `rgba(255, 146, 43, ${0.5 * fade})`);
+  glow.addColorStop(1, 'rgba(255, 80, 0, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(z.x, z.y, r, 0, TAU);
+  ctx.fill();
+
+  // 퍼지는 충격파 링
+  ctx.globalAlpha = fade;
+  ctx.strokeStyle = '#ffd8a8';
+  ctx.lineWidth = 1 + 5 * fade;
+  ctx.beginPath();
+  ctx.arc(z.x, z.y, r, 0, TAU);
+  ctx.stroke();
+
+  // 사방으로 튀는 불티. 각도를 폭발 위치로 흩뜨려 매번 같은 모양이 되지 않게 한다.
+  ctx.strokeStyle = `rgba(255, 212, 59, ${fade})`;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < 8; i += 1) {
+    const a = (i / 8) * TAU + z.x * 0.017 + z.y * 0.011;
+    const inner = r * 0.72;
+    const outer = r * (1.05 + 0.4 * progress);
+    ctx.moveTo(z.x + Math.cos(a) * inner, z.y + Math.sin(a) * inner);
+    ctx.lineTo(z.x + Math.cos(a) * outer, z.y + Math.sin(a) * outer);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** 폭발은 캐릭터/탄환 위에 얹는다(가려지면 터진 걸 알 수 없다). */
+function drawBlasts(ctx: CanvasRenderingContext2D, snap: Snapshot): void {
+  const list = snap.zones;
+  for (let i = 0; i < list.length; i += 1) {
+    if (list[i].type === 'blast') drawBlast(ctx, list[i]);
+  }
+}
+
 function drawZones(ctx: CanvasRenderingContext2D, snap: Snapshot, t: number): void {
   const list = snap.zones;
   if (list.length === 0) return;
@@ -360,6 +414,7 @@ function drawZones(ctx: CanvasRenderingContext2D, snap: Snapshot, t: number): vo
   ctx.save();
   for (let i = 0; i < list.length; i += 1) {
     const z = list[i];
+    if (z.type === 'blast') continue; // drawBlasts 가 맨 위에서 따로 그린다
     const color = ZONE_COLORS[z.type] ?? '#ff2e97';
     ctx.globalAlpha = 0.14 + pulse;
     ctx.fillStyle = color;
@@ -414,6 +469,24 @@ function drawBar(
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w * Math.max(0, Math.min(1, ratio)), h);
+}
+
+/**
+ * 머리 위 가드 표시. 게이지가 아니라 **이번 라운드에 남은 횟수**다.
+ * 가드를 펼치고 있는 동안에는 그 자리에 남은 지속 시간을 막대로 보여 준다.
+ */
+function drawGuard(ctx: CanvasRenderingContext2D, p: PlayerSnap, x: number, y: number, w: number): void {
+  if (p.block_timer > 0) {
+    drawBar(ctx, x, y, w, 3, p.block_timer / Math.max(1, p.block_duration), '#00e5ff');
+    return;
+  }
+  const max = Math.max(1, p.block_uses_max);
+  const gap = 2;
+  const pw = (w - gap * (max - 1)) / max;
+  for (let i = 0; i < max; i += 1) {
+    ctx.fillStyle = i < p.block_uses ? '#4dabf7' : 'rgba(255,255,255,0.14)';
+    ctx.fillRect(x + i * (pw + gap), y, pw, 3);
+  }
 }
 
 /** 상태이상(침묵/독/냉기) 표시 */
@@ -496,7 +569,7 @@ function drawPlayer(
   const angle = Math.atan2(p.aim.y - cy, p.aim.x - cx);
 
   // 가드 원호 (조준 방향으로 펼쳐짐)
-  if (p.blocking && p.block_meter > 0) {
+  if (p.blocking) {
     ctx.save();
     ctx.strokeStyle = 'rgba(0, 229, 255, 0.9)';
     ctx.lineWidth = 4;
@@ -531,7 +604,7 @@ function drawPlayer(
   // 머리 위 HP / 가드 / 닉네임
   const barY = ly - 14;
   drawBar(ctx, lx, barY, w, 6, p.hp / Math.max(1, p.max_hp), isMe ? '#00e5ff' : '#ff2e97');
-  drawBar(ctx, lx, barY + 8, w, 3, p.block_meter / Math.max(1, p.block_meter_max), '#4dabf7');
+  drawGuard(ctx, p, lx, barY + 8, w);
 
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
   ctx.font = 'bold 11px system-ui, sans-serif';
@@ -626,7 +699,8 @@ export function renderFrame(
     drawPlayer(ctx, p, l.x, l.y, p.id === myId, t);
   }
 
-  // 먼지는 캐릭터 위에 얹는다(천장에 붙어 있어도 가려지지 않게).
+  // 먼지·폭발은 캐릭터 위에 얹는다(천장에 붙어 있거나 몸에 가려도 보여야 한다).
+  drawBlasts(ctx, snap);
   drawDust(ctx, t, dt);
   drawMuzzles(ctx, t);
 }
