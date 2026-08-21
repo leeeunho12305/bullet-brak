@@ -11,7 +11,7 @@ ACCEL = 0.8
 
 MAX_HP = 120.0
 PLAYER_SIZE = 30.0
-PLAYER_SPEED = 5.0
+PLAYER_SPEED = 4.0
 JUMP_POWER = -16.0
 BASE_COOLDOWN = 15.0
 STRONG_COOLDOWN = 180.0
@@ -102,17 +102,17 @@ COINS_MATCH_WIN = 100
 #   reaction     : 플레이어를 다시 조준하기까지의 지연(틱) — 클수록 굼뜨다
 BOT_TIERS: dict[str, dict[str, float]] = {
     "dummy": {
-        "hp": 70.0, "speed": 2.6, "jump_power": -13.0,
+        "hp": 70.0, "speed": 2.1, "jump_power": -13.0,
         "fire_cooldown": 0.0, "damage": 0.0, "range": 0.0,
         "aim_error": 0.0, "lead": 0.0, "dodge": 0.0, "reaction": 0.0,
     },
     "rookie": {
-        "hp": 100.0, "speed": 3.4, "jump_power": -14.0,
+        "hp": 100.0, "speed": 2.7, "jump_power": -14.0,
         "fire_cooldown": 100.0, "damage": 7.0, "range": 420.0,
         "aim_error": 0.20, "lead": 0.0, "dodge": 0.12, "reaction": 24.0,
     },
     "veteran": {
-        "hp": 140.0, "speed": 4.4, "jump_power": -15.0,
+        "hp": 140.0, "speed": 3.5, "jump_power": -15.0,
         "fire_cooldown": 60.0, "damage": 10.0, "range": 640.0,
         "aim_error": 0.06, "lead": 1.0, "dodge": 0.45, "reaction": 10.0,
     },
