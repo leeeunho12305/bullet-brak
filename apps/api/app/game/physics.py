@@ -87,6 +87,30 @@ def entity_hit(bullet, entity: Entity) -> bool:
     )
 
 
+def apply_knockback(
+    entity: Entity,
+    dx: float,
+    dy: float,
+    power: float,
+    lift: float = C.KNOCKBACK_LIFT,
+    pop: float = C.HIT_POP,
+) -> None:
+    """(dx, dy) 방향으로 `entity` 를 민다. 위로 뜨는 양만 상한을 둔다.
+
+    수평은 마음껏 밀어도 되지만(넉백의 요점이다) 수직은 묶어야 한다. 예전에는 명중 한 번마다
+    `vy -= 4` 를 그냥 더해서, 산탄 4알·연발 3발이 한꺼번에 맞으면 -16 ~ -48 이 쌓였다 —
+    점프(-16)보다 높이 솟구치는 "갑자기 높이 점프하는" 현상의 정체다. 이미 위로 뜨는 중이면
+    (점프 중 피격) 그 속도를 더 빠르게 만들지도 않는다.
+    """
+    dist = math.hypot(dx, dy) or 1.0
+    entity.vx += (dx / dist) * power
+    before = entity.vy
+    entity.vy += (dy / dist) * power * lift - pop
+    limit = min(before, -C.MAX_HIT_LIFT)
+    if entity.vy < limit:
+        entity.vy = limit
+
+
 def entities_in_radius(
     room: "Room", x: float, y: float, radius: float
 ) -> list[tuple[Entity, float, float, float]]:
@@ -154,8 +178,9 @@ def apply_explosion(
             continue
         power = 1.0 - distance / radius
         target.hp -= damage * power
-        target.vx += (dx / distance) * knockback * power
-        target.vy += (dy / distance) * knockback * power
+        # 폭발은 폭심지 반대 방향으로 온전히 민다(lift=1.0). 위로 뜨는 양은
+        # apply_knockback 이 MAX_HIT_LIFT 로 묶어서 연쇄 폭발에 하늘로 쏘이지 않게 한다.
+        apply_knockback(target, dx, dy, knockback * power, lift=1.0, pop=0.0)
         if target.hp > 0:
             continue
         if target.id in room.bots:

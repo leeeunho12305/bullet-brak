@@ -334,3 +334,322 @@ async def test_bad_token_falls_back_to_anonymous(db) -> None:
     from app.api.ws import _load_identity
 
     assert await _load_identity("쓰레기토큰") is None
+
+
+# --------------------------------------------------------------------------
+# 로그인 — 아이디 / 비밀번호
+# --------------------------------------------------------------------------
+
+
+def test_login_id_normalizes_case() -> None:
+    """대소문자를 구분하면 "만들 때와 다르게 쳤다"는 이유로 못 들어오게 된다."""
+    assert account_service.normalize_login_id("MinSu_99") == "minsu_99"
+    assert account_service.normalize_login_id("  minsu  ") == "minsu"
+
+
+def test_login_id_rejects_bad_shapes() -> None:
+    assert account_service.normalize_login_id("ab") is None  # 너무 짧다
+    assert account_service.normalize_login_id("9minsu") is None  # 숫자로 시작
+    assert account_service.normalize_login_id("min su") is None  # 공백
+    assert account_service.normalize_login_id("민수") is None  # 한글
+    assert account_service.normalize_login_id("a" * 21) is None  # 너무 길다
+    assert account_service.normalize_login_id(None) is None
+
+
+def test_password_rules() -> None:
+    assert account_service.password_problem("f7#kQ2mz") is None
+    assert account_service.password_problem("short7") is not None
+    assert account_service.password_problem("password") is not None  # 흔한 값
+    assert account_service.password_problem("aaaaaaaa") is not None  # 한 글자 반복
+    # 아이디와 같은 비밀번호는 아이디를 아는 사람에게 그냥 열어 주는 것이다.
+    assert account_service.password_problem("minsu123", "minsu123") is not None
+
+
+async def test_password_is_hashed_not_stored(db) -> None:
+    async with db_session.session_scope() as s:
+        account, _ = await account_service.create_anonymous(s)
+        ok, reason, _ = await account_service.set_credentials(s, account, "minsu", "f7#kQ2mz")
+        assert (ok, reason) == (True, "ok")
+        account_id = account.id
+
+    async with db_session.session_scope() as s:
+        row = await s.get(Account, account_id)
+        assert row is not None
+        assert row.password_hash is not None
+        assert "f7#kQ2mz" not in row.password_hash
+        assert row.password_hash.startswith("$2b$")
+
+
+async def test_long_password_is_not_silently_truncated(db) -> None:
+    """bcrypt 는 72바이트에서 자른다. 한글은 글자당 3바이트라 24자만 넘어도 걸린다.
+
+    앞부분이 같고 뒤 한 글자만 다른 두 비밀번호가 서로 통과하면 안 된다.
+    """
+    base = "가나다라마바사아자차카타파하거너더러머버서어" * 2  # 44자 = 132바이트
+    async with db_session.session_scope() as s:
+        account, _ = await account_service.create_anonymous(s)
+        await account_service.set_credentials(s, account, "minsu", base + "끝A")
+
+    async with db_session.session_scope() as s:
+        assert await account_service.login(s, "minsu", base + "끝B") is None
+        assert await account_service.login(s, "minsu", base + "끝A") is not None
+
+
+async def test_login_returns_a_new_device_token(db) -> None:
+    """로그인의 결과물은 세션이 아니라 이 기기의 디바이스 토큰이다."""
+    async with db_session.session_scope() as s:
+        account, first_token = await account_service.create_anonymous(s, seed_coins=300)
+        await account_service.set_credentials(s, account, "minsu", "f7#kQ2mz")
+        account_id = account.id
+
+    async with db_session.session_scope() as s:
+        result = await account_service.login(s, "minsu", "f7#kQ2mz", label="다른 기기")
+        assert result is not None
+        account, second_token = result
+        assert account.id == account_id
+        assert account.coins == 300  # 코인이 그대로 따라온다
+        assert second_token != first_token
+
+    # 두 토큰이 모두 살아 있어야 한다 — 기기 두 대를 동시에 쓰는 게 정상이다.
+    async with db_session.session_scope() as s:
+        first = await account_service.resolve_token(s, first_token)
+        second = await account_service.resolve_token(s, second_token)
+        assert first is not None and first.id == account_id
+        assert second is not None and second.id == account_id
+
+
+async def test_login_rejects_wrong_password(db) -> None:
+    async with db_session.session_scope() as s:
+        account, _ = await account_service.create_anonymous(s)
+        await account_service.set_credentials(s, account, "minsu", "f7#kQ2mz")
+
+    async with db_session.session_scope() as s:
+        assert await account_service.login(s, "minsu", "f7#kQ2mZ") is None
+        assert await account_service.login(s, "nobody", "f7#kQ2mz") is None
+
+
+async def test_login_id_is_taken_by_only_one_account(db) -> None:
+    async with db_session.session_scope() as s:
+        first, _ = await account_service.create_anonymous(s)
+        await account_service.set_credentials(s, first, "minsu", "f7#kQ2mz")
+
+    async with db_session.session_scope() as s:
+        second, _ = await account_service.create_anonymous(s)
+        ok, reason, _ = await account_service.set_credentials(s, second, "MINSU", "zQ8!wp3v")
+        assert (ok, reason) == (False, "taken")
+
+
+async def test_changing_own_password_keeps_the_id(db) -> None:
+    """같은 아이디로 다시 부르는 건 비밀번호 변경이다 — taken 이 되면 안 된다."""
+    async with db_session.session_scope() as s:
+        account, _ = await account_service.create_anonymous(s)
+        await account_service.set_credentials(s, account, "minsu", "f7#kQ2mz")
+        ok, reason, _ = await account_service.set_credentials(s, account, "minsu", "zQ8!wp3v")
+        assert (ok, reason) == (True, "ok")
+
+    async with db_session.session_scope() as s:
+        assert await account_service.login(s, "minsu", "f7#kQ2mz") is None  # 옛 비번은 죽는다
+        assert await account_service.login(s, "minsu", "zQ8!wp3v") is not None
+
+
+# --------------------------------------------------------------------------
+# 인계 코드
+# --------------------------------------------------------------------------
+
+
+def test_code_normalization_forgives_human_typing() -> None:
+    """하이픈·소문자·헷갈리는 글자(O/I/L)를 사용자가 정확히 칠 거라 기대하지 않는다."""
+    canonical = account_service.normalize_code("K7M2-9QPX-3W5B")
+    assert canonical == "K7M29QPX3W5B"
+    assert account_service.normalize_code("k7m2 9qpx 3w5b") == canonical
+    # O -> 0, I/L -> 1 로 되돌린다(알파벳에 없는 글자라 정상 코드를 망가뜨리지 않는다).
+    assert account_service.normalize_code("OABI2345678Z") == "0AB12345678Z"
+
+
+def test_code_normalization_rejects_bad_length_or_letters() -> None:
+    assert account_service.normalize_code("K7M2-9QPX") is None  # 짧다
+    assert account_service.normalize_code("K7M29QPX3W5BX") is None  # 길다
+    assert account_service.normalize_code("K7M29QPX3W5U") is None  # U 는 알파벳에 없다
+    assert account_service.normalize_code(None) is None
+
+
+def test_issued_code_is_readable_and_valid() -> None:
+    code = account_service.issue_code()
+    assert code.count("-") == 2 and len(code) == 14  # "XXXX-XXXX-XXXX"
+    assert account_service.normalize_code(code) is not None
+
+
+async def test_recovery_code_is_never_stored_in_plaintext(db) -> None:
+    async with db_session.session_scope() as s:
+        account, _ = await account_service.create_anonymous(s)
+        code = await account_service.issue_recovery_code(s, account)
+        account_id = account.id
+
+    async with db_session.session_scope() as s:
+        row = await s.get(Account, account_id)
+        assert row is not None
+        assert row.recovery_code_hash is not None
+        assert row.recovery_code_hash != code.replace("-", "")
+        assert len(row.recovery_code_hash) == 64
+
+
+async def test_redeem_code_links_a_new_device(db) -> None:
+    async with db_session.session_scope() as s:
+        account, _ = await account_service.create_anonymous(s, seed_coins=500)
+        code = await account_service.issue_recovery_code(s, account)
+        account_id = account.id
+
+    async with db_session.session_scope() as s:
+        result = await account_service.redeem_recovery_code(s, code.lower(), label="폰")
+        assert result is not None
+        found, token = result
+        assert found.id == account_id
+        assert found.coins == 500
+        resolved = await account_service.resolve_token(s, token)
+        assert resolved is not None and resolved.id == account_id
+
+
+async def test_code_survives_being_used(db) -> None:
+    """기기를 셋, 넷 붙일 수 있어야 한다 — 코드는 1회용이 아니다."""
+    async with db_session.session_scope() as s:
+        account, _ = await account_service.create_anonymous(s)
+        code = await account_service.issue_recovery_code(s, account)
+
+    async with db_session.session_scope() as s:
+        assert await account_service.redeem_recovery_code(s, code) is not None
+        assert await account_service.redeem_recovery_code(s, code) is not None
+
+
+async def test_reissuing_kills_the_previous_code(db) -> None:
+    """재발급이 곧 유출됐을 때의 폐기 수단이다."""
+    async with db_session.session_scope() as s:
+        account, _ = await account_service.create_anonymous(s)
+        old = await account_service.issue_recovery_code(s, account)
+        new = await account_service.issue_recovery_code(s, account)
+        assert old != new
+
+    async with db_session.session_scope() as s:
+        assert await account_service.redeem_recovery_code(s, old) is None
+        assert await account_service.redeem_recovery_code(s, new) is not None
+
+
+async def test_unknown_code_is_rejected(db) -> None:
+    async with db_session.session_scope() as s:
+        assert await account_service.redeem_recovery_code(s, "ZZZZ-ZZZZ-ZZZZ") is None
+        assert await account_service.redeem_recovery_code(s, "형식이 틀린 값") is None
+
+
+# --------------------------------------------------------------------------
+# REST — 로그인 / 인계 코드
+# --------------------------------------------------------------------------
+
+
+async def test_signup_promotes_the_current_account(client) -> None:
+    """회원가입 화면이 따로 없다. 쓰던 익명 계정에 아이디/비밀번호를 얹는다."""
+    created = await client.post("/api/auth/anon", json={"nickname": "쪼꼬", "seed_coins": 250})
+    token = created.json()["token"]
+    auth = {"Authorization": f"Bearer {token}"}
+
+    res = await client.post(
+        "/api/me/credentials", headers=auth, json={"login_id": "choco", "password": "f7#kQ2mz"}
+    )
+    assert res.status_code == 200
+    assert res.json()["ok"] is True
+    assert res.json()["login_id"] == "choco"
+
+    me = await client.get("/api/me", headers=auth)
+    assert me.json()["login_id"] == "choco"
+    assert me.json()["coins"] == 250  # 승격이지 새 계정이 아니다
+
+
+async def test_login_from_another_device_keeps_everything(client) -> None:
+    created = await client.post("/api/auth/anon", json={"nickname": "쪼꼬", "seed_coins": 250})
+    first = created.json()["token"]
+    await client.post(
+        "/api/me/credentials",
+        headers={"Authorization": f"Bearer {first}"},
+        json={"login_id": "choco", "password": "f7#kQ2mz"},
+    )
+
+    # 다른 기기 — 토큰이 하나도 없는 상태에서 아이디/비번만으로 들어온다.
+    res = await client.post("/api/auth/login", json={"login_id": "CHOCO", "password": "f7#kQ2mz"})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["token"] != first
+    assert body["account"]["coins"] == 250
+    assert body["account"]["id"] == created.json()["account"]["id"]
+
+
+async def test_login_failure_does_not_reveal_which_half_was_wrong(client) -> None:
+    created = await client.post("/api/auth/anon", json={})
+    await client.post(
+        "/api/me/credentials",
+        headers={"Authorization": f"Bearer {created.json()['token']}"},
+        json={"login_id": "choco", "password": "f7#kQ2mz"},
+    )
+
+    wrong_pw = await client.post(
+        "/api/auth/login", json={"login_id": "choco", "password": "nope1234"}
+    )
+    no_such_id = await client.post(
+        "/api/auth/login", json={"login_id": "nobody", "password": "f7#kQ2mz"}
+    )
+    # 사유가 갈리면 그 창구가 "이 아이디는 존재한다"를 알려주는 도구가 된다.
+    assert wrong_pw.json() == no_such_id.json() == {
+        "ok": False,
+        "reason": "invalid_credentials",
+        "token": None,
+        "account": None,
+    }
+
+
+async def test_weak_password_is_refused_with_a_reason(client) -> None:
+    created = await client.post("/api/auth/anon", json={})
+    res = await client.post(
+        "/api/me/credentials",
+        headers={"Authorization": f"Bearer {created.json()['token']}"},
+        json={"login_id": "choco", "password": "password"},
+    )
+    body = res.json()
+    assert (body["ok"], body["reason"]) == (False, "weak_password")
+    assert body["message"]  # 사용자에게 보여줄 문장이 비어 있으면 안 된다
+
+
+async def test_recovery_code_round_trip_over_rest(client) -> None:
+    created = await client.post("/api/auth/anon", json={"seed_coins": 70})
+    auth = {"Authorization": f"Bearer {created.json()['token']}"}
+
+    issued = await client.post("/api/me/recovery-code", headers=auth)
+    assert issued.status_code == 201
+    code = issued.json()["code"]
+
+    # 코드는 발급 응답에서만 나온다 — 프로필에는 있다/없다만 실린다.
+    me = await client.get("/api/me", headers=auth)
+    assert me.json()["has_recovery_code"] is True
+    assert code not in me.text
+
+    res = await client.post("/api/auth/redeem", json={"code": code.lower()})
+    assert res.json()["ok"] is True
+    assert res.json()["account"]["coins"] == 70
+
+
+async def test_login_attempts_are_rate_limited(client) -> None:
+    from app.api.auth import login_limiter
+
+    login_limiter.reset()
+    try:
+        for _ in range(login_limiter.limit):
+            res = await client.post(
+                "/api/auth/login", json={"login_id": "nobody", "password": "f7#kQ2mz"}
+            )
+            assert res.status_code == 200  # 틀린 건 장애가 아니라 정상 응답이다
+
+        blocked = await client.post(
+            "/api/auth/login", json={"login_id": "nobody", "password": "f7#kQ2mz"}
+        )
+        assert blocked.status_code == 429
+        assert blocked.headers.get("Retry-After")
+    finally:
+        # 리미터는 프로세스 전역이라 치우지 않으면 다음 테스트가 막힌다.
+        login_limiter.reset()

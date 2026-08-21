@@ -86,7 +86,10 @@ export interface PlayerStats {
   damage_mult: number;
   max_hp: number;
   speed: number;
+  /** 사격 간격(틱). 화면에는 cooldown_seconds 를 쓴다. */
   cooldown: number;
+  /** 같은 값을 초로 환산한 것. 서버가 계산한다(틱은 플레이어에게 의미가 없다). */
+  cooldown_seconds: number;
   bullet_speed: number;
   bullet_size: number;
   bounces: number;
@@ -319,6 +322,8 @@ export type ClientMessage =
   | { type: 'strong_start' }
   | { type: 'strong_release' }
   | { type: 'pick_card'; card_id: string }
+  /** 훈련장 전용. 싸우는 중에 카드 목록을 직접 연다(서버가 mode/phase 로 거른다). */
+  | { type: 'open_cards' }
   | { type: 'chat'; text: string }
   | { type: 'start_game' }
   | { type: 'restart' }

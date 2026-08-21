@@ -12,8 +12,15 @@ from app.game import constants as C
 from app.game.models import Bullet, Player
 
 
-def falloff_at(distance: float) -> float:
-    """이동 거리에 따른 대미지 배율. 0px -> 1.5배, 600px 이상 -> 0.4배 (선형)."""
+def falloff_at(distance: float, scatter: bool = False) -> float:
+    """이동 거리에 따른 대미지 배율. 0px -> 1.5배, 600px 이상 -> 0.4배 (선형).
+
+    `scatter=True`(산탄 한 알)는 훨씬 가파른 곡선을 쓴다 — 260px 만 가도 0.15배다.
+    알이 4개라 근접에서는 어차피 합계가 크므로, 거리로 값을 치르게 하는 쪽이 맞다.
+    """
+    if scatter:
+        t = min(max(distance, 0.0) / C.SCATTER_FALLOFF_RANGE, 1.0)
+        return C.DAMAGE_CLOSE_MULT + (C.SCATTER_FAR_MULT - C.DAMAGE_CLOSE_MULT) * t
     t = min(max(distance, 0.0) / C.DAMAGE_FALLOFF_RANGE, 1.0)
     return C.DAMAGE_CLOSE_MULT + (C.DAMAGE_FAR_MULT - C.DAMAGE_CLOSE_MULT) * t
 
@@ -23,7 +30,8 @@ def bullet_falloff(bullet: Bullet) -> float:
 
     STEADY SHOT 은 이 감쇠를 절반만 받는다 — 근접에서 덜 세지는 대신 멀리서도 덜 약해진다.
     """
-    mult = falloff_at(math.hypot(bullet.x - bullet.start_x, bullet.y - bullet.start_y))
+    distance = math.hypot(bullet.x - bullet.start_x, bullet.y - bullet.start_y)
+    mult = falloff_at(distance, bullet.has("scatter"))
     if bullet.has("steady_shot"):
         return 1.0 + (mult - 1.0) * 0.5
     return mult
@@ -35,10 +43,11 @@ def base_shot_damage(player: Player) -> float:
 
 
 def damage_table(player: Player) -> list[dict[str, float]]:
-    """Tab 오버레이용 거리별 대미지 표."""
+    """Tab 오버레이용 거리별 대미지 표. 산탄이면 알 하나 기준(가파른 곡선)이다."""
     base = base_shot_damage(player)
+    scatter = player.buckshot > 0
     return [
-        {"distance": float(d), "damage": round(base * falloff_at(d), 1)}
+        {"distance": float(d), "damage": round(base * falloff_at(d, scatter), 1)}
         for d in C.DAMAGE_TABLE_DISTANCES
     ]
 
@@ -51,6 +60,8 @@ def stat_summary(player: Player) -> dict[str, float]:
         "max_hp": round(player.max_hp, 1),
         "speed": round(player.speed, 2),
         "cooldown": round(player.max_cooldown, 1),
+        # 화면에는 초로 보여 준다 — "15틱"은 아무에게도 감이 오지 않는다.
+        "cooldown_seconds": round(player.max_cooldown / C.TICK_RATE, 2),
         "bullet_speed": round(C.BASE_BULLET_SPEED * player.bullet_speed_mult, 2),
         "bullet_size": round(player.bullet_size, 1),
         "bounces": float(player.max_bounces),

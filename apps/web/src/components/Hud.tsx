@@ -195,6 +195,12 @@ function TrainingCenter({ t }: { t: TrainingSnap }): JSX.Element {
   if (t.state === 'wave_clear') banner = `웨이브 ${t.wave} 클리어! 카드 선택 ${seconds}초`;
   else if (t.state === 'respawning') banner = `부활까지 ${seconds}초`;
 
+  // 훈련장은 시험해 보는 곳이다 — 웨이브를 깰 때까지 기다리지 않고 아무 때나 카드를 연다.
+  // 서버가 mode/phase 를 다시 검사하므로(engine.open_training_cards) 여기서는 힌트만 준다.
+  const openCards = (): void => {
+    if (net.isOpen()) net.send({ type: 'open_cards' });
+  };
+
   return (
     <div className="hud-score hud-training">
       <span className="hud-score-num">W{t.wave}</span>
@@ -205,6 +211,15 @@ function TrainingCenter({ t }: { t: TrainingSnap }): JSX.Element {
         <span title="사망">☠ {t.deaths}</span>
       </div>
       <div className="hud-score-hint">{banner ?? `최고 W${t.best_wave}`}</div>
+      <button
+        type="button"
+        className="hud-cards-btn"
+        disabled={t.state !== 'fighting'}
+        title="훈련장에서는 아무 때나 원하는 카드를 가져올 수 있습니다"
+        onClick={openCards}
+      >
+        🃏 카드 고르기
+      </button>
     </div>
   );
 }

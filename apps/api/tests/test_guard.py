@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from app.game import bullets, cards, constants as C, engine, sim
@@ -112,6 +114,55 @@ def test_empower_boosts_only_the_first_shot_after_a_guard() -> None:
 
 
 # --------------------------------------------------------------------------
+# 가드 반사
+# --------------------------------------------------------------------------
+
+
+def test_a_reflected_bullet_actually_flies_back() -> None:
+    """예전에는 반사가 도탄으로 세어져서, 도탄 카드가 없는 보통 탄(max_bounces=0)이
+    반사되자마자 `bounces > max_bounces` 검사에 걸려 다음 틱에 사라졌다 —
+    "막아도 되돌아가는 탄이 안 보인다"의 정체다."""
+    room, blocker = _room()
+    attacker = Player(id="b", x=700.0, y=0.0)  # 되돌아간 탄의 경로에서 비켜 세운다
+    room.players["b"] = attacker
+    blocker.blocking = True
+
+    bullet = bullets.spawn_bullet(room, attacker, math.pi)  # 왼쪽(blocker) 으로
+    bullet.x, bullet.y = blocker.cx, blocker.cy
+    room.bullets = [bullet]
+
+    bullets._hit_players(room, bullet)
+    assert bullet.owner == blocker.id
+    assert bullet.vx > 0, "반사했는데 방향이 그대로다"
+
+    for _ in range(20):
+        bullets.update_bullets(room)
+
+    assert bullet.active, "반사한 탄이 곧바로 사라졌다"
+    assert bullet.x > blocker.cx + 100, "반사한 탄이 날아가지 않았다"
+
+
+def test_a_reflected_bullet_can_hit_the_original_shooter() -> None:
+    room, blocker = _room()
+    attacker = Player(id="b", x=400.0, y=300.0)
+    room.players["b"] = attacker
+    blocker.blocking = True
+
+    bullet = bullets.spawn_bullet(room, attacker, math.pi)
+    bullet.x, bullet.y = blocker.cx, blocker.cy
+    room.bullets = [bullet]
+    bullets._hit_players(room, bullet)
+
+    before = attacker.hp
+    for _ in range(60):
+        bullets.update_bullets(room)
+        if attacker.hp < before:
+            break
+
+    assert attacker.hp < before, "반사한 탄이 쏜 사람에게 닿지 않았다"
+
+
+# --------------------------------------------------------------------------
 # 가드 장판
 # --------------------------------------------------------------------------
 
@@ -139,6 +190,40 @@ def test_healing_field_does_not_heal_the_enemy_standing_in_it() -> None:
         sim.update_zones(room)
 
     assert enemy.hp == 50.0, "내 회복 장판이 상대까지 살려 줬다"
+
+
+def test_healing_field_does_not_heal_an_enemy_bot_either() -> None:
+    """훈련장에서도 같다 — 내 회복 장판은 나만 회복한다."""
+    from app.game.bots import create_bot
+
+    room, p = _room()
+    room.mode = "training"
+    bot = create_bot(room, "dummy")
+    bot.x, bot.y = p.x, p.y
+    bot.hp = 20.0
+    room.zones.append(Zone("heal", p.cx, p.cy, 120.0, 60, p.id))
+
+    for _ in range(60):
+        sim.update_zones(room)
+
+    assert bot.hp == 20.0, "내 회복 장판이 봇까지 살려 줬다"
+
+
+def test_radiance_on_hit_lands_under_the_shooter_not_the_victim() -> None:
+    """radiance 는 소유자만 회복하는 장판이다. 맞은 쪽 발밑에 깔면 회복은 안 되면서
+    "회복 장판이 적을 살린다"는 그림만 남는다."""
+    room, shooter = _room()
+    victim = Player(id="b", x=600.0, y=300.0)
+    room.players["b"] = victim
+    cards.apply_card(shooter, "radiance")
+
+    bullet = bullets.spawn_bullet(room, shooter, 0.0)
+    bullet.x, bullet.y = victim.cx, victim.cy
+    bullets._damage_player(room, bullet, victim)
+
+    zone = next(z for z in room.zones if z.type == "radiance")
+    assert (zone.x, zone.y) == (shooter.cx, shooter.cy)
+    assert zone.owner == shooter.id
 
 
 def test_implode_pulls_an_enemy_toward_the_center() -> None:

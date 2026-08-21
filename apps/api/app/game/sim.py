@@ -110,10 +110,17 @@ def update_player(room: Room, p: Player) -> None:
 
     # 이동 / 중력 / 경계 / 발판 (TASTE OF BLOOD 는 여기서 속도를 올린다)
     speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0) * (1.35 if p.blood_timer > 0 else 1.0)
-    p.vx = clamp(p.vx, -speed, speed)
-    if not inp.left and not inp.right:
-        # 빙판 위에서는 거의 멈추지 못한다(직전 틱의 접촉 판정을 쓴다).
-        p.vx *= blocks.ICE_FRICTION if p.on_ice else C.FRICTION
+    over = abs(p.vx) - speed
+    if over > C.KNOCKBACK_MIN:
+        # 이동 입력으로 낼 수 있는 속도는 speed 까지다. 그보다 빠른 건 넉백/폭발로 얻은
+        # 속도이므로 clamp 로 잘라내지도, 마찰로 지우지도 않는다. 예전에는 둘 다 했기 때문에
+        # 넉백이 다음 틱에 통째로 사라졌고, 그래서 낙사 맵 말고는 아무 쓸모가 없었다.
+        p.vx = math.copysign(speed + over * C.KNOCKBACK_DECAY, p.vx)
+    else:
+        p.vx = clamp(p.vx, -speed, speed)
+        if not inp.left and not inp.right:
+            # 빙판 위에서는 거의 멈추지 못한다(직전 틱의 접촉 판정을 쓴다).
+            p.vx *= blocks.ICE_FRICTION if p.on_ice else C.FRICTION
 
     # 올라타 있던 이동발판을 따라간다(발판은 engine 이 이미 이번 틱 위치로 옮겨 뒀다).
     blocks.carry(p, room)
@@ -152,10 +159,10 @@ def update_player(room: Room, p: Player) -> None:
 
 
 def _guard_effects(room: Room, p: Player, started: bool) -> None:
-    """가드 중 발동하는 카드 효과(텔레포트/실드차지/장판/톱날 등).
+    """가드 중 발동하는 카드 효과(실드차지/장판/톱날 등).
 
-    장판·톱날·순간이동은 **가드를 시작한 그 틱에 한 번만** 만든다. 예전처럼 가드가
-    유지되는 내내 뿌리면 같은 장판이 겹겹이 쌓여 회복량과 끌어당김이 몇 배로 뻥튀기된다.
+    장판과 톱날은 **가드를 시작한 그 틱에 한 번만** 만든다. 예전처럼 가드가 유지되는 내내
+    뿌리면 같은 장판이 겹겹이 쌓여 회복량과 끌어당김이 몇 배로 뻥튀기된다.
     """
     cx, cy = p.cx, p.cy
     dx, dy = p.aim.x - cx, p.aim.y - cy
@@ -173,9 +180,6 @@ def _guard_effects(room: Room, p: Player, started: bool) -> None:
 
     if not started:
         return
-    if p.has("teleport"):
-        p.x = clamp(cx + ux * 110, 0.0, C.WIDTH - p.width)
-        p.y = clamp(cy + uy * 50, 0.0, C.HEIGHT - p.height)
     for flag, ztype, radius, duration in GUARD_ZONES:
         if p.has(flag):
             room.zones.append(Zone(ztype, cx, cy, radius, duration, p.id))

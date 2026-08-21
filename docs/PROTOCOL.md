@@ -27,14 +27,23 @@
 
 ### 1.1 계정 (`/api/auth`, `/api/me`)
 
-로그인 화면이 없다. 브라우저가 **디바이스 토큰**(불투명 난수)을 `localStorage.bulletBrakToken` 에
-들고 있고, 서버는 그 sha256 해시로 계정을 찾는다. 평문 토큰은 서버에 저장되지 않는다.
+**신원의 단위는 언제나 디바이스 토큰이다.** 브라우저가 불투명 난수 하나를
+`localStorage.bulletBrakToken` 에 들고 있고, 서버는 그 sha256 해시로 계정을 찾는다.
+평문 토큰은 서버에 저장되지 않는다.
+
+앱을 처음 열면 **익명 계정이 자동으로 생긴다**(회원가입 화면이 없다). 로그인 수단은
+그 위에 나중에 얹는 선택지이며, 어느 경로로 로그인하든 결과물은 똑같이
+"이 기기의 디바이스 토큰 한 개"다 — 세션도 쿠키도 없고, **WS 입장 경로는 전혀 바뀌지 않는다.**
 
 | Method | Path | Auth | Body | Response |
 |---|---|---|---|---|
 | POST | `/api/auth/anon` | - | `{"nickname":str,"customization":Customization,"seed_coins":int,"seed_items":[str]}` | 201 `{"token":str,"account":Account}` |
+| POST | `/api/auth/login` | - | `{"login_id":str,"password":str}` | `AuthResult` |
+| POST | `/api/auth/redeem` | - | `{"code":str}` | `AuthResult` |
 | GET | `/api/me` | Bearer | - | `Account` |
 | PATCH | `/api/me` | Bearer | `{"nickname"?:str,"customization"?:Customization}` | `Account` |
+| POST | `/api/me/credentials` | Bearer | `{"login_id":str,"password":str}` | `{"ok":bool,"reason":str,"login_id":str\|null,"message":str}` |
+| POST | `/api/me/recovery-code` | Bearer | - | 201 `{"code":str,"issued_at":datetime}` |
 | POST | `/api/me/items` | Bearer | `{"item_key":str}` | `{"ok":bool,"reason":str,"coins":int,"owned_items":[str]}` |
 
 ```jsonc
@@ -46,16 +55,65 @@
   "coins": 250,          // 서버 권위. PATCH 로 바꿀 수 없다
   "level": 1, "xp": 0,
   "matches_played": 0, "matches_won": 0,
-  "owned_items": ["eyes:3"]
+  "owned_items": ["eyes:3"],
+  "login_id": "minsu99",     // null 이면 아직 이 기기에만 묶인 계정
+  "has_recovery_code": true  // 있다/없다만. 코드 평문은 절대 여기 실리지 않는다
 }
+
+// AuthResult — 로그인(/auth/login)과 인계 코드(/auth/redeem)의 공통 응답
+{ "ok": true,  "reason": "ok", "token": "...", "account": { /* Account */ } }
+{ "ok": false, "reason": "invalid_credentials", "token": null, "account": null }
 ```
 
 - 토큰은 `Authorization: Bearer <token>` 헤더로만 보낸다. **쿼리스트링에 싣지 않는다**(액세스 로그에 남는다).
-- `token` 평문은 발급 응답에서 **한 번만** 나온다. 잃으면 그 계정으로 못 돌아온다.
+- `token` 평문은 응답에서 **한 번만** 나온다. 잃어도 아이디나 인계 코드가 있으면 되찾을 수 있다.
 - `seed_coins` / `seed_items` 는 localStorage 시절 잔액·소유를 물려받기 위한 값이다.
   위조 가능한 값이라 `ACCOUNT_SEED_COINS_MAX` 로 잘린다. 이관이 끝나면 0 으로 내린다.
 - **서버에 DB 가 없으면 이 엔드포인트들은 503** 을 돌려준다. 클라이언트는 그때 예전처럼
   localStorage 로만 동작한다(`GET /api/health` 의 `db` 로 미리 알 수 있다).
+
+#### 로그인 (`POST /api/auth/login`, `POST /api/me/credentials`)
+
+```jsonc
+// 1) 아이디/비밀번호 만들기 — 지금 쓰던 계정에 얹는다(승격). 새 계정이 아니라서 코인이 따라온다.
+POST /api/me/credentials   { "login_id": "minsu99", "password": "..." }
+{ "ok": true, "reason": "ok", "login_id": "minsu99", "message": "아이디와 비밀번호를 저장했어요." }
+
+// 2) 다른 기기에서 로그인 — 토큰이 하나도 없는 상태에서 부를 수 있다.
+POST /api/auth/login       { "login_id": "MINSU99", "password": "..." }
+{ "ok": true, "reason": "ok", "token": "<이 기기의 새 디바이스 토큰>", "account": { ... } }
+```
+
+- **아이디는 대소문자를 구분하지 않는다.** 영문 소문자로 시작하는 4~20자(소문자·숫자·밑줄)로
+  정규화해 저장하고 조회한다.
+- 비밀번호는 bcrypt 해시로만 저장한다. **해싱은 워커 스레드에서 돈다** —
+  이 프로세스의 이벤트 루프는 60Hz 틱 루프와 같은 루프라, 동기로 해싱하면 틱이 밀린다
+  (`app/services/passwords.py`).
+- 실패 사유는 `invalid_credentials` 하나로 뭉뚱그린다. "아이디 없음"과 "비번 틀림"을
+  나누면 그 창구가 **아이디 존재 여부를 알려주는 도구**가 된다. 없는 아이디에도 더미 해시로
+  대조해 응답 시간까지 맞춘다.
+- 로그인은 기존 토큰을 회수하지 않는다. 기기 여러 대가 동시에 붙어 있는 게 정상이다.
+- `/auth/login` 과 `/auth/redeem` 은 **IP 기준 10분 10회**로 제한된다. 초과하면 429 +
+  `Retry-After` 헤더다(200 + ok:false 가 아니다 — 차단은 정상 결과가 아니다).
+
+#### 인계 코드 (`POST /api/me/recovery-code`, `POST /api/auth/redeem`)
+
+비밀번호를 잊었을 때의 우회로다. 이메일이 없는 구조라 복구 경로가 하나는 있어야 한다.
+
+```jsonc
+POST /api/me/recovery-code        // -> 201
+{ "code": "K7M2-9QPX-3W5B", "issued_at": "2026-08-21T09:00:00Z" }
+
+POST /api/auth/redeem   { "code": "k7m2 9qpx 3w5b" }   // 하이픈·대소문자 상관없음
+{ "ok": true, "reason": "ok", "token": "...", "account": { ... } }
+```
+
+- 코드는 Crockford Base32 12자(≈60비트)다. 알파벳에 `I·L·O·U` 가 없고, 입력할 때
+  `O→0` / `I·L→1` 로 되돌려 준다 — 사람이 옮겨 적는 물건이기 때문이다.
+- **평문은 발급 응답에서만 나온다.** 서버는 sha256 해시만 갖고 있어서 다시 보여줄 방법이 없다.
+  `Account.has_recovery_code` 로 있다/없다만 알 수 있다.
+- **소모되지 않는다** — 기기를 셋, 넷 붙일 수 있어야 한다.
+- 계정당 하나다. 재발급하면 **이전 코드는 그 즉시 죽는다.** 그게 곧 유출됐을 때의 폐기 수단이다.
 
 #### 구매 (`POST /api/me/items`)
 
@@ -97,6 +155,7 @@
 | `strong_start` | `{}` | 강공격 차징 시작 |
 | `strong_release` | `{}` | 강공격 발사 |
 | `pick_card` | `{"card_id":str}` | 카드 선택 (패자만 유효) |
+| `open_cards` | `{}` | **훈련장 전용.** 싸우는 중에 카드 목록을 직접 연다. 대전 방·사망 중·웨이브 사이에서는 서버가 무시한다 |
 | `chat` | `{"text":str}` | 채팅 (서버에서 200자 제한만 적용) |
 | `set_map` | `{"map_id":str}` | 방장이 맵 선택 (`waiting`/`finished` 에서만, 방장 아니면 무시). 편집한 배치는 버려진다 |
 | `set_platforms` | `{"platforms":[Platform]}` | 방장의 맵 에디터 저장. 서버가 좌표/종류를 다시 검증하고 못 쓰는 항목은 버린다 (최대 160개, 빈 배치는 거절) |
@@ -248,15 +307,24 @@ Snapshot = {
   배율 = 0px 에서 1.5배 → 600px 이상 0.4배 (선형). 기본 탄(20) 기준 근접 30 / 원거리 8.
   가드 반사 시 반사 지점이 새 기준점이 되고, 위력은 반사한 쪽 공격력 배율로 환산된다.
   공격력 배율은 **발사 시점에 한 번만** 적용한다(명중 시 재적용 금지).
+  **산탄(BUCKSHOT) 탄알은 곡선이 따로다** — `SCATTER_FALLOFF_RANGE`(260px)에서 0.15배까지
+  떨어진다. 알이 네 개라 근접 합계가 크므로, 거리로 값을 치르게 한다.
 - 월드 경계: 좌우 벽과 **천장(`y = 0`)은 막혀 있다**(플레이어/봇 모두 `vy` 가 0으로 끊긴다).
-  바닥만 뚫려 있다 — 낙사가 협곡·부유섬 맵의 규칙이기 때문이다. 탄환은 네 면 모두에서 튕긴다.
+  탄환도 이 세 면에서만 튕긴다. **바닥은 뚫려 있고, 그리로 나간 탄환은 튕기지 않고 사라진다** —
+  협곡·부유섬의 허공에서 벽도 없이 되돌아오면 안 된다.
+- **도탄**: 벽이나 발판에 튕길 때마다 `life` 가 `life_max` 로 초기화된다. 그래야 도탄 카드를
+  여러 장 겹쳤을 때 수명이 먼저 끝나지 않고 실제로 그 횟수만큼 튕긴다.
+  **가드 반사는 도탄으로 세지 않는다**(`bounces` 를 올리지 않고 수명만 되돌린다).
+- **넉백**: `apply_knockback` 하나로만 준다. 수평은 `Bullet.knockback × KNOCKBACK_SCALE` 이고,
+  이동 속도를 넘는 부분은 clamp/마찰이 지우지 않고 `KNOCKBACK_DECAY` 로 천천히 식는다.
+  위로 뜨는 양만 `MAX_HIT_LIFT`(9)로 묶는다 — 산탄·연발이 겹쳐도 점프(16)보다 높이 솟지 않는다.
 - 낙사: `y > HEIGHT + 100` 이면 즉사.
 - 가드: **라운드당 게이지**다(`BLOCK_METER_MAX` = 150, DEFENDER 가 +75).
   누르고 있는 동안만 `BLOCK_DRAIN`(= 150 / 30초 / 60틱) 씩 줄고, 손을 떼면 그 자리에서 멈춘다 —
   언제든 끊었다 다시 쓸 수 있다. 가득 찬 게이지를 계속 눌러 다 쓰면 `BLOCK_DRAIN_SECONDS`(30초).
   SHIELDS UP 은 `block_drain` 을 ×0.7 로 줄인다(같은 게이지로 약 43초).
   라운드 안에서는 회복되지 않고, `reset_round`(훈련장은 `start_wave`/부활)에서만 채워진다.
-  펼쳐진 동안 닿은 총알은 반사된다(×-1.35, 소유권 이전). 가드 장판·톱날·순간이동은
+  펼쳐진 동안 닿은 총알은 반사된다(×-1.35, 소유권 이전, 수명 초기화). 가드 장판과 톱날은
   **가드를 시작한 틱에 한 번만** 생성된다.
 - 폭발(`apply_explosion`)은 **터뜨린 본인에게는 닿지 않는다**. 연출용 `blast` 장판을 남긴다.
 - 강공격: `strong_start`~`strong_release` 차징(0~60), 발사 후 쿨다운 180틱.
@@ -265,7 +333,12 @@ Snapshot = {
     `dummy`(움직이기만 하는 허수아비) / `rookie`(느리게 조준해 사격) / `veteran`(선도 사격 + 회피).
   - 봇은 서로를 쏘지 않는다(같은 봇 소유 탄환은 봇에게 명중 판정하지 않는다).
     봇은 시야가 막히면(플랫폼이 가로막으면) 쏘지 않는다.
-  - 웨이브 전멸 → `wave_clear`(1.5초) → `picking`(카드 5장 중 1장) → 다음 웨이브.
+  - 웨이브 전멸 → `wave_clear`(1.5초) → `picking` → 다음 웨이브.
+  - **카드는 전부 열린다.** 대전은 무작위 5장이지만 훈련장은 `available_cards` 에 카드 전체가
+    실린다(`engine.open_card_pick`). 시험해 보는 곳이지 이기는 곳이 아니기 때문이다.
+    클라이언트는 8장을 넘으면 뒤집기 카드 대신 검색되는 목록으로 그린다.
+  - 싸우는 중에도 `open_cards` 로 직접 열 수 있다. 그렇게 고른 카드는 웨이브를 넘기지 않고
+    하던 판을 그대로 이어 간다(`training.resume_after_pick`).
   - 플레이어 사망 → `respawning`(3초) → 같은 웨이브를 처음부터. 카드와 스탯은 유지한다.
     `deaths` 만 올라가고 매치는 끝나지 않는다.
   - 통계(킬/사망/명중률/누적 대미지/최고 웨이브/생존 시간)는 `Snapshot.training` 으로 내려간다.
@@ -283,6 +356,7 @@ CARDS: list[Card]                      # Card(id, name, desc, category, color, e
 CARD_BY_ID: dict[str, Card]
 def card_infos() -> list[dict]         # REST /api/cards 응답
 def random_cards(n: int = 5) -> list[Card]
+def all_card_ids() -> list[str]         # 훈련장 카드 창(전부 열어 준다)
 def apply_card(player: Player, card_id: str) -> bool
 def reset_card_state(player: Player) -> None
 
@@ -290,6 +364,7 @@ def reset_card_state(player: Player) -> None
 def resolve_platform_collision(entity, rect) -> None
 def bullet_hits_rect(bullet, rect) -> bool
 def apply_explosion(room, x, y, owner_id, damage, radius=90.0, knockback=14.0) -> None
+def apply_knockback(entity, dx, dy, power, lift=..., pop=...) -> None  # 넉백의 유일한 창구
 def clamp(v, lo, hi) -> float
 
 # app/game/bullets.py

@@ -231,6 +231,10 @@ async def _handle(room: Room, player: Player, msg_type: str, payload: Any) -> No
     elif msg_type == "pick_card" and isinstance(payload, PickCardMsg):
         engine.pick_card(room, player.id, payload.card_id)
 
+    elif msg_type == "open_cards":
+        # 훈련장 전용. 대전 방에서 오면 engine 이 조용히 무시한다.
+        engine.open_training_cards(room)
+
     elif msg_type == "chat" and isinstance(payload, ChatMsg):
         message = chat_service.push(room, player.nickname, payload.text)
         if message:

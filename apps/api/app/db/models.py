@@ -60,6 +60,25 @@ class Account(Base):
     matches_played: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     matches_won: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    #: 사용자가 직접 정한 로그인 아이디(소문자로 정규화). 안 만들었으면 NULL 이다 —
+    #: 익명 계정이 기본이고 아이디/비밀번호는 나중에 얹는 선택지다.
+    login_id: Mapped[str | None] = mapped_column(
+        String(32), unique=True, nullable=True, default=None
+    )
+    #: bcrypt 해시. 평문은 물론이고 되돌릴 수 있는 어떤 형태로도 저장하지 않는다.
+    password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
+
+    #: 계정 인계 코드의 sha256 해시. 다른 기기에서 이 코드를 입력하면 디바이스 토큰이
+    #: 하나 더 발급된다(= 로그인). 토큰과 같은 이유로 **평문은 저장하지 않는다** —
+    #: 그래서 한 번 발급한 코드는 다시 보여줄 수 없고, 잊었으면 재발급뿐이다.
+    #: 계정당 하나이며, 재발급하면 이전 코드는 그 즉시 죽는다.
+    recovery_code_hash: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True, default=None
+    )
+    recovery_code_issued_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

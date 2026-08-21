@@ -67,6 +67,13 @@ export interface GameState {
    * accountId === null 만으로 판단하면 부팅 직후 잠깐 참이라 안내가 깜빡인다.
    */
   localOnly: boolean;
+  /**
+   * 사용자가 정한 로그인 아이디. null 이면 이 계정은 아직 이 기기에만 묶여 있다
+   * (= 브라우저 저장소를 지우면 사라진다).
+   */
+  loginId: string | null;
+  /** 인계 코드를 발급받아 뒀는가. 코드 자체는 어디에도 보관하지 않는다. */
+  hasRecoveryCode: boolean;
   /** 서버 계정을 프로필에 반영한다. 코인·소유 아이템은 서버 값이 이긴다. */
   applyAccount(account: AccountResponse): void;
   markLocalOnly(): void;
@@ -104,6 +111,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
   coins: profile.coins,
   accountId: null,
   localOnly: false,
+  loginId: null,
+  hasRecoveryCode: false,
 
   setNickname(v) {
     saveNickname(v);
@@ -141,6 +150,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
       coins: account.coins,
       nickname: account.nickname,
       customization: account.customization,
+      loginId: account.login_id,
+      hasRecoveryCode: account.has_recovery_code,
     });
   },
 

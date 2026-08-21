@@ -215,6 +215,27 @@ function drawBackground(ctx: CanvasRenderingContext2D): void {
 
   ctx.fillStyle = getVignette(ctx);
   ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+  drawArenaBounds(ctx);
+}
+
+/**
+ * 좌우 벽과 천장. 서버에서 실제로 막혀 있는 면이다 — 플레이어도 탄환도 여기서 튕긴다.
+ * 아무것도 그리지 않던 시절에는 "벽도 없는데 탄이 튕긴다"로 읽혔다. **아래쪽은 일부러
+ * 비운다**: 바닥은 뚫려 있고(낙사) 서버도 그쪽으로 나간 탄환은 튕기지 않고 없앤다.
+ */
+function drawArenaBounds(ctx: CanvasRenderingContext2D): void {
+  ctx.save();
+  ctx.strokeStyle = theme.edge;
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(1.5, WORLD_HEIGHT);
+  ctx.lineTo(1.5, 1.5);
+  ctx.lineTo(WORLD_WIDTH - 1.5, 1.5);
+  ctx.lineTo(WORLD_WIDTH - 1.5, WORLD_HEIGHT);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** 블럭 종류별 강조색. types/game.ts 의 BLOCK_INFO 와 같은 색을 쓴다. */

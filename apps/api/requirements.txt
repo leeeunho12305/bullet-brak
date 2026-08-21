@@ -13,3 +13,7 @@ websockets==14.1
 sqlalchemy[asyncio]==2.0.36
 asyncpg==0.30.0
 alembic==1.14.0
+
+# 비밀번호 해싱. C 확장이라 해싱 중 GIL 을 놓는다 —
+# app/services/passwords.py 가 asyncio.to_thread 로 빼서 60Hz 틱 루프를 막지 않는다.
+bcrypt==4.2.1

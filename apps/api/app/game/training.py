@@ -173,12 +173,33 @@ def _tick_wave_clear(room: Room, state: TrainingState) -> None:
     open_card_pick(room)
 
 
-def next_wave(room: Room) -> None:
-    """카드 선택이 끝나면 engine 이 호출한다."""
+def can_open_cards(room: Room) -> bool:
+    """지금 카드 목록을 직접 열어도 되는가(훈련장 전용).
+
+    싸우는 중에만 연다. 웨이브 사이(wave_clear)나 부활 대기(respawning)에는 어차피
+    곧 카드 창이 뜨거나 판이 다시 깔리므로 손대지 않는다.
+    """
+    state = room.training
+    if room.mode != "training" or state is None or room.phase != "playing":
+        return False
+    if state.state != "fighting" or state.wave == 0:
+        return False
+    player = next(iter(room.players.values()), None)
+    return player is not None and player.alive
+
+
+def resume_after_pick(room: Room) -> None:
+    """카드 선택이 끝나면 engine 이 호출한다.
+
+    웨이브를 깨고 받은 카드면 다음 웨이브로 넘어가고, 싸우는 중에 직접 연 카드 창이면
+    (can_open_cards) 그 웨이브를 그대로 이어서 싸운다 — 카드를 고른다고 판이 넘어가면
+    "지금 이 카드가 어떻게 굴러가는지" 를 볼 수가 없다.
+    """
     state = ensure(room)
     if state is None:
         return
-    start_wave(room, state.wave + 1)
+    if state.state == "wave_clear":
+        start_wave(room, state.wave + 1)
 
 
 # --------------------------------------------------------------------------

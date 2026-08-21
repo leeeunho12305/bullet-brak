@@ -231,8 +231,12 @@ def _physics(bot: Bot, room: Room) -> None:
     elif bot.dir == 1:
         bot.vx += 1.2
 
-    bot.vx = max(-bot.speed, min(bot.speed, bot.vx))
-    if bot.dir == 0:
+    # 플레이어(sim.update_player)와 같은 규칙이다. 이동 속도를 넘는 부분은 넉백으로 얻은
+    # 속도이므로 clamp/마찰로 지우지 않고 천천히 식힌다 — 봇도 총에 맞으면 밀려나야 한다.
+    over = abs(bot.vx) - bot.speed
+    if over > C.KNOCKBACK_MIN:
+        bot.vx = math.copysign(bot.speed + over * C.KNOCKBACK_DECAY, bot.vx)
+    elif bot.dir == 0:
         bot.vx *= blocks.ICE_FRICTION if bot.on_ice else C.FRICTION
 
     blocks.carry(bot, room)

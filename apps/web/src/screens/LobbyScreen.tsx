@@ -1,6 +1,7 @@
 // 로비: 닉네임 / 외형 / 코인 + 방 만들기 · 코드로 참가 · 훈련 모드
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import AccountPanel from '@/components/AccountPanel';
 import AvatarEditor from '@/components/AvatarEditor';
 import ControlsGuide from '@/components/ControlsGuide';
 import Tutorial from '@/components/Tutorial';
@@ -24,8 +25,6 @@ export default function LobbyScreen() {
   const { nickname, customization, coins, setNickname } = useLocalProfile();
   const status = useGameStore((s) => s.status);
   const storeError = useGameStore((s) => s.error);
-  // 계정을 못 받았다 — 코인/아이템이 이 브라우저에만 남는다.
-  const localOnly = useGameStore((s) => s.localOnly);
 
   const [code, setCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(2);
@@ -146,11 +145,10 @@ export default function LobbyScreen() {
           {/* 외형 편집기(동료 컴포넌트) — store 의 customization 을 직접 갱신한다 */}
           <AvatarEditor />
 
-          {localOnly ? (
-            <p className="hint">
-              💾 계정에 연결되지 않아 코인과 아이템이 이 브라우저에만 저장돼요.
-            </p>
-          ) : null}
+          {/* 계정 — 아이디 만들기 / 다른 기기 로그인 / 인계 코드.
+              로컬 모드(서버에 DB 없음) 안내도 이 컴포넌트가 함께 맡는다. */}
+          <div className="divider" />
+          <AccountPanel />
 
           <div className="divider" />
 

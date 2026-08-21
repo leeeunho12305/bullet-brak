@@ -263,6 +263,62 @@ def test_training_card_pick_starts_next_wave(manager: RoomManager) -> None:
     assert [b.tier for b in room.bots.values()] == list(C.TRAINING_WAVES[1])
 
 
+def test_training_card_pick_offers_every_card(manager: RoomManager) -> None:
+    """훈련장은 시험해 보는 곳이다 — 무작위 5장이 아니라 전부 열어 준다."""
+    from app.game.cards import CARDS
+
+    room = manager.create("training", 1)
+    _add_player(room, "solo")
+    engine.tick_room(room)
+    for bot in room.bots.values():
+        bot.hp = 0.0
+    for _ in range(C.TRAINING_WAVE_BREAK_TICKS + 2):
+        engine.tick_room(room)
+
+    assert room.phase == "picking"
+    assert len(room.available_cards) == len(CARDS)
+
+
+def test_training_player_can_open_cards_mid_wave(manager: RoomManager) -> None:
+    """웨이브를 깨지 않아도 카드를 가져올 수 있고, 그렇다고 웨이브가 넘어가지는 않는다."""
+    room = manager.create("training", 1)
+    _add_player(room, "solo")
+    engine.tick_room(room)
+    assert room.training is not None and room.training.wave == 1
+    bots_before = len(room.bots)
+
+    assert engine.open_training_cards(room) is True
+    assert room.phase == "picking"
+    assert room.loser_to_pick == "solo"
+
+    assert engine.pick_card(room, "solo", "glass_cannon") is True
+    assert room.phase == "playing"
+    assert room.players["solo"].cards == ["glass_cannon"]
+    assert room.training.wave == 1, "카드를 골랐다고 웨이브가 넘어가면 시험을 못 한다"
+    assert len(room.bots) == bots_before, "싸우던 봇이 사라졌다"
+
+
+def test_pvp_room_cannot_open_cards_on_demand(manager: RoomManager) -> None:
+    """대전에서는 진 쪽만, 라운드가 끝났을 때만 카드를 받는다."""
+    room = manager.create("pvp", 2)
+    _add_player(room, "a")
+    _add_player(room, "b")
+    engine.start_game(room)
+
+    assert engine.open_training_cards(room) is False
+    assert room.phase == "playing"
+
+
+def test_training_dead_player_cannot_open_cards(manager: RoomManager) -> None:
+    room = manager.create("training", 1)
+    p = _add_player(room, "solo")
+    engine.tick_room(room)
+    p.hp = 0.0
+    engine.tick_room(room)  # respawning 진입
+
+    assert engine.open_training_cards(room) is False
+
+
 def test_training_death_respawns_and_keeps_wave(manager: RoomManager) -> None:
     room = manager.create("training", 1)
     p = _add_player(room, "solo")

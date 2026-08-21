@@ -11,6 +11,7 @@ from app.game import constants as C
 from app.game.models import Bot, Bullet, Player, Room, Vec, Zone
 from app.game.physics import (
     apply_explosion,
+    apply_knockback,
     bullet_hits_rect,
     clamp,
     entity_hit,
@@ -90,6 +91,9 @@ def spawn_bullet(room: Room, player: Player, angle: float, **extra: Any) -> Bull
         flags["radiance"] = True
     if player.has("decay"):
         flags["decay_rate"] = 0.985
+    # 산탄 한 알. 감쇠 곡선이 따로다(stats.bullet_falloff) — 붙으면 세고 조금만 멀어져도 약하다.
+    if extra.get("scatter"):
+        flags["scatter"] = True
 
     life = int(extra.get("life", 50 if player.has("fast_forward") else C.BASE_BULLET_LIFE))
     if player.has("steady_shot"):
@@ -108,6 +112,7 @@ def spawn_bullet(room: Room, player: Player, angle: float, **extra: Any) -> Bull
         damage=float(extra.get("damage", C.BASE_BULLET_DAMAGE)) * damage_mult,
         knockback=float(extra.get("knockback", C.BASE_KNOCKBACK)) * player.knockback_mult,
         life=life,
+        life_max=life,
         max_bounces=max_bounces,
         pierce=pierce,
         explode_radius=float(extra.get("explode_radius", 85.0)),
@@ -136,6 +141,7 @@ def spawn_bot_bullet(room: Room, bot: Bot, angle: float) -> Bullet:
         damage=bot.trait("damage"),
         knockback=C.BOT_KNOCKBACK,
         life=C.BOT_BULLET_LIFE,
+        life_max=C.BOT_BULLET_LIFE,
         start_x=bot.cx,
         start_y=bot.cy,
         owner_aim=Vec(bot.aim.x, bot.aim.y),
@@ -182,13 +188,16 @@ def fire(room: Room, player: Player) -> None:
 
     angle = _aim_angle(player)
     empower = _take_empower(player)
-    fire_count = player.buckshot + 1 if player.buckshot > 0 else (3 if player.has("barrage") else 1)
+    scatter = player.buckshot > 0
+    fire_count = player.buckshot + 1 if scatter else (3 if player.has("barrage") else 1)
     burst_count = 3 if player.burst > 0 else 1
     total = fire_count * burst_count
 
     for i in range(total):
         spread = (i - (total - 1) / 2) * 0.08 if total > 1 else 0.0
-        room.bullets.append(spawn_bullet(room, player, angle, spread=spread, damage_mult=empower))
+        room.bullets.append(
+            spawn_bullet(room, player, angle, spread=spread, damage_mult=empower, scatter=scatter)
+        )
 
     _record(room, "shots", total)
     _pay_shot_costs(player)
@@ -260,10 +269,17 @@ def _steer(room: Room, bullet: Bullet) -> None:
     speed = math.hypot(bullet.vx, bullet.vy) or 1.0
 
     if bullet.has("remote"):
+        # **지금** 조준하는 지점을 따라간다. `owner_aim` 은 발사(또는 반사) 시점의 사본이라
+        # 소유자가 방을 나간 뒤에만 쓴다. 예전에는 사본을 먼저 봤기 때문에, 카드 설명과 달리
+        # 탄이 "쏠 때 겨눴던 한 점"으로 빨려들어 그 자리를 맴돌았다 — 조종도 안 되고
+        # 멀리 날아가지도 않으면서 남이 보기엔 유도탄처럼만 보이던 원인이다.
         owner = room.players.get(bullet.owner)
-        aim = bullet.owner_aim if bullet.owner_aim else (owner.aim if owner else None)
+        aim = owner.aim if owner is not None else bullet.owner_aim
         if aim is not None:
-            _turn(bullet, aim.x - bullet.x, aim.y - bullet.y, 0.08, speed)
+            dx, dy = aim.x - bullet.x, aim.y - bullet.y
+            # 조준점에 닿으면 더 꺾지 않는다. 안 그러면 커서 주위를 뱅뱅 돌기만 한다.
+            if math.hypot(dx, dy) > C.REMOTE_DEADZONE:
+                _turn(bullet, dx, dy, C.REMOTE_STEER, speed)
 
     if not homing:
         return
@@ -296,34 +312,51 @@ def _expire(room: Room, bullet: Bullet, damage_ratio: float) -> None:
     bullet.active = False
 
 
+def _ricochet(bullet: Bullet, counted: bool = True) -> None:
+    """튕긴 직후 처리: 도탄 카운트 + 사거리(수명) 초기화 + TARGET BOUNCE 추적 점화.
+
+    수명을 되돌리는 게 핵심이다. 예전에는 튕겨도 수명이 계속 줄어서, 도탄을 다섯 장
+    골라도 두세 번 튕기면 공중에서 사라졌다 — "도탄을 많이 골라도 많이 튕기질 못한다".
+    """
+    if bullet.has("target_bounce"):
+        bullet.flags["homing"] = True
+    if not counted:
+        # 유도탄이 월드 경계에 부딪힌 경우다. 도탄으로도 세지 않고 수명도 되돌리지 않는다 —
+        # 되돌리면 쫓을 적이 없을 때 벽 사이를 영원히 오가는 탄이 된다.
+        return
+    bullet.bounces += 1
+    bullet.life = bullet.life_max
+
+
 def _bounce_walls(bullet: Bullet) -> None:
+    """월드 경계 처리.
+
+    좌/우/천장은 실제 벽이다 — 플레이어도 여기서 막힌다(sim.update_player). 반면 **바닥은
+    뚫려 있다**(낙사 구간). 예전에는 y > HEIGHT 에서도 튕겨서, 협곡·부유섬의 허공에서
+    탄환이 아무것도 없는 자리에 부딪혀 되돌아왔다. 아래로 나간 탄은 그냥 사라진다.
+    """
     # 유도탄은 벽을 뚫고 가므로 월드 경계도 도탄으로 세지 않는다. 그래야 일반 탄과
     # 똑같이 수명(life)만으로 사라진다.
-    counted = 0 if bullet.has("homing") else 1
+    counted = not bullet.has("homing")
+    if bullet.y > C.HEIGHT:
+        bullet.active = False
+        return
+
     hit = False
     if bullet.x < 0:
         bullet.x = 0.0
         bullet.vx *= -1
-        bullet.bounces += counted
         hit = True
     elif bullet.x > C.WIDTH:
         bullet.x = C.WIDTH
         bullet.vx *= -1
-        bullet.bounces += counted
         hit = True
     if bullet.y < 0:
         bullet.y = 0.0
         bullet.vy *= -1
-        bullet.bounces += counted
         hit = True
-    elif bullet.y > C.HEIGHT:
-        bullet.y = C.HEIGHT
-        bullet.vy *= -1
-        bullet.bounces += counted
-        hit = True
-    # TARGET BOUNCE: 발판뿐 아니라 월드 경계에 튕겨도 여기서 추적이 켜진다.
-    if hit and bullet.has("target_bounce"):
-        bullet.flags["homing"] = True
+    if hit:
+        _ricochet(bullet, counted)
 
 
 def _hit_platforms(room: Room, bullet: Bullet) -> None:
@@ -340,9 +373,7 @@ def _hit_platforms(room: Room, bullet: Bullet) -> None:
                 bullet.vy *= -1
             else:
                 bullet.vx *= -1
-            bullet.bounces += 1
-            if bullet.has("target_bounce"):
-                bullet.flags["homing"] = True
+            _ricochet(bullet)
             if bullet.has("bombs_away"):
                 damage = bullet.damage * 0.35 * bullet_falloff(bullet)
                 _detonate(room, bullet, damage, 70.0, 12.0)
@@ -360,14 +391,20 @@ def _consume(bullet: Bullet) -> None:
 
 
 def _reflect(room: Room, bullet: Bullet, player: Player) -> None:
-    """가드 반사: 속도 반전 + 소유권 이전, echo 면 반격탄 1발."""
+    """가드 반사: 속도 반전 + 소유권 이전, echo 면 반격탄 1발.
+
+    **반사는 도탄이 아니다.** 예전에는 여기서 `bounces` 를 올렸는데, 도탄 카드가 없는
+    보통 탄환은 `max_bounces` 가 0 이라 다음 틱의 `bounces > max_bounces` 검사에 걸려
+    곧바로 사라졌다 — 막아도 되돌아가는 탄이 안 보이던 이유다. 대신 수명만 되돌려서
+    반사한 탄이 상대에게 닿을 때까지 날아가게 한다.
+    """
     previous_owner_id = bullet.owner
     attacker = room.players.get(previous_owner_id)
     bullet.vx *= -1.35
     bullet.vy *= -1.35
     bullet.owner = player.id
     bullet.owner_aim = Vec(player.aim.x, player.aim.y)
-    bullet.bounces += 1
+    bullet.life = bullet.life_max
     # 반사한 순간이 새 발사 지점이다(거리 감쇠 기준 재설정) + 위력은 반사한 쪽 배율로 환산.
     bullet.start_x, bullet.start_y = bullet.x, bullet.y
     if attacker is not None and attacker.damage_mult:
@@ -382,15 +419,24 @@ def _reflect(room: Room, bullet: Bullet, player: Player) -> None:
     room.bullets.append(spawn_bullet(room, player, angle, damage_mult=0.65, speed_mult=1.1))
 
 
+def _knock(bullet: Bullet, target: Player | Bot) -> None:
+    """피격 넉백. 탄환이 날아온 방향으로 민다.
+
+    예전에는 `vx += bullet.vx * 0.4` 였는데, 그 속도는 다음 틱에 이동 속도 clamp 와 마찰이
+    지워 버려서 낙사 맵이 아니면 넉백에 아무 의미가 없었다. 이제 세기는 `Bullet.knockback`
+    (= BASE_KNOCKBACK × 소유자 배율)에서 나오고, 이동 속도를 넘는 부분은 sim/bots 의 물리가
+    천천히 식힌다(C.KNOCKBACK_DECAY). 위로 뜨는 양만 MAX_HIT_LIFT 로 묶는다.
+    """
+    apply_knockback(target, bullet.vx, bullet.vy, bullet.knockback * C.KNOCKBACK_SCALE)
+
+
 def _damage_player(room: Room, bullet: Bullet, player: Player) -> None:
     owner = room.players.get(bullet.owner)
-    knockback_mult = owner.knockback_mult if owner else 1.0
     # 소유자 공격력 배율은 발사 시점에 이미 반영됐다. 여기선 거리 감쇠만 곱한다.
     hit_damage = bullet.damage * bullet_falloff(bullet)
 
     player.hp -= hit_damage
-    player.vx += bullet.vx * 0.4 * knockback_mult
-    player.vy -= 4
+    _knock(bullet, player)
 
     # 상태이상
     poison_stacks = int(bullet.flags.get("poison", 0) or 0)
@@ -418,7 +464,11 @@ def _damage_player(room: Room, bullet: Bullet, player: Player) -> None:
         if owner.has("parasite"):
             owner.max_hp += 1
         if owner.has("radiance"):
-            room.zones.append(Zone("radiance", bullet.x, bullet.y, 70.0, 8, bullet.owner))
+            # 장판을 **쏜 사람 발밑**에 깐다. 예전에는 명중 지점(= 상대 위치)에 깔았는데,
+            # radiance 는 소유자만 회복하는 장판이라(sim.OWNER_ONLY_ZONES) 상대 발밑에
+            # 깔리면 회복은 한 번도 안 되면서 화면에는 "상대가 회복 장판을 밟고 있는" 그림만
+            # 남았다 — 회복 장판이 적을 살려 준다는 오해의 출처다.
+            room.zones.append(Zone("radiance", owner.cx, owner.cy, 70.0, 8, owner.id))
 
     _record(room, "damage_taken", hit_damage)
     _spawn_hit_zones(room, bullet, hit_damage)
@@ -462,8 +512,7 @@ def _hit_bots(room: Room, bullet: Bullet) -> None:
             continue
         hit_damage = bullet.damage * bullet_falloff(bullet)
         bot.hp -= hit_damage
-        bot.vx += bullet.vx * 0.4
-        bot.vy -= 4
+        _knock(bullet, bot)
 
         _record(room, "damage_dealt", hit_damage)
         # 명중률은 탄환 1발당 한 번만 센다(관통탄이 여러 번 세지 않도록).
@@ -503,6 +552,8 @@ def update_bullets(room: Room) -> None:
             continue
 
         _bounce_walls(bullet)
+        if not bullet.active:
+            continue  # 열린 아래쪽으로 빠져나갔다 — 허공에서 터뜨릴 것도 없다
         if bullet.bounces > bullet.max_bounces:
             _expire(room, bullet, 0.6)
             continue

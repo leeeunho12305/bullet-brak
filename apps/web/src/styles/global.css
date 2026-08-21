@@ -840,3 +840,59 @@ textarea {
     flex-wrap: wrap;
   }
 }
+
+/* ---------- 계정 (로비 좌측 패널) ---------- */
+.account-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.account-actions,
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-msg {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.account-msg-good {
+  background: rgba(81, 207, 102, 0.12);
+  color: var(--ok);
+}
+.account-msg-bad {
+  background: rgba(255, 107, 107, 0.12);
+  color: var(--danger);
+}
+
+/* 발급 직후에만 보이는 코드 상자. 다시 볼 수 없다는 게 이 화면의 요점이라
+   눈에 띄게 띄워 둔다. */
+.recovery-code {
+  padding: 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  background: rgba(255, 212, 59, 0.08);
+}
+
+.recovery-code-value {
+  display: block;
+  margin: 6px 0 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--accent-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: center;
+  /* 길게 눌러 선택 -> 복사가 클립보드 권한 없이도 되게 한다 */
+  user-select: all;
+  word-break: break-all;
+}

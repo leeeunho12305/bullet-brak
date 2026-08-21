@@ -13,7 +13,7 @@ from typing import Any, Literal
 from app.game import blocks, constants as C
 from app.game import maps, sim, training
 from app.game.bullets import update_bullets
-from app.game.cards import apply_card, random_cards, reset_card_state
+from app.game.cards import all_card_ids, apply_card, random_cards, reset_card_state
 from app.game.models import Room
 from app.game.physics import clamp
 
@@ -90,13 +90,18 @@ def _check_round_over(room: Room) -> None:
 
 
 def open_card_pick(room: Room) -> None:
-    """훈련장 웨이브 클리어 보상. 카드 5장을 열어 준다(training 이 호출)."""
+    """훈련장 웨이브 클리어 보상. **카드 전체**를 열어 준다(training 이 호출).
+
+    훈련장은 이기려고 하는 곳이 아니라 시험해 보는 곳이다. 무작위 5장으로 묶으면
+    "이 카드가 어떻게 굴러가는지 보고 싶다"를 못 한다 — 그래서 여기서만 다 열어 준다.
+    대전(_resolve_round_over)은 그대로 무작위 5장이다.
+    """
     player = next(iter(room.players.values()), None)
     if player is None:
         return
     room.phase = "picking"
     room.loser_to_pick = player.id
-    room.available_cards = _pick_card_ids(C.CARD_CHOICES)
+    room.available_cards = all_card_ids()
 
 
 def _resolve_round_over(room: Room) -> None:
@@ -371,9 +376,21 @@ def pick_card(room: Room, player_id: str, card_id: str) -> bool:
     room.loser_to_pick = None
     room.available_cards = []
     if room.mode == "training":
-        # 훈련장은 라운드를 리셋하지 않는다. 카드를 챙기고 다음 웨이브로 넘어간다.
+        # 훈련장은 라운드를 리셋하지 않는다. 카드를 챙기고 하던 웨이브를 이어 간다.
         room.phase = "playing"
-        training.next_wave(room)
+        training.resume_after_pick(room)
     else:
         reset_round(room)
+    return True
+
+
+def open_training_cards(room: Room) -> bool:
+    """훈련장에서 플레이어가 직접 카드 목록을 연다. 열렸으면 True.
+
+    훈련장의 요점은 "이 카드가 어떻게 굴러가는지 지금 보고 싶다"이므로 웨이브를 깰
+    때까지 기다리게 하지 않는다. 대전에는 없는 문이다(training.can_open_cards 가 막는다).
+    """
+    if not training.can_open_cards(room):
+        return False
+    open_card_pick(room)
     return True

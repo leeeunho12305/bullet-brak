@@ -185,6 +185,9 @@ class Bullet:
     damage: float = C.BASE_BULLET_DAMAGE
     knockback: float = C.BASE_KNOCKBACK
     life: int = C.BASE_BULLET_LIFE
+    #: 발사 시점의 수명. 벽/발판에 튕길 때마다 `life` 를 이 값으로 되돌린다 —
+    #: 그래야 도탄을 여러 장 골랐을 때 실제로 여러 번 튕긴다(수명이 먼저 끝나지 않는다).
+    life_max: int = C.BASE_BULLET_LIFE
     bounces: int = 0
     max_bounces: int = 0
     pierce: int = 0
