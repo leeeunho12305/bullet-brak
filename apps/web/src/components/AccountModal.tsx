@@ -34,6 +34,8 @@ interface Props {
 export default function AccountModal({ onClose }: Props): JSX.Element {
   const loginId = useGameStore((s) => s.loginId);
   const hasRecoveryCode = useGameStore((s) => s.hasRecoveryCode);
+  /** 서버에 DB 가 없다 = 이 배포에는 계정 기능 자체가 없다. */
+  const localOnly = useGameStore((s) => s.localOnly);
   const coins = useGameStore((s) => s.coins);
   const nickname = useGameStore((s) => s.nickname);
 
@@ -199,8 +201,27 @@ export default function AccountModal({ onClose }: Props): JSX.Element {
         </header>
 
         <div className="modal-body account-body">
+          {/* 계정 기능이 꺼진 서버 — 폼을 보여 줘 봐야 전부 503 이다. 이유만 말한다. */}
+          {localOnly ? (
+            <>
+              <p className="account-state is-warn">
+                💾 이 서버에는 <strong>계정 기능이 꺼져 있어요.</strong> 코인과 아이템이 이
+                브라우저에만 저장돼서, 저장소를 지우거나 다른 기기로 옮기면 사라져요.
+              </p>
+              {/* 아래는 개발자에게만 필요한 안내다. 배포 빌드에서 플레이어가
+                  `make up` 같은 문장을 읽게 두면 그건 그냥 새어 나온 내부 사정이다. */}
+              {import.meta.env.DEV ? (
+                <p className="hint">
+                  서버에 <code>DATABASE_URL</code> 이 설정돼 있어야 아이디·비밀번호를 만들 수
+                  있어요. 로컬에서 켜 보려면 <code>make up</code>(Postgres 가 붙은 배포 스택)으로
+                  띄우세요 — <code>make dev</code> 에는 DB 가 없습니다.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+
           {/* 지금 상태 — 이 계정이 어디에 묶여 있는지부터 알려 준다. */}
-          {loginId ? (
+          {localOnly ? null : loginId ? (
             <p className="account-state is-safe">
               🔐 <strong>@{loginId}</strong> 로 로그인돼 있어요. 다른 기기에서 이 아이디로
               들어오면 코인({coins})과 아이템이 그대로 따라와요.
@@ -212,6 +233,7 @@ export default function AccountModal({ onClose }: Props): JSX.Element {
             </p>
           )}
 
+          {localOnly ? null : (
           <div className="account-tabs" role="tablist">
             <button
               type="button"
@@ -241,6 +263,7 @@ export default function AccountModal({ onClose }: Props): JSX.Element {
               인계 코드
             </button>
           </div>
+          )}
 
           {message ? (
             <p className={failed ? 'account-msg account-msg-bad' : 'account-msg account-msg-good'}>
@@ -248,7 +271,7 @@ export default function AccountModal({ onClose }: Props): JSX.Element {
             </p>
           ) : null}
 
-          {tab === 'create' ? (
+          {!localOnly && tab === 'create' ? (
             <form className="account-form" onSubmit={(e) => void submitCreate(e)}>
               <div className="field">
                 <label className="label" htmlFor="accountId">
@@ -312,7 +335,7 @@ export default function AccountModal({ onClose }: Props): JSX.Element {
             </form>
           ) : null}
 
-          {tab === 'login' ? (
+          {!localOnly && tab === 'login' ? (
             <form className="account-form" onSubmit={(e) => void submitLogin(e)}>
               {!loginId && coins > 0 ? (
                 <p className="account-state is-warn">
@@ -365,7 +388,7 @@ export default function AccountModal({ onClose }: Props): JSX.Element {
             </form>
           ) : null}
 
-          {tab === 'code' ? (
+          {!localOnly && tab === 'code' ? (
             <div className="account-form">
               {/* 발급 직후에만 보이는 코드. 이 화면을 닫으면 다시 볼 수 없다. */}
               {issued ? (

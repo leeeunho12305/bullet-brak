@@ -112,16 +112,15 @@ export default function LobbyScreen() {
   return (
     <div className="screen">
       <header className="brand">
+        {/* 제목 왼쪽. 계정 기능이 꺼진 서버에서도 버튼은 남긴다 —
+            숨겨 버리면 왜 안 되는지 물어볼 곳조차 없어진다(모달이 이유를 설명한다). */}
+        <button type="button" className="btn btn-ghost" onClick={() => setAccount(true)}>
+          {loginId ? `🔐 @${loginId}` : '🔐 로그인'}
+        </button>
         <h1>BULLET BRAK</h1>
         <button type="button" className="btn btn-ghost" onClick={() => setTutorial(true)}>
           📖 튜토리얼
         </button>
-        {/* 계정 기능이 없는 배포(서버에 DB 없음)에서는 버튼 자체를 감춘다 — 눌러 봐야 할 게 없다. */}
-        {localOnly ? null : (
-          <button type="button" className="btn btn-ghost" onClick={() => setAccount(true)}>
-            {loginId ? `🔐 @${loginId}` : '🔐 로그인'}
-          </button>
-        )}
         <span className="badge">💰 {coins}</span>
       </header>
 
