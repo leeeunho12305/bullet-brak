@@ -1,7 +1,7 @@
 // 로비: 닉네임 / 외형 / 코인 + 방 만들기 · 코드로 참가 · 훈련 모드
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import AccountPanel from '@/components/AccountPanel';
+import AccountModal from '@/components/AccountModal';
 import AvatarEditor from '@/components/AvatarEditor';
 import ControlsGuide from '@/components/ControlsGuide';
 import Tutorial from '@/components/Tutorial';
@@ -25,6 +25,9 @@ export default function LobbyScreen() {
   const { nickname, customization, coins, setNickname } = useLocalProfile();
   const status = useGameStore((s) => s.status);
   const storeError = useGameStore((s) => s.error);
+  // 계정을 못 받았다 — 코인/아이템이 이 브라우저에만 남는다(서버에 DB 가 없는 배포).
+  const localOnly = useGameStore((s) => s.localOnly);
+  const loginId = useGameStore((s) => s.loginId);
 
   const [code, setCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(2);
@@ -33,6 +36,7 @@ export default function LobbyScreen() {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [tutorial, setTutorial] = useState(false);
+  const [account, setAccount] = useState(false);
 
   // 시작 맵. 방을 만든 뒤 대기실에서 방장이 언제든 바꿀 수 있다.
   useEffect(() => {
@@ -112,10 +116,17 @@ export default function LobbyScreen() {
         <button type="button" className="btn btn-ghost" onClick={() => setTutorial(true)}>
           📖 튜토리얼
         </button>
+        {/* 계정 기능이 없는 배포(서버에 DB 없음)에서는 버튼 자체를 감춘다 — 눌러 봐야 할 게 없다. */}
+        {localOnly ? null : (
+          <button type="button" className="btn btn-ghost" onClick={() => setAccount(true)}>
+            {loginId ? `🔐 @${loginId}` : '🔐 로그인'}
+          </button>
+        )}
         <span className="badge">💰 {coins}</span>
       </header>
 
       {tutorial ? <Tutorial onClose={() => setTutorial(false)} /> : null}
+      {account ? <AccountModal onClose={() => setAccount(false)} /> : null}
 
       {message ? (
         <div className="alert" role="alert">
@@ -145,10 +156,11 @@ export default function LobbyScreen() {
           {/* 외형 편집기(동료 컴포넌트) — store 의 customization 을 직접 갱신한다 */}
           <AvatarEditor />
 
-          {/* 계정 — 아이디 만들기 / 다른 기기 로그인 / 인계 코드.
-              로컬 모드(서버에 DB 없음) 안내도 이 컴포넌트가 함께 맡는다. */}
-          <div className="divider" />
-          <AccountPanel />
+          {localOnly ? (
+            <p className="hint">
+              💾 계정에 연결되지 않아 코인과 아이템이 이 브라우저에만 저장돼요.
+            </p>
+          ) : null}
 
           <div className="divider" />
 

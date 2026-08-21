@@ -841,18 +841,62 @@ textarea {
   }
 }
 
-/* ---------- 계정 (로비 좌측 패널) ---------- */
-.account-panel {
+/* ---------- 계정 모달 ---------- */
+.account-modal {
+  width: min(100%, 480px);
+}
+
+.account-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-form {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.account-actions,
-.account-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* 지금 이 계정이 어디에 묶여 있는지 알려 주는 띠. 모달을 열면 제일 먼저 읽는 줄이다. */
+.account-state {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+.account-state.is-safe {
+  background: rgba(81, 207, 102, 0.1);
+  border: 1px solid rgba(81, 207, 102, 0.35);
+}
+.account-state.is-warn {
+  background: rgba(255, 212, 59, 0.1);
+  border: 1px solid rgba(255, 212, 59, 0.35);
+}
+
+.account-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.account-tabs .btn {
+  padding: 8px 6px;
+  font-size: 0.82rem;
+}
+.account-tabs .btn.is-on {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* 이미 정해진 아이디는 입력칸이 아니라 사실 표시다(이 폼은 비밀번호 변경이다). */
+.account-fixed-id {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--accent-2);
+  font-weight: 700;
 }
 
 .account-msg {

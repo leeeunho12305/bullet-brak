@@ -67,6 +67,13 @@ def normalize_database_url(raw: str) -> tuple[str, dict[str, Any]]:
                 connect_args["ssl"] = ssl_value
 
     normalized = urlunsplit((scheme, parts.netloc, parts.path, urlencode(kept), parts.fragment))
+
+    # urlunsplit 은 netloc 이 비면 `//` 를 떼 버린다. 호스트 없는 URL —
+    # sqlite 의 `sqlite+aiosqlite:///./dev.db` 같은 것 — 이 `sqlite+aiosqlite:/./dev.db` 로
+    # 망가져 SQLAlchemy 가 파싱을 거부한다. 원래 있던 `//` 는 그대로 살려 둔다.
+    if not parts.netloc and url.startswith(f"{parts.scheme}://"):
+        normalized = normalized.replace(f"{scheme}:", f"{scheme}://", 1)
+
     return normalized, connect_args
 
 

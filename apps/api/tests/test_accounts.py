@@ -60,6 +60,15 @@ def test_empty_url_is_noop() -> None:
     assert normalize_database_url("") == ("", {})
 
 
+def test_hostless_url_keeps_its_double_slash() -> None:
+    """urlunsplit 은 netloc 이 비면 `//` 를 떼 버린다 — sqlite 경로가 그렇게 망가졌었다."""
+    url, _ = normalize_database_url("sqlite+aiosqlite:///./dev.db")
+    assert url == "sqlite+aiosqlite:///./dev.db"
+    assert normalize_database_url("sqlite+aiosqlite:///:memory:")[0] == (
+        "sqlite+aiosqlite:///:memory:"
+    )
+
+
 # --------------------------------------------------------------------------
 # sqlite 픽스처
 # --------------------------------------------------------------------------
