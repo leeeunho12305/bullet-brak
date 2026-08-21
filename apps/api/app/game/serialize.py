@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.game import blocks
 from app.game import constants as C
 from app.game import maps, training
 from app.game.cards import card_info
@@ -76,10 +77,10 @@ def player_snap(room: Room, p: Player, loadout: bool = True) -> dict[str, Any]:
         "aim": {"x": p.aim.x, "y": p.aim.y},
         "cooldown": p.cooldown,
         "max_cooldown": p.max_cooldown,
+        # 가드 게이지. 라운드가 시작될 때만 채워지고, 누르고 있는 동안만 줄어든다.
         "block_meter": p.block_meter,
         "block_meter_max": p.block_meter_max,
         "blocking": p.blocking,
-        "guard_broken": p.guard_broken,
         "charging": p.charging,
         "charge": p.charge,
         "score": room.scores.get(p.id, 0),
@@ -133,7 +134,8 @@ def bullet_snap(b: Bullet) -> dict[str, Any]:
 
 
 def zone_snap(z: Zone) -> dict[str, Any]:
-    return {"type": z.type, "x": z.x, "y": z.y, "radius": z.radius}
+    # d(남은 틱)는 폭발 섬광(blast)의 진행도를 클라이언트가 계산하는 데 쓴다.
+    return {"type": z.type, "x": z.x, "y": z.y, "radius": z.radius, "d": z.duration}
 
 
 def _available_cards(room: Room) -> list[dict[str, Any]]:
@@ -147,13 +149,17 @@ def _available_cards(room: Room) -> list[dict[str, Any]]:
 
 #: 대전 중 loadout 필드를 싣는 주기(틱). 60Hz 기준 0.5초.
 LOADOUT_INTERVAL = 30
+#: 발판 전체 목록을 다시 싣는 주기(틱). 그 사이에는 이동발판 좌표(movers)만 보낸다.
+#: 맵 에디터가 블럭을 백 개 넘게 깔 수 있으므로, 매 틱 전부 싣으면 지형만으로 대역폭이 찬다.
+LAYOUT_INTERVAL = 30
 
 
 def snapshot(room: Room) -> dict[str, Any]:
     """60Hz 로 브로드캐스트되는 전체 상태(PROTOCOL §3 Snapshot)."""
     # 전투 중이 아니면(대기/카드선택/종료) 트래픽이 한가하므로 매 틱 싣는다.
-    loadout = room.phase != "playing" or room.tick % LOADOUT_INTERVAL == 0
-    return {
+    idle = room.phase != "playing"
+    loadout = idle or room.tick % LOADOUT_INTERVAL == 0
+    data: dict[str, Any] = {
         "type": "state",
         "tick": room.tick,
         "phase": room.phase,
@@ -164,7 +170,6 @@ def snapshot(room: Room) -> dict[str, Any]:
         "bots": [bot_snap(b) for b in room.bots.values()],
         "bullets": [bullet_snap(b) for b in room.bullets if b.active],
         "zones": [zone_snap(z) for z in room.zones],
-        "platforms": [dict(p) for p in room.platforms],
         "loser_to_pick": room.loser_to_pick,
         "available_cards": _available_cards(room),
         "winner_id": room.winner_id,
@@ -172,10 +177,24 @@ def snapshot(room: Room) -> dict[str, Any]:
         "rematch": [pid for pid in room.players if pid in room.rematch_votes],
         "training": training.snap(room),
     }
+    if idle or room.tick % LAYOUT_INTERVAL == 0:
+        data["platforms"] = [blocks.snap(p) for p in room.platforms]
+    movers = [
+        {"i": i, "x": p["x"], "y": p["y"]}
+        for i, p in enumerate(room.platforms)
+        if p.get("type") == blocks.MOVER
+    ]
+    if movers:
+        data["movers"] = movers
+    return data
 
 
 def room_state(room: Room) -> dict[str, Any]:
     """로비/대기실용 경량 상태(PROTOCOL §3 RoomState)."""
+    # 이름/테마/스폰은 고른 맵의 것이지만, 발판은 지금 방에 실제로 깔린 것을 보낸다.
+    # 맵 에디터로 고친 배치가 대기실 미리보기에 그대로 보여야 하기 때문이다.
+    game_map = maps.get(room.active_map_id).to_dict()
+    game_map["platforms"] = [blocks.snap(p, full=True) for p in room.platforms]
     return {
         "code": room.code,
         "mode": room.mode,
@@ -183,7 +202,9 @@ def room_state(room: Room) -> dict[str, Any]:
         "phase": room.phase,
         # map_id 는 방장이 고른 값("random" 일 수 있고), map 은 지금 깔린 실제 맵이다.
         "map_id": room.map_id,
-        "map": maps.get(room.active_map_id).to_dict(),
+        "map": game_map,
+        #: 발판이 맵 원본이 아니라 방장이 에디터로 짠 배치인가
+        "custom_map": room.custom_layout is not None,
         "players": [
             {
                 "id": p.id,

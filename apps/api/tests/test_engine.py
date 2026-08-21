@@ -263,6 +263,62 @@ def test_training_card_pick_starts_next_wave(manager: RoomManager) -> None:
     assert [b.tier for b in room.bots.values()] == list(C.TRAINING_WAVES[1])
 
 
+def test_training_card_pick_offers_every_card(manager: RoomManager) -> None:
+    """훈련장은 시험해 보는 곳이다 — 무작위 5장이 아니라 전부 열어 준다."""
+    from app.game.cards import CARDS
+
+    room = manager.create("training", 1)
+    _add_player(room, "solo")
+    engine.tick_room(room)
+    for bot in room.bots.values():
+        bot.hp = 0.0
+    for _ in range(C.TRAINING_WAVE_BREAK_TICKS + 2):
+        engine.tick_room(room)
+
+    assert room.phase == "picking"
+    assert len(room.available_cards) == len(CARDS)
+
+
+def test_training_player_can_open_cards_mid_wave(manager: RoomManager) -> None:
+    """웨이브를 깨지 않아도 카드를 가져올 수 있고, 그렇다고 웨이브가 넘어가지는 않는다."""
+    room = manager.create("training", 1)
+    _add_player(room, "solo")
+    engine.tick_room(room)
+    assert room.training is not None and room.training.wave == 1
+    bots_before = len(room.bots)
+
+    assert engine.open_training_cards(room) is True
+    assert room.phase == "picking"
+    assert room.loser_to_pick == "solo"
+
+    assert engine.pick_card(room, "solo", "glass_cannon") is True
+    assert room.phase == "playing"
+    assert room.players["solo"].cards == ["glass_cannon"]
+    assert room.training.wave == 1, "카드를 골랐다고 웨이브가 넘어가면 시험을 못 한다"
+    assert len(room.bots) == bots_before, "싸우던 봇이 사라졌다"
+
+
+def test_pvp_room_cannot_open_cards_on_demand(manager: RoomManager) -> None:
+    """대전에서는 진 쪽만, 라운드가 끝났을 때만 카드를 받는다."""
+    room = manager.create("pvp", 2)
+    _add_player(room, "a")
+    _add_player(room, "b")
+    engine.start_game(room)
+
+    assert engine.open_training_cards(room) is False
+    assert room.phase == "playing"
+
+
+def test_training_dead_player_cannot_open_cards(manager: RoomManager) -> None:
+    room = manager.create("training", 1)
+    p = _add_player(room, "solo")
+    engine.tick_room(room)
+    p.hp = 0.0
+    engine.tick_room(room)  # respawning 진입
+
+    assert engine.open_training_cards(room) is False
+
+
 def test_training_death_respawns_and_keeps_wave(manager: RoomManager) -> None:
     room = manager.create("training", 1)
     p = _add_player(room, "solo")
@@ -331,7 +387,6 @@ SNAPSHOT_KEYS = {
     "bots",
     "bullets",
     "zones",
-    "platforms",
     "loser_to_pick",
     "available_cards",
     "winner_id",
@@ -358,7 +413,6 @@ PLAYER_KEYS = {
     "block_meter",
     "block_meter_max",
     "blocking",
-    "guard_broken",
     "charging",
     "charge",
     "score",
@@ -385,16 +439,38 @@ def test_snapshot_shape(manager: RoomManager) -> None:
     engine.tick_room(room)
 
     snap = snapshot(room)
-    assert set(snap) == SNAPSHOT_KEYS
+    # platforms/movers 는 조건부다(아래 test_snapshot_layout_is_periodic).
+    assert set(snap) - {"platforms", "movers"} == SNAPSHOT_KEYS
     assert snap["type"] == "state"
     assert snap["tick"] == room.tick
-    assert len(snap["platforms"]) == len(C.PLATFORMS)
 
     player = snap["players"][0]
     assert set(player) == PLAYER_KEYS  # 대전 중 대부분의 틱에는 loadout 이 빠진다
     assert player["score"] == 2 and player["round_wins"] == 1
     assert set(player["customization"]) == {"eye", "mouth", "detail", "detail2", "color", "offsets"}
     assert "flags" not in player and "inputs" not in player
+
+
+def test_snapshot_layout_is_periodic(manager: RoomManager) -> None:
+    """발판 전체 목록은 0.5초에 한 번만. 그 사이에는 이동발판 좌표만 실린다(대역폭)."""
+    room = manager.create("pvp", 2, map_id="factory")
+    room.phase = "playing"
+    _add_player(room, "a")
+
+    room.tick = serialize_mod.LAYOUT_INTERVAL
+    full = snapshot(room)
+    assert len(full["platforms"]) == len(room.platforms)
+
+    room.tick = serialize_mod.LAYOUT_INTERVAL + 1
+    between = snapshot(room)
+    assert "platforms" not in between
+    # 움직이는 발판만 인덱스와 함께 실린다.
+    moving = [i for i, p in enumerate(room.platforms) if p.get("type") == "mover"]
+    assert [m["i"] for m in between["movers"]] == moving
+
+    # 대기실처럼 한가한 상태에서는 매 틱 전부 보낸다(첫 화면이 늦게 뜨면 안 된다).
+    room.phase = "waiting"
+    assert "platforms" in snapshot(room)
 
 
 def test_snapshot_loadout_is_periodic(manager: RoomManager) -> None:
@@ -481,7 +557,16 @@ def test_room_state_shape(manager: RoomManager) -> None:
     room = manager.create("pvp", 2)
     _add_player(room, "a")
     state = room_state(room)
-    assert set(state) == {"code", "mode", "max_players", "phase", "map_id", "map", "players"}
+    assert set(state) == {
+        "code",
+        "mode",
+        "max_players",
+        "phase",
+        "map_id",
+        "map",
+        "custom_map",
+        "players",
+    }
     assert set(state["players"][0]) == {"id", "nickname", "customization", "coins"}
 
 

@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from app.db import db_ready
 from app.game import maps
 from app.game.cards import card_infos
 from app.game.rooms import RoomError, room_manager
@@ -21,7 +22,13 @@ router = APIRouter(prefix="/api", tags=["api"])
 
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    return HealthResponse(status="ok")
+    """DB 상태와 무관하게 항상 200 이다.
+
+    Render 의 healthCheckPath 와 compose healthcheck 가 이 엔드포인트를 본다.
+    DB 가 없어도 게임은 정상이므로 여기서 실패를 내면 배포가 통째로 막힌다.
+    프런트는 `db` 필드로 계정 기능을 켤지 판단한다.
+    """
+    return HealthResponse(status="ok", db="on" if db_ready() else "off")
 
 
 @router.post("/rooms", response_model=CreateRoomResponse, status_code=201)

@@ -8,6 +8,7 @@
     "node": ">=20",
     "pnpm": ">=9 <10"
   },
+  "//docker": "도커는 배포 전용이다. compose 파일은 docker-compose.yml 하나뿐이고 up/down/logs 는 그 배포 스택(api+db+nginx, :8080)을 가리킨다. 로컬 개발은 도커 없이 `make dev` (또는 pnpm dev + apps/api 의 uvicorn) 로 한다.",
   "scripts": {
     "postinstall": "node scripts/render-postinstall.mjs",
     "start": "node scripts/serve-static.mjs",
@@ -21,11 +22,11 @@
     "preview": "pnpm --filter @bullet-brak/web preview",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm test:api && pnpm typecheck",
+    "//test:api": "pnpm exec 는 node_modules/.bin 만 본다 — venv 파이썬을 직접 찾아 돌린다.",
     "test:api": "node scripts/run-pytest.mjs",
+    "shop:prices": "node scripts/export-shop-prices.mjs",
     "up": "docker compose up -d --build",
     "down": "docker compose down",
-    "logs": "docker compose logs -f",
-    "prod:up": "docker compose -f docker-compose.prod.yml up -d --build",
-    "prod:down": "docker compose -f docker-compose.prod.yml down"
+    "logs": "docker compose logs -f"
   }
 }

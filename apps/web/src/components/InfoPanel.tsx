@@ -20,14 +20,16 @@ const EMPTY: Panel = { table: [], stats: null, cards: [] };
 const STAT_ROWS: { key: keyof PlayerStats; label: string; suffix?: string }[] = [
   { key: 'damage_mult', label: '공격력', suffix: '×' },
   { key: 'max_hp', label: '최대 체력' },
-  { key: 'cooldown', label: '쿨다운', suffix: '틱' },
+  // "틱"은 플레이어에게 아무 의미가 없다. 서버가 초로 환산해서 준다.
+  { key: 'cooldown_seconds', label: '사격 간격', suffix: '초' },
   { key: 'shots_per_fire', label: '발사 수', suffix: '발' },
   { key: 'bullet_speed', label: '탄속' },
   { key: 'bullet_size', label: '탄 크기' },
   { key: 'bounces', label: '도탄', suffix: '회' },
   { key: 'knockback', label: '넉백', suffix: '×' },
   { key: 'speed', label: '이동 속도' },
-  { key: 'block_meter_max', label: '가드 게이지' },
+  { key: 'block_meter', label: '가드 게이지', suffix: '/라운드' },
+  { key: 'block_seconds', label: '가드 시간', suffix: '초' },
 ];
 
 /** 같은 값이면 setState 를 건너뛰기 위한 얕은 비교 */
@@ -147,7 +149,9 @@ export default function InfoPanel(): JSX.Element | null {
             ))}
           </tbody>
         </table>
-        <p className="info-foot">가까울수록 강함 · 600px 이상은 동일</p>
+        {/* 산탄(BUCKSHOT)은 감쇠 곡선이 따로라 600px 기준을 못 쓴다 — 표 자체는 서버가
+            그 곡선으로 계산해 주므로, 여기서는 "탄 1발 기준"이라는 것만 밝힌다. */}
+        <p className="info-foot">가까울수록 강함 · 탄 1발 기준</p>
       </section>
 
       <section className="info-block">

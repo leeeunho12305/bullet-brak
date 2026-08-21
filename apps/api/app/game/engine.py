@@ -10,11 +10,11 @@ from __future__ import annotations
 import random
 from typing import Any, Literal
 
-from app.game import constants as C
+from app.game import blocks, constants as C
 from app.game import maps, sim, training
 from app.game.bullets import update_bullets
-from app.game.cards import apply_card, random_cards, reset_card_state
-from app.game.models import Player, Room
+from app.game.cards import all_card_ids, apply_card, random_cards, reset_card_state
+from app.game.models import Room
 from app.game.physics import clamp
 
 #: 라운드 종료 시점의 승자 id 를 방 코드별로 기억(타이머 만료 때 사용).
@@ -38,6 +38,8 @@ def tick_room(room: Room) -> None:
     room.tick += 1
 
     if room.phase in ACTIVE_PHASES:
+        # 이동발판이 먼저 움직여야 올라탄 사람을 같은 틱에 실어 나를 수 있다.
+        blocks.update_movers(room)
         for player in room.players.values():
             sim.update_player(room, player)
         sim.update_bots(room)
@@ -84,17 +86,22 @@ def _check_round_over(room: Room) -> None:
     _ROUND_WINNER[room.code] = winner.id if winner else None
     if winner:
         room.round_wins[winner.id] = room.round_wins.get(winner.id, 0) + 1
-        winner.coins += 10
+        winner.coins += C.COINS_ROUND_WIN
 
 
 def open_card_pick(room: Room) -> None:
-    """훈련장 웨이브 클리어 보상. 카드 5장을 열어 준다(training 이 호출)."""
+    """훈련장 웨이브 클리어 보상. **카드 전체**를 열어 준다(training 이 호출).
+
+    훈련장은 이기려고 하는 곳이 아니라 시험해 보는 곳이다. 무작위 5장으로 묶으면
+    "이 카드가 어떻게 굴러가는지 보고 싶다"를 못 한다 — 그래서 여기서만 다 열어 준다.
+    대전(_resolve_round_over)은 그대로 무작위 5장이다.
+    """
     player = next(iter(room.players.values()), None)
     if player is None:
         return
     room.phase = "picking"
     room.loser_to_pick = player.id
-    room.available_cards = _pick_card_ids(C.CARD_CHOICES, player)
+    room.available_cards = all_card_ids()
 
 
 def _resolve_round_over(room: Room) -> None:
@@ -114,7 +121,7 @@ def _resolve_round_over(room: Room) -> None:
     if room.scores[winner.id] >= C.SCORE_TO_WIN:
         room.phase = "finished"
         room.winner_id = winner.id
-        winner.coins += 100
+        winner.coins += C.COINS_MATCH_WIN
         room.bullets.clear()
         room.zones.clear()
         room.loser_to_pick = None
@@ -199,14 +206,46 @@ def prepare_map(room: Room) -> None:
 
 
 def set_map(room: Room, map_id: str) -> bool:
-    """방장의 맵 선택. 대기실 / 매치 종료 상태에서만 바꿀 수 있다."""
+    """방장의 맵 선택. 대기실 / 매치 종료 상태에서만 바꿀 수 있다.
+
+    맵을 다시 고르면 에디터로 짠 배치는 버린다(고른 맵의 원본 지형으로 돌아간다).
+    """
     if room.phase not in ("waiting", "finished"):
         return False
     if not maps.is_valid_selection(map_id):
         return False
     room.map_id = map_id
+    room.custom_layout = None
     if map_id != maps.RANDOM_ID:
         maps.apply(room, map_id)
+    else:
+        maps.apply(room, room.active_map_id)  # 원본 지형 복구(미리보기용)
+    return True
+
+
+def set_platforms(room: Room, raw: Any) -> bool:
+    """방장이 맵 에디터에서 저장한 배치를 방에 적용한다.
+
+    편집한 순간 맵은 지금 깔린 맵으로 고정된다 — "무작위"인 채로 두면 다음 라운드에
+    남의 맵 위에 내 배치가 얹혀서 뜻이 통하지 않는다.
+    """
+    if room.phase not in ("waiting", "finished"):
+        return False
+    layout = blocks.normalize_all(raw)
+    if not layout:
+        return False
+    room.custom_layout = layout
+    room.map_id = room.active_map_id
+    maps.apply(room, room.active_map_id)
+    return True
+
+
+def clear_platforms(room: Room) -> bool:
+    """맵 에디터 초기화. 지금 맵의 원본 지형으로 되돌린다."""
+    if room.phase not in ("waiting", "finished"):
+        return False
+    room.custom_layout = None
+    maps.apply(room, room.active_map_id)
     return True
 
 
@@ -228,7 +267,6 @@ def reset_round(room: Room) -> None:
         p.vx = p.vy = 0.0
         p.hp = p.max_hp
         p.cooldown = 0.0
-        p.burst_queue = p.burst_timer = 0
         p.charging = False
         p.charge = 0.0
         p.windup = 0.0
@@ -237,7 +275,7 @@ def reset_round(room: Room) -> None:
         p.grounded = False
         p.jumps = 0
         p.blocking = False
-        p.guard_broken = False
+        # 가드 게이지는 라운드가 시작될 때만 채워진다(라운드 안에서는 다시 차지 않는다).
         p.block_meter = p.block_meter_max
         p.poison = 0
         p.cold_timer = p.dazzle_timer = p.silence_timer = 0
@@ -281,7 +319,7 @@ def reset_match(room: Room) -> None:
         p.width = p.height = C.PLAYER_SIZE
         p.block_meter_max = C.BLOCK_METER_MAX
         p.block_meter = C.BLOCK_METER_MAX
-        p.guard_broken = False
+        p.block_drain = C.BLOCK_DRAIN
         p.charging = False
         p.charge = 0.0
         p.cards.clear()
@@ -342,9 +380,21 @@ def pick_card(room: Room, player_id: str, card_id: str) -> bool:
     room.loser_to_pick = None
     room.available_cards = []
     if room.mode == "training":
-        # 훈련장은 라운드를 리셋하지 않는다. 카드를 챙기고 다음 웨이브로 넘어간다.
+        # 훈련장은 라운드를 리셋하지 않는다. 카드를 챙기고 하던 웨이브를 이어 간다.
         room.phase = "playing"
-        training.next_wave(room)
+        training.resume_after_pick(room)
     else:
         reset_round(room)
+    return True
+
+
+def open_training_cards(room: Room) -> bool:
+    """훈련장에서 플레이어가 직접 카드 목록을 연다. 열렸으면 True.
+
+    훈련장의 요점은 "이 카드가 어떻게 굴러가는지 지금 보고 싶다"이므로 웨이브를 깰
+    때까지 기다리게 하지 않는다. 대전에는 없는 문이다(training.can_open_cards 가 막는다).
+    """
+    if not training.can_open_cards(room):
+        return False
+    open_card_pick(room)
     return True

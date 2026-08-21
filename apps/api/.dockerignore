@@ -1,9 +1,10 @@
+# 패턴은 재귀가 아니다 — 하위 디렉터리까지 걸리려면 **/ 를 붙여야 한다.
 .venv
-__pycache__
-*.py[cod]
-.pytest_cache
-.mypy_cache
-.ruff_cache
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
 .coverage
 htmlcov
 .env

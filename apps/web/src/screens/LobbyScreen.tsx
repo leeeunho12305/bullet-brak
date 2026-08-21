@@ -1,7 +1,10 @@
 // 로비: 닉네임 / 외형 / 코인 + 방 만들기 · 코드로 참가 · 훈련 모드
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import AccountModal from '@/components/AccountModal';
 import AvatarEditor from '@/components/AvatarEditor';
+import ControlsGuide from '@/components/ControlsGuide';
+import Tutorial from '@/components/Tutorial';
 import { ApiError, api } from '@/api/client';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
@@ -22,6 +25,9 @@ export default function LobbyScreen() {
   const { nickname, customization, coins, setNickname } = useLocalProfile();
   const status = useGameStore((s) => s.status);
   const storeError = useGameStore((s) => s.error);
+  // 계정을 못 받았다 — 코인/아이템이 이 브라우저에만 남는다(서버에 DB 가 없는 배포).
+  const localOnly = useGameStore((s) => s.localOnly);
+  const loginId = useGameStore((s) => s.loginId);
 
   const [code, setCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(2);
@@ -29,6 +35,8 @@ export default function LobbyScreen() {
   const [maps, setMaps] = useState<MapInfo[]>([]);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [tutorial, setTutorial] = useState(false);
+  const [account, setAccount] = useState(false);
 
   // 시작 맵. 방을 만든 뒤 대기실에서 방장이 언제든 바꿀 수 있다.
   useEffect(() => {
@@ -104,9 +112,20 @@ export default function LobbyScreen() {
   return (
     <div className="screen">
       <header className="brand">
+        {/* 제목 왼쪽. 계정 기능이 꺼진 서버에서도 버튼은 남긴다 —
+            숨겨 버리면 왜 안 되는지 물어볼 곳조차 없어진다(모달이 이유를 설명한다). */}
+        <button type="button" className="btn btn-ghost" onClick={() => setAccount(true)}>
+          {loginId ? `🔐 @${loginId}` : '🔐 로그인'}
+        </button>
         <h1>BULLET BRAK</h1>
+        <button type="button" className="btn btn-ghost" onClick={() => setTutorial(true)}>
+          📖 튜토리얼
+        </button>
         <span className="badge">💰 {coins}</span>
       </header>
+
+      {tutorial ? <Tutorial onClose={() => setTutorial(false)} /> : null}
+      {account ? <AccountModal onClose={() => setAccount(false)} /> : null}
 
       {message ? (
         <div className="alert" role="alert">
@@ -135,6 +154,24 @@ export default function LobbyScreen() {
 
           {/* 외형 편집기(동료 컴포넌트) — store 의 customization 을 직접 갱신한다 */}
           <AvatarEditor />
+
+          {localOnly ? (
+            <p className="hint">
+              💾 계정에 연결되지 않아 코인과 아이템이 이 브라우저에만 저장돼요.
+            </p>
+          ) : null}
+
+          <div className="divider" />
+
+          {/* 예전에는 인게임 캔버스 위에 겹쳐 있었는데 시야를 가려서 여기로 내렸다. */}
+          <ControlsGuide />
+          <button
+            type="button"
+            className="btn btn-ghost btn-block"
+            onClick={() => setTutorial(true)}
+          >
+            📖 처음이신가요? 튜토리얼 보기
+          </button>
         </section>
 
         <section className="panel">

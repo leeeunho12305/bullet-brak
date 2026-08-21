@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.game import bullets, cards, constants as C, sim
+from app.game import bullets, cards, sim
 from app.game.bots import create_bot, update_bot
 from app.game.models import Player
 from app.game.rooms import RoomManager
@@ -107,7 +107,7 @@ def test_guard_zone_stuns_a_nearby_player(manager: RoomManager, card: str) -> No
     cards.apply_card(p, card)
     p.inputs.block = True
 
-    for _ in range(sim.GUARD_PERIOD * 2):
+    for _ in range(40):
         sim.update_player(room, p)
         sim.update_zones(room)
         room.tick += 1
@@ -127,7 +127,7 @@ def test_guard_zone_stuns_a_nearby_bot(manager: RoomManager, card: str) -> None:
     cards.apply_card(p, card)
     p.inputs.block = True
 
-    for _ in range(sim.GUARD_PERIOD * 2):
+    for _ in range(40):
         sim.update_player(room, p)
         sim.update_zones(room)
         room.tick += 1
@@ -203,4 +203,4 @@ def test_dazzle_bullet_stuns_a_bot(manager: RoomManager) -> None:
 
     _hit(room, player, bot)
 
-    assert bot.dazzle_timer >= C.DAZZLE_HIT_TICKS - 1
+    assert bot.dazzle_timer >= 24  # bullets._apply_status 의 25틱

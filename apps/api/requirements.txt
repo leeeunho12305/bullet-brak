@@ -1,5 +1,19 @@
+# -*- coding: utf-8 -*-
+# ↑ 지우지 말 것. 한국어 주석이 있는 requirements 파일을 한국어 Windows 에서
+#   pip 이 읽으면 cp949 로 디코딩하다 죽는다. pip 은 이 줄을 보고 UTF-8 로 읽는다.
+
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.0
 websockets==14.1
+
+# DB (DATABASE_URL 이 없으면 import 만 되고 쓰이지 않는다 — app/db/session.py 참고)
+# alembic 은 앱이 기동 시 스스로 upgrade head 를 돌리므로 런타임 의존성이다.
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# 비밀번호 해싱. C 확장이라 해싱 중 GIL 을 놓는다 —
+# app/services/passwords.py 가 asyncio.to_thread 로 빼서 60Hz 틱 루프를 막지 않는다.
+bcrypt==4.2.1

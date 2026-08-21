@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import random
 
+from app.game import blocks
 from app.game import constants as C
 from app.game.models import Bot, Player, Room
 from app.game.physics import resolve_platform_collision
@@ -226,21 +227,29 @@ def _jump(bot: Bot) -> None:
     bot.jump_cooldown = 40
 
 
-def _physics(bot: Bot, platforms: list[dict[str, float]]) -> None:
+def _physics(bot: Bot, room: Room) -> None:
     if bot.dir == -1:
         bot.vx -= 1.2
     elif bot.dir == 1:
         bot.vx += 1.2
 
-    speed = bot.speed * (0.65 if bot.cold_timer > 0 else 1.0)  # COLD BULLETS / FROST SLAM
-    bot.vx = max(-speed, min(speed, bot.vx))
-    if bot.dir == 0:
-        bot.vx *= C.FRICTION
+    # 플레이어(sim.update_player)와 같은 규칙이다. 이동 속도를 넘는 부분은 넉백으로 얻은
+    # 속도이므로 clamp/마찰로 지우지 않고 천천히 식힌다 — 봇도 총에 맞으면 밀려나야 한다.
+    # COLD BULLETS / FROST SLAM: 얼어 있는 동안은 최고 속도가 깎인다.
+    speed = bot.speed * (0.65 if bot.cold_timer > 0 else 1.0)
+    over = abs(bot.vx) - speed
+    if over > C.KNOCKBACK_MIN:
+        bot.vx = math.copysign(speed + over * C.KNOCKBACK_DECAY, bot.vx)
+    elif bot.dir == 0:
+        bot.vx *= blocks.ICE_FRICTION if bot.on_ice else C.FRICTION
+
+    blocks.carry(bot, room)
 
     bot.vy += C.GRAVITY
     bot.x += bot.vx
     bot.y += bot.vy
     bot.grounded = False
+    bot.on_ice = False
 
     if bot.x < 0:
         bot.x = 0.0
@@ -253,8 +262,18 @@ def _physics(bot: Bot, platforms: list[dict[str, float]]) -> None:
         bot.y = 0.0
         bot.vy = 0.0
 
-    for plat in platforms:
-        resolve_platform_collision(bot, plat)
+    # 블럭 효과(점프대/빙판/가시)는 플레이어와 같은 규칙으로 봇에게도 적용된다.
+    damage = 0.0
+    for index, plat in enumerate(room.platforms):
+        if not blocks.is_solid(plat):
+            blocks.touch(bot, plat)  # 점프대: 밀어내지 않고 튀어오르게만 한다
+            continue
+        side = resolve_platform_collision(bot, plat)
+        damage += blocks.on_contact(bot, plat, side, index)
+    if damage > 0:
+        bot.hp -= damage
+        if bot.hp <= 0:
+            kill_bot(bot)
 
 
 # --------------------------------------------------------------------------
@@ -287,6 +306,8 @@ def update_bot(room: Room, bot: Bot) -> None:
         bot.jump_cooldown -= 1
     if bot.reaction_timer > 0:
         bot.reaction_timer -= 1
+    if bot.spike_grace > 0:
+        bot.spike_grace -= 1
 
     _tick_status(room, bot)
     if not bot.alive:
@@ -296,7 +317,7 @@ def update_bot(room: Room, bot: Bot) -> None:
     if bot.dazzle_timer > 0:
         bot.dir = 0
         bot.evade_timer = 0
-        _physics(bot, room.platforms)
+        _physics(bot, room)
         return
 
     target = _nearest_player(room, bot)
@@ -322,7 +343,7 @@ def update_bot(room: Room, bot: Bot) -> None:
         bot.aim.x, bot.aim.y = bot.cx, bot.cy
         _wander(bot)
 
-    _physics(bot, room.platforms)
+    _physics(bot, room)
 
 
 def fall_check(room: Room) -> None:

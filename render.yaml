@@ -34,6 +34,13 @@ services:
       # 예) https://bullet-brak-web.onrender.com  (쉼표로 여러 개, 끝에 / 붙이지 말 것)
       - key: CORS_ORIGINS
         sync: false
+      # Render 는 드라이버 없는 postgresql://... 를 준다. 서버가 기동 시
+      # postgresql+asyncpg:// 로 바꾸고 sslmode 파라미터도 정리한다(app/config.py).
+      # 이 블록을 지우면 계정 기능만 꺼진 채(인메모리) 그대로 뜬다.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bullet-brak-db
+          property: connectionString
     # ⚠ 인스턴스를 2개 이상으로 올리지 말 것. 방 상태가 프로세스 메모리에 있어서
     #   같은 방 플레이어가 다른 인스턴스에 붙으면 게임이 갈라진다. docs/DEPLOYMENT.md §2
 
@@ -65,3 +72,18 @@ services:
       - path: /index.html
         name: Cache-Control
         value: no-cache
+
+# ── Postgres (계정/코인 영속화) ────────────────────────────────────────
+# 마이그레이션은 api 가 기동할 때 스스로 돌린다(alembic upgrade head).
+# Render 에 별도 job 을 만들 필요가 없고, compose 배포와 동작이 같아진다.
+#
+# ⚠ free 플랜 DB 는 생성 후 30일이 지나면 만료돼 삭제된다. 실제로 데이터를 지킬
+#   거면 유료 플랜으로 올릴 것. 만료돼도 api 는 죽지 않고 인메모리 모드로 떨어진다.
+databases:
+  - name: bullet-brak-db
+    databaseName: bulletbrak
+    user: bulletbrak
+    region: singapore # api 와 같은 리전이어야 내부 네트워크로 붙는다
+    plan: free
+    postgresMajorVersion: '17'
+    ipAllowList: [] # 외부 접속 차단. 같은 리전의 Render 서비스만 붙는다.

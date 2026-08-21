@@ -5,6 +5,10 @@ export const WORLD_HEIGHT = 600;
 export const MAX_CHARGE = 60;
 /** 라운드 2승 = 1점 (서버 constants.ROUNDS_TO_SCORE 와 같아야 한다) */
 export const ROUNDS_TO_SCORE = 2;
+/** 라운드 승리 보상 (서버 constants.COINS_ROUND_WIN) */
+export const COINS_ROUND_WIN = 10;
+/** 매치 승리 보상 (서버 constants.COINS_MATCH_WIN) */
+export const COINS_MATCH_WIN = 100;
 
 export type Phase = 'waiting' | 'playing' | 'round_over' | 'picking' | 'finished';
 export type Mode = 'pvp' | 'training';
@@ -71,8 +75,10 @@ export interface RoomState {
   phase: Phase;
   /** 방장이 고른 값. 'random' 일 수 있다. */
   map_id: string;
-  /** 지금 실제로 깔려 있는 맵 */
+  /** 지금 실제로 깔려 있는 맵. platforms 는 에디터로 고친 결과가 반영된 값이다. */
   map: MapInfo;
+  /** 발판이 맵 원본이 아니라 방장이 맵 에디터로 짠 배치인가 */
+  custom_map: boolean;
   players: RoomPlayer[];
 }
 
@@ -80,12 +86,18 @@ export interface PlayerStats {
   damage_mult: number;
   max_hp: number;
   speed: number;
+  /** 사격 간격(틱). 화면에는 cooldown_seconds 를 쓴다. */
   cooldown: number;
+  /** 같은 값을 초로 환산한 것. 서버가 계산한다(틱은 플레이어에게 의미가 없다). */
+  cooldown_seconds: number;
   bullet_speed: number;
   bullet_size: number;
   bounces: number;
   knockback: number;
-  block_meter_max: number;
+  /** 라운드마다 채워지는 가드 게이지 */
+  block_meter: number;
+  /** 그 게이지를 계속 눌러 다 쓰는 데 걸리는 시간(초) */
+  block_seconds: number;
   shots_per_fire: number;
 }
 
@@ -110,11 +122,10 @@ export interface PlayerSnap {
   aim: Vec;
   cooldown: number;
   max_cooldown: number;
+  /** 이번 라운드에 남은 가드 게이지. 누르고 있는 동안만 줄고, 라운드 안에서는 차지 않는다. */
   block_meter: number;
   block_meter_max: number;
   blocking: boolean;
-  /** 가드 게이지를 다 써서 가드가 깨진 상태(일정 비율까지 차야 다시 가드 가능). */
-  guard_broken: boolean;
   charging: boolean;
   charge: number;
   score: number;
@@ -163,18 +174,55 @@ export interface BulletSnap {
   color: string;
 }
 
+/** 폭발 섬광(zone type 'blast')이 남아 있는 틱. 서버 constants.BLAST_TICKS 와 같아야 한다. */
+export const BLAST_TICKS = 12;
+
 export interface ZoneSnap {
+  /** heal|toxic|static|emp|frost|implode|shockwave|radiance|chilling|blast */
   type: string;
   x: number;
   y: number;
   radius: number;
+  /** 남은 틱. blast 는 이 값으로 퍼지는 정도를 그린다. */
+  d: number;
 }
+
+/**
+ * 발판 종류 (서버 game/blocks.py 의 TYPES 와 같은 값이어야 한다).
+ *  solid  일반 블럭 · jump 점프대 · mover 이동발판 · ice 빙판 · hazard 가시
+ */
+export type BlockType = 'solid' | 'jump' | 'mover' | 'ice' | 'hazard';
+
+export const BLOCK_TYPES: BlockType[] = ['solid', 'jump', 'mover', 'ice', 'hazard'];
+
+/** 팔레트/범례용 표시 정보. 색은 renderer 와 MapPreview 가 공유한다. */
+export const BLOCK_INFO: Record<BlockType, { name: string; emoji: string; color: string; desc: string }> = {
+  solid: { name: '일반 블럭', emoji: '⬛', color: '#8d99ae', desc: '평범한 발판. 위아래·옆 모두 막힌다.' },
+  jump: {
+    name: '점프대',
+    emoji: '🔼',
+    color: '#51cf66',
+    desc: '바닥에 박아 넣는 발판. 걸려 넘어지지 않고 지나가면 그대로 튀어오른다.',
+  },
+  mover: { name: '이동 발판', emoji: '↔️', color: '#4dabf7', desc: '정해진 구간을 왕복한다. 올라타면 같이 실려 간다.' },
+  ice: { name: '빙판', emoji: '🧊', color: '#99e9f2', desc: '마찰이 거의 없다. 멈추기 어렵다.' },
+  hazard: { name: '가시', emoji: '🔺', color: '#ff6b6b', desc: '한 번 밟을 때마다 50 피해를 입고 튕겨난다.' },
+};
 
 export interface Platform {
   x: number;
   y: number;
   width: number;
   height: number;
+  /** 없으면 'solid' (서버가 일반 블럭에서는 생략한다) */
+  type?: BlockType;
+  /** 점프대 위력(위로 향하는 속도) */
+  power?: number;
+  /** 이동발판이 왕복하는 축 */
+  axis?: 'x' | 'y';
+  /** 이동발판 왕복 폭 / 속도 — 에디터에서만 쓰고 스냅샷에는 실리지 않는다. */
+  span?: number;
+  speed?: number;
 }
 
 export interface CardInfo {
@@ -203,7 +251,13 @@ export interface Snapshot {
   bots: BotSnap[];
   bullets: BulletSnap[];
   zones: ZoneSnap[];
+  /**
+   * 지금 깔린 발판. 서버는 LAYOUT_INTERVAL(0.5초)마다만 전부 실어 보낸다 —
+   * connection.ts 가 직전 목록을 기억했다가 채워 넣으므로 렌더러에서는 항상 채워져 있다.
+   */
   platforms: Platform[];
+  /** 그 사이 틱의 이동발판 좌표만. i 는 platforms 의 인덱스다. */
+  movers?: { i: number; x: number; y: number }[];
   loser_to_pick: string | null;
   available_cards: CardInfo[];
   winner_id: string | null;
@@ -240,7 +294,13 @@ export interface InputState {
 }
 
 export type ServerMessage =
-  | { type: 'welcome'; player_id: string; room: RoomState }
+  | {
+      type: 'welcome';
+      player_id: string;
+      room: RoomState;
+      /** 이번 입장이 계정에 묶였는지. null 이면 비로그인(진행이 저장되지 않는다). */
+      account_id?: string | null;
+    }
   | { type: 'room_state'; room: RoomState }
   | ({ type: 'state' } & Snapshot)
   | { type: 'chat'; message: ChatMessage }
@@ -255,17 +315,31 @@ export type ServerMessage =
   | { type: 'error'; message: string };
 
 export type ClientMessage =
-  | { type: 'join'; nickname: string; customization: Customization; coins: number }
+  | {
+      type: 'join';
+      nickname: string;
+      customization: Customization;
+      /** 비로그인일 때만 쓰인다. 토큰이 유효하면 서버가 계정 잔액으로 덮는다. */
+      coins: number;
+      /** 디바이스 토큰. 없으면 비로그인으로 입장한다. */
+      token?: string;
+    }
   | ({ type: 'input' } & InputState)
   | { type: 'aim'; x: number; y: number }
   | { type: 'shoot' }
   | { type: 'strong_start' }
   | { type: 'strong_release' }
   | { type: 'pick_card'; card_id: string }
+  /** 훈련장 전용. 싸우는 중에 카드 목록을 직접 연다(서버가 mode/phase 로 거른다). */
+  | { type: 'open_cards' }
   | { type: 'chat'; text: string }
   | { type: 'start_game' }
   | { type: 'restart' }
   | { type: 'rematch'; accept: boolean }
   | { type: 'avatar'; customization: Customization }
   /** 방장 전용. 서버가 방장이 아닌 요청은 조용히 무시한다. */
-  | { type: 'set_map'; map_id: string };
+  | { type: 'set_map'; map_id: string }
+  /** 방장 전용. 맵 에디터로 짠 배치를 저장한다(대기실에서만 유효). */
+  | { type: 'set_platforms'; platforms: Platform[] }
+  /** 방장 전용. 맵 원본 지형으로 되돌린다. */
+  | { type: 'reset_platforms' };

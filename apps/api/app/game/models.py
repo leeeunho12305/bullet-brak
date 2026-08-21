@@ -38,6 +38,11 @@ class Player:
     customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
     coins: int = 0
 
+    #: 로그인(디바이스 토큰)에 성공한 경우의 계정 id. DB 가 꺼져 있거나 토큰이
+    #: 없으면 None 이고, 그때 이 플레이어의 진행은 아무 데도 남지 않는다.
+    #: 매치 종료 시 전적/보상을 기록할 대상이기도 하다.
+    account_id: str | None = None
+
     # 물리
     x: float = 100.0
     y: float = 150.0
@@ -48,6 +53,10 @@ class Player:
     grounded: bool = False
     jumps: int = 0
     max_jumps: int = 1
+    #: 올라타 있는 이동발판의 room.platforms 인덱스(-1 = 없음). blocks 가 관리한다.
+    ride: int = -1
+    #: 직전 틱에 빙판을 밟았는가(마찰이 거의 없어진다).
+    on_ice: bool = False
 
     # 스탯
     hp: float = C.MAX_HP
@@ -64,23 +73,22 @@ class Player:
     revives: int = 0
     lifesteal: float = 0.0
     buckshot: int = 0
-    burst: int = 0  # BURST 카드: 한 번 누를 때 추가로 나가는 발수
-
-    # 점사 예약(한 번 누르면 같은 방향으로 burst 발이 더 나간다)
-    burst_queue: int = 0
-    burst_timer: int = 0
-    burst_angle: float = 0.0
+    burst: int = 0
 
     # 가드 / 강공격
+    #: 이번 라운드에 남은 가드 게이지. 누르고 있는 동안만 줄고, 라운드가 시작될 때만
+    #: block_meter_max 로 채워진다(라운드 안에서는 회복되지 않는다).
     block_meter: float = C.BLOCK_METER_MAX
     block_meter_max: float = C.BLOCK_METER_MAX
+    #: 가드 1틱당 소모량. SHIELDS UP 이 줄여서 같은 게이지로 더 오래 버티게 한다.
+    block_drain: float = C.BLOCK_DRAIN
     blocking: bool = False
-    guard_broken: bool = False  # 게이지 소진 → BLOCK_RECOVER_RATIO 까지 차야 해제
     charging: bool = False
     charge: float = 0.0
     windup: float = 0.0
-    empower_ready: bool = False  # EMPOWER: 가드로 충전됨, 다음 한 발에 소비
     still_ticks: int = 0
+    #: EMPOWER: 가드가 끝나 다음 사격 한 번이 강화된 상태.
+    empower_ready: bool = False
 
     # 상태이상 타이머(틱)
     poison: int = 0
@@ -89,6 +97,8 @@ class Player:
     silence_timer: int = 0
     echo_cooldown: int = 0
     blood_timer: int = 0
+    #: 가시를 다시 밟아 아플 때까지 남은 틱(blocks.HAZARD_GRACE). 한 번 밟음 = 한 번 피해.
+    spike_grace: int = 0
 
     aim: Vec = field(default_factory=Vec)
     inputs: Inputs = field(default_factory=Inputs)
@@ -125,6 +135,11 @@ class Bot:
     speed: float = 3.5
     jump_power: float = -14.0
     grounded: bool = False
+    #: 플레이어와 같은 블럭 상태(이동발판 탑승 / 빙판). blocks 가 관리한다.
+    ride: int = -1
+    on_ice: bool = False
+    #: 플레이어와 같은 가시 무적 시간(blocks.HAZARD_GRACE)
+    spike_grace: int = 0
     cooldown: float = 0.0
     customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
     # AI
@@ -175,6 +190,9 @@ class Bullet:
     damage: float = C.BASE_BULLET_DAMAGE
     knockback: float = C.BASE_KNOCKBACK
     life: int = C.BASE_BULLET_LIFE
+    #: 발사 시점의 수명. 벽/발판에 튕길 때마다 `life` 를 이 값으로 되돌린다 —
+    #: 그래야 도탄을 여러 장 골랐을 때 실제로 여러 번 튕긴다(수명이 먼저 끝나지 않는다).
+    life_max: int = C.BASE_BULLET_LIFE
     bounces: int = 0
     max_bounces: int = 0
     pierce: int = 0
@@ -242,7 +260,9 @@ class Room:
     map_id: str = M.DEFAULT_ID
     #: 지금 실제로 깔려 있는 맵. random 선택은 게임 시작 때 여기로 확정된다.
     active_map_id: str = M.DEFAULT_ID
-    platforms: list[dict[str, float]] = field(default_factory=lambda: M.platforms_of(M.DEFAULT_ID))
+    platforms: list[dict[str, Any]] = field(default_factory=lambda: M.platforms_of(M.DEFAULT_ID))
+    #: 맵 에디터로 방장이 직접 짠 배치. None 이 아니면 맵의 기본 발판 대신 이걸 깐다.
+    custom_layout: list[dict[str, Any]] | None = None
 
     scores: dict[str, int] = field(default_factory=dict)
     round_wins: dict[str, int] = field(default_factory=dict)

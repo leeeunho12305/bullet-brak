@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 
+from app.game import blocks
 from app.game import bullets as _bullets
 from app.game import constants as C
 from app.game.bots import fall_check as bot_fall_check
@@ -16,33 +17,30 @@ from app.game.bots import update_bot
 from app.game.models import Bot, Player, Room, Zone
 from app.game.physics import clamp, handle_lethal, resolve_platform_collision
 
-#: 가드 중 생성되는 장판: (카드 플래그, 존 타입, 반경, 지속틱)
-#:
-#: 적을 건드리는 장판(shockwave~frost)의 반경은 봇이 유지하는 거리(bots.NEAR_DISTANCE
-#: = 190px)보다 커야 한다. 예전에는 전부 110~140 이라 훈련장에서는 봇이 원 안으로
-#: 들어오는 일이 없어 EMP 같은 카드가 통째로 "작동 안 하는" 것처럼 보였다.
-#: 회복 장판(radiance/heal)은 내 발밑에만 필요하므로 작게 둔다.
+#: 가드를 **시작한 틱에 한 번만** 생성되는 장판: (카드 플래그, 존 타입, 반경, 지속틱)
 GUARD_ZONES: tuple[tuple[str, str, float, int], ...] = (
-    ("radiance", "radiance", 100.0, 18),
-    ("healing_field", "heal", 120.0, 60),
-    ("shockwave", "shockwave", 200.0, 1),
-    ("implode", "implode", 220.0, 30),
-    ("static_field", "static", 200.0, 45),
-    ("emp", "emp", 230.0, 12),
-    ("frost_slam", "frost", 200.0, 14),
+    ("radiance", "radiance", 110.0, 45),
+    ("healing_field", "heal", 120.0, 90),
+    ("shockwave", "shockwave", 130.0, 1),
+    ("implode", "implode", 170.0, 60),
+    ("static_field", "static", 130.0, 45),
+    ("emp", "emp", 130.0, 24),
+    ("frost_slam", "frost", 140.0, 20),
 )
 
 #: 소유자에게는 적용하지 않는 장판 타입
 HARMFUL_ZONES = frozenset({"toxic", "static", "emp", "frost", "implode", "shockwave", "chilling"})
 
-#: 소유자에게만 적용하는 장판 타입 — 회복을 적에게까지 나눠 주면 카드가 자해가 된다
-FRIENDLY_ZONES = frozenset({"heal", "radiance"})
+#: 소유자에게만 적용하는 장판 타입. 내 회복 장판이 그 위에 선 상대까지 살려 주면 안 된다.
+OWNER_ONLY_ZONES = frozenset({"heal", "radiance"})
 
-#: 가드 장판/톱날 생성 주기(레거시는 매 틱 생성 → 장판 폭증. 성능상 6틱마다로 제한)
-GUARD_PERIOD = 6
+#: 게임에 아무 영향도 주지 않는 연출용 장판(폭발 섬광). 클라이언트만 쓴다.
+EFFECT_ZONES = frozenset({"blast"})
 
 #: 상태이상 타이머(매 틱 1 감소)
-_TIMERS = ("blood_timer", "cold_timer", "dazzle_timer", "silence_timer", "echo_cooldown")
+_TIMERS = (
+    "blood_timer", "cold_timer", "dazzle_timer", "silence_timer", "echo_cooldown", "spike_grace",
+)
 
 
 # --------------------------------------------------------------------------
@@ -58,7 +56,6 @@ def update_player(room: Room, p: Player) -> None:
 
     if p.cooldown > 0:
         p.cooldown -= 1
-    _bullets.update_burst(room, p)  # BURST 예약분(같은 방향 연발)
     if p.charging:
         p.charge = clamp(p.charge + 2, 0.0, C.MAX_CHARGE)
 
@@ -80,51 +77,60 @@ def update_player(room: Room, p: Player) -> None:
 
     stunned = p.dazzle_timer > 0
     inp = p.inputs
-    # 게이지를 다 쓰면 가드가 깨지고, 꽉 찰 때까지 다시 못 올린다. 이 "깨짐" 상태가
-    # 없으면 게이지 0 근처에서 "1틱 가드 → 1틱 회복"이 반복돼(사실상 무한 가드)
-    # 6틱 주기인 가드 장판이 안 깔린다.
-    if p.block_meter <= 0:
-        p.guard_broken = True
-    elif p.guard_broken and p.block_meter >= p.block_meter_max * C.BLOCK_RECOVER_RATIO:
-        p.guard_broken = False
-    blocking = bool(inp.block) and not stunned and not p.guard_broken
+
+    # 가드는 게이지다. 누르고 있는 동안만 줄고, 손을 떼면 그 자리에서 멈춘다 —
+    # 언제든 끊을 수 있다. 라운드가 끝날 때까지 다시 채워지지는 않는다.
+    blocking = bool(inp.block) and p.block_meter > 0 and not stunned
+    started = blocking and not p.blocking
+    ended = p.blocking and not blocking
     p.blocking = blocking
 
     if blocking:
         p.vx *= 0.5
-        # 게이지는 시간으로 닳지 않는다 — 누르고 있는 한 가드 카드 효과도 계속 나간다.
-        # 닳는 건 탄을 실제로 받아쳤을 때뿐이다(bullets._reflect).
-        _guard_effects(room, p)
+        p.block_meter -= p.block_drain
+        # 부동소수 찌꺼기(1e-13)가 남으면 게이지를 다 썼는데도 한 틱 더 막아 준다.
+        if p.block_meter < 1e-6:
+            p.block_meter = 0.0
+        _guard_effects(room, p, started)
     else:
+        # EMPOWER: 가드를 끊은(또는 게이지가 바닥난) 직후 한 발이 강화된다.
+        if ended and p.has("empower"):
+            p.empower_ready = True
         if not stunned:
             if inp.left:
                 p.vx -= C.ACCEL
             if inp.right:
                 p.vx += C.ACCEL
-        regen = C.BLOCK_REGEN * (1.25 if p.has("shields_up") else 1.0)
-        p.block_meter = min(p.block_meter_max, p.block_meter + regen)
-
-    # 점프는 가드 중에도 된다(가드는 이동만 둔하게 할 뿐 발을 묶지 않는다).
-    if not stunned and inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
-        p.vy = p.jump_power
-        p.grounded = False
-        p.jumps += 1
-        inp.jump_consumed = True
+            if inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
+                p.vy = p.jump_power
+                p.grounded = False
+                p.jumps += 1
+                inp.jump_consumed = True
     if not inp.jump:
         inp.jump_consumed = False
 
-    # 이동 / 중력 / 경계 / 발판
-    speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0)
-    if p.blood_timer > 0:  # TASTE OF BLOOD
-        speed *= C.BLOOD_SPEED_MULT
-    p.vx = clamp(p.vx, -speed, speed)
-    if not inp.left and not inp.right:
-        p.vx *= C.FRICTION
+    # 이동 / 중력 / 경계 / 발판 (TASTE OF BLOOD 는 여기서 속도를 올린다)
+    speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0) * (1.35 if p.blood_timer > 0 else 1.0)
+    over = abs(p.vx) - speed
+    if over > C.KNOCKBACK_MIN:
+        # 이동 입력으로 낼 수 있는 속도는 speed 까지다. 그보다 빠른 건 넉백/폭발로 얻은
+        # 속도이므로 clamp 로 잘라내지도, 마찰로 지우지도 않는다. 예전에는 둘 다 했기 때문에
+        # 넉백이 다음 틱에 통째로 사라졌고, 그래서 낙사 맵 말고는 아무 쓸모가 없었다.
+        p.vx = math.copysign(speed + over * C.KNOCKBACK_DECAY, p.vx)
+    else:
+        p.vx = clamp(p.vx, -speed, speed)
+        if not inp.left and not inp.right:
+            # 빙판 위에서는 거의 멈추지 못한다(직전 틱의 접촉 판정을 쓴다).
+            p.vx *= blocks.ICE_FRICTION if p.on_ice else C.FRICTION
+
+    # 올라타 있던 이동발판을 따라간다(발판은 engine 이 이미 이번 틱 위치로 옮겨 뒀다).
+    blocks.carry(p, room)
 
     p.vy += C.GRAVITY
     p.x += p.vx
     p.y += p.vy
     p.grounded = False
+    p.on_ice = False
 
     if p.x < 0:
         p.x, p.vx = 0.0, 0.0
@@ -135,35 +141,45 @@ def update_player(room: Room, p: Player) -> None:
     if p.y < 0:
         p.y, p.vy = 0.0, 0.0
 
-    for plat in room.platforms:
-        resolve_platform_collision(p, plat)
+    damage = 0.0
+    for index, plat in enumerate(room.platforms):
+        if not blocks.is_solid(plat):
+            blocks.touch(p, plat)  # 점프대: 밀어내지 않고 튀어오르게만 한다
+            continue
+        side = resolve_platform_collision(p, plat)
+        damage += blocks.on_contact(p, plat, side, index)
+    if damage > 0:
+        p.hp -= damage
+        if p.hp <= 0:
+            handle_lethal(p)  # 가시로도 PHOENIX(revives) 는 발동한다
+            if not p.alive:
+                return
 
     if p.has("chilling_presence") and room.tick % 10 == 0:
         room.zones.append(Zone("chilling", p.cx, p.cy, 150.0, 12, p.id))
 
 
-def _guard_effects(room: Room, p: Player) -> None:
-    """가드 유지 중 발동하는 카드 효과(텔레포트/실드차지/장판/톱날 등)."""
+def _guard_effects(room: Room, p: Player, started: bool) -> None:
+    """가드 중 발동하는 카드 효과(실드차지/장판/톱날 등).
+
+    장판과 톱날은 **가드를 시작한 그 틱에 한 번만** 만든다. 예전처럼 가드가 유지되는 내내
+    뿌리면 같은 장판이 겹겹이 쌓여 회복량과 끌어당김이 몇 배로 뻥튀기된다.
+    """
     cx, cy = p.cx, p.cy
     dx, dy = p.aim.x - cx, p.aim.y - cy
     mag = math.hypot(dx, dy) or 1.0
     ux, uy = dx / mag, dy / mag
 
-    if p.has("empower"):
-        p.empower_ready = True  # 가드를 놓은 뒤 쏘는 첫 발에 실린다
     if p.has("shield_charge"):
         p.vx += ux * 5
         p.vy += uy * 2
-    if p.has("teleport"):
-        p.x = clamp(cx + ux * 110, 0.0, C.WIDTH - p.width)
-        p.y = clamp(cy + uy * 50, 0.0, C.HEIGHT - p.height)
     if p.has("tactical_reload"):
         p.cooldown = max(0.0, p.cooldown - 8)
     if p.has("scavenger"):
         p.cooldown = max(0.0, p.cooldown - 4)
     # ECHO 반격탄은 bullets._reflect 가 player.has("echo")/echo_cooldown 으로 처리한다
 
-    if room.tick % GUARD_PERIOD:
+    if not started:
         return
     for flag, ztype, radius, duration in GUARD_ZONES:
         if p.has(flag):
@@ -194,7 +210,6 @@ def _corpse_physics(room: Room, p: Player) -> None:
     """사망 플레이어 시체는 중력만 받고 발판 위에 눕는다."""
     p.blocking = False
     p.charging = False
-    _bullets.cancel_burst(p)
     p.vy += C.GRAVITY
     p.x += p.vx
     p.y += p.vy
@@ -231,7 +246,6 @@ def kill(p: Player) -> None:
     p.block_meter = 0.0
     p.silence_timer = 0
     p.poison = 0
-    _bullets.cancel_burst(p)
 
 
 def check_fall_death(room: Room) -> None:
@@ -266,15 +280,16 @@ def update_zones(room: Room) -> None:
     entities = room.entities()
     for zone in room.zones:
         zone.duration -= 1
+        if zone.type in EFFECT_ZONES:
+            continue  # 폭발 섬광 — 클라이언트 연출 전용이라 아무에게도 닿지 않는다
         harmful = zone.type in HARMFUL_ZONES
-        friendly = zone.type in FRIENDLY_ZONES
+        owner_only = zone.type in OWNER_ONLY_ZONES
         for entity in entities:
             if not entity.alive:
                 continue
-            mine = zone.owner == entity.id
-            if harmful and mine:
+            if harmful and zone.owner == entity.id:
                 continue
-            if friendly and not mine:
+            if owner_only and zone.owner != entity.id:
                 continue
             _apply_zone(zone, entity)
     room.zones = [z for z in room.zones if z.duration > 0]
@@ -291,20 +306,28 @@ def _apply_zone(z: Zone, e: Player | Bot) -> None:
     is_player = isinstance(e, Player)
 
     if kind == "heal":
-        e.hp = min(e.max_hp, e.hp + 0.8 * power)
+        e.hp = min(e.max_hp, e.hp + 0.45 * power)
     elif kind == "radiance":
         e.hp = min(e.max_hp, e.hp + 0.25 * power)
     elif kind == "toxic":
-        e.hp -= 0.7 * power
-        e.poison += 1
+        # 한 방이 아니라 오래 갉는 장판이다. 독 중첩도 매 틱이 아니라 주기적으로만 쌓인다.
+        e.hp -= C.TOXIC_TICK_DAMAGE * power
+        if is_player and z.duration % C.TOXIC_STACK_PERIOD == 0:
+            e.poison += 1
     elif kind in ("static", "emp"):
         e.silence_timer = max(e.silence_timer, 25)
         e.dazzle_timer = max(e.dazzle_timer, 20)
     elif kind == "frost":
         e.cold_timer = max(e.cold_timer, 50)
     elif kind == "implode":
-        e.vx += (-dx / norm) * 0.35 * power
-        e.vy += (-dy / norm) * 0.35 * power
+        # 속도만 건드리면 마찰(FRICTION)과 이동 입력 clamp 에 그대로 지워져서 아무도
+        # 끌려오지 않았다. 위치를 직접 당기고 속도에도 같은 방향을 실어 준다.
+        # 가장자리에서도 최소한은 끌리도록 세기의 바닥을 40% 로 둔다.
+        pull = C.IMPLODE_PULL * (0.4 + 0.6 * power)
+        e.x -= (dx / norm) * pull
+        e.y -= (dy / norm) * pull
+        e.vx -= (dx / norm) * 0.6 * power
+        e.vy -= (dy / norm) * 0.6 * power
     elif kind == "shockwave":
         e.vx += (dx / norm) * 6 * power
         e.vy += (dy / norm) * 4 * power

@@ -1,9 +1,7 @@
-"""가드: 시간이 아니라 "막아 낸 만큼" 닳는다 / 가드 중 점프.
+"""가드(라운드당 게이지)와 가드/장판 효과 검증.
 
-- 게이지가 시간으로 닳던 시절에는 누르고 있어도 10초 뒤에 가드가 저절로 내려가서,
-  가드로 켜지는 장판 카드(RADIANCE / HEALING FIELD / EMP ...)가 "시간이 지나면
-  자동으로 꺼지는" 것처럼 보였다. 지금은 탄을 받아쳤을 때만 닳는다.
-- 가드는 이동만 둔하게 만들 뿐 점프를 막지 않는다.
+가드는 게이지다 — 누르고 있는 동안만 줄고 손을 떼면 그 자리에서 멈춘다.
+가득 찬 게이지(150)를 계속 눌러 다 쓰는 데 30초가 걸리고, 라운드가 다시 시작될 때만 채워진다.
 """
 
 from __future__ import annotations
@@ -12,190 +10,255 @@ import math
 
 import pytest
 
-from app.game import bullets, cards, constants as C, sim
-from app.game.models import Player
-from app.game.rooms import RoomManager
+from app.game import bullets, cards, constants as C, engine, sim
+from app.game.models import Player, Room, Zone
 
 
-@pytest.fixture
-def manager() -> RoomManager:
-    return RoomManager()
-
-
-def _playing_room(manager: RoomManager):
-    room = manager.create("pvp", 2, map_id="classic")
+def _room() -> tuple[Room, Player]:
+    room = Room(code="222222")
     room.phase = "playing"
-    return room
+    player = Player(id="a", x=100.0, y=300.0)
+    room.players["a"] = player
+    return room, player
 
 
-def _add_player(room, pid: str = "a", x: float = 100.0, y: float = 100.0) -> Player:
-    p = Player(id=pid, nickname=pid, x=x, y=y)
-    room.players[pid] = p
-    room.scores.setdefault(pid, 0)
-    room.round_wins.setdefault(pid, 0)
-    return p
+# --------------------------------------------------------------------------
+# 가드 = 라운드당 게이지
+# --------------------------------------------------------------------------
+
+#: 게이지를 끝까지 쓰는 데 걸리는 틱(= 30초)
+_FULL_GUARD_TICKS = int(C.BLOCK_DRAIN_SECONDS * C.TICK_RATE)
 
 
-def _hold(room, p: Player, ticks: int) -> None:
-    for _ in range(ticks):
+def test_full_guard_gauge_lasts_thirty_seconds() -> None:
+    room, p = _room()
+    assert p.block_meter == C.BLOCK_METER_MAX == 150.0
+    p.inputs.block = True
+
+    for _ in range(_FULL_GUARD_TICKS - 1):
         sim.update_player(room, p)
-        room.tick += 1
+    assert p.blocking, "30초가 되기 전에 가드가 풀렸다"
+    assert p.block_meter > 0
+
+    sim.update_player(room, p)
+    assert p.block_meter == 0.0
+
+    # 바닥나면 계속 누르고 있어도 다시 켜지지 않는다(라운드 안에서는 회복되지 않는다).
+    sim.update_player(room, p)
+    assert not p.blocking
 
 
-def _recover_ticks(p: Player) -> int:
-    """깨진 가드가 다시 설 때까지 걸리는 틱."""
-    return math.ceil(p.block_meter_max * C.BLOCK_RECOVER_RATIO / C.BLOCK_REGEN) + 2
+def test_guard_can_be_released_midway_and_the_rest_is_kept() -> None:
+    """중간에 끊을 수 있어야 한다 — 남은 게이지는 그대로 아껴 둔다."""
+    room, p = _room()
+    p.inputs.block = True
+    for _ in range(300):  # 5초만 쓴다
+        sim.update_player(room, p)
+    left = p.block_meter
+    assert left == pytest.approx(C.BLOCK_METER_MAX - C.BLOCK_DRAIN * 300)
+
+    p.inputs.block = False
+    for _ in range(120):
+        sim.update_player(room, p)
+    assert not p.blocking, "키를 뗐는데도 가드가 유지됐다"
+    assert p.block_meter == left, "가드를 끊었는데 게이지가 계속 줄었다"
+
+    # 남은 만큼 다시 쓸 수 있다.
+    p.inputs.block = True
+    sim.update_player(room, p)
+    assert p.blocking
+    assert p.block_meter < left
 
 
-def _shoot_at(room, guard: Player, shots: int = 1) -> None:
-    """가드 중인 guard 에게 탄을 shots 발 먹인다(= 게이지를 깎는 유일한 방법)."""
-    attacker = room.players.get("atk") or _add_player(room, "atk", x=600.0)
-    for _ in range(shots):
-        bullet = bullets.spawn_bullet(room, attacker, 0.0)
-        # 한 틱 이동한 뒤 몸통 한복판에 닿도록 둔다.
-        bullet.x, bullet.y = guard.cx - bullet.vx, guard.cy
-        room.bullets.append(bullet)
+def test_round_reset_refills_guard() -> None:
+    room, p = _room()
+    room.players["b"] = Player(id="b", x=400.0, y=300.0)
+    p.block_meter = 0.0
+
+    engine.reset_round(room)
+
+    assert p.block_meter == p.block_meter_max == C.BLOCK_METER_MAX
+
+
+def test_defender_adds_gauge_and_shields_up_slows_the_drain() -> None:
+    _, p = _room()
+    cards.apply_card(p, "defender")
+    cards.apply_card(p, "shields_up")
+
+    assert p.block_meter_max == C.BLOCK_METER_MAX + 75.0
+    assert p.block_meter == C.BLOCK_METER_MAX + 75.0
+    assert p.block_drain == pytest.approx(C.BLOCK_DRAIN * 0.7)
+
+
+def test_empower_boosts_only_the_first_shot_after_a_guard() -> None:
+    room, p = _room()
+    cards.apply_card(p, "empower")
+    p.inputs.block = True
+    for _ in range(30):
+        sim.update_player(room, p)
+    assert not p.empower_ready, "가드 중인데 벌써 강화가 준비됐다"
+
+    p.inputs.block = False  # 중간에 끊는다
+    sim.update_player(room, p)
+    assert p.empower_ready, "가드를 끊었는데 강화가 준비되지 않았다"
+
+    p.cooldown = 0.0
+    bullets.fire(room, p)
+    boosted = room.bullets[-1].damage
+    p.cooldown = 0.0
+    bullets.fire(room, p)
+    plain = room.bullets[-1].damage
+
+    assert boosted == pytest.approx(plain * 1.6)
+    assert not p.empower_ready
+
+
+# --------------------------------------------------------------------------
+# 가드 반사
+# --------------------------------------------------------------------------
+
+
+def test_a_reflected_bullet_actually_flies_back() -> None:
+    """예전에는 반사가 도탄으로 세어져서, 도탄 카드가 없는 보통 탄(max_bounces=0)이
+    반사되자마자 `bounces > max_bounces` 검사에 걸려 다음 틱에 사라졌다 —
+    "막아도 되돌아가는 탄이 안 보인다"의 정체다."""
+    room, blocker = _room()
+    attacker = Player(id="b", x=700.0, y=0.0)  # 되돌아간 탄의 경로에서 비켜 세운다
+    room.players["b"] = attacker
+    blocker.blocking = True
+
+    bullet = bullets.spawn_bullet(room, attacker, math.pi)  # 왼쪽(blocker) 으로
+    bullet.x, bullet.y = blocker.cx, blocker.cy
+    room.bullets = [bullet]
+
+    bullets._hit_players(room, bullet)
+    assert bullet.owner == blocker.id
+    assert bullet.vx > 0, "반사했는데 방향이 그대로다"
+
+    for _ in range(20):
         bullets.update_bullets(room)
-        room.bullets.clear()  # 되받아친 탄은 이 테스트에 필요 없다
+
+    assert bullet.active, "반사한 탄이 곧바로 사라졌다"
+    assert bullet.x > blocker.cx + 100, "반사한 탄이 날아가지 않았다"
 
 
-def _break_guard(room, p: Player) -> None:
-    """게이지를 다 깎아 가드를 깨뜨린다."""
-    for _ in range(40):
-        if p.block_meter <= 0:
+def test_a_reflected_bullet_can_hit_the_original_shooter() -> None:
+    room, blocker = _room()
+    attacker = Player(id="b", x=400.0, y=300.0)
+    room.players["b"] = attacker
+    blocker.blocking = True
+
+    bullet = bullets.spawn_bullet(room, attacker, math.pi)
+    bullet.x, bullet.y = blocker.cx, blocker.cy
+    room.bullets = [bullet]
+    bullets._hit_players(room, bullet)
+
+    before = attacker.hp
+    for _ in range(60):
+        bullets.update_bullets(room)
+        if attacker.hp < before:
             break
-        _shoot_at(room, p)
-    _hold(room, p, 1)
-    assert p.guard_broken
+
+    assert attacker.hp < before, "반사한 탄이 쏜 사람에게 닿지 않았다"
 
 
 # --------------------------------------------------------------------------
-# 가드 브레이크
+# 가드 장판
 # --------------------------------------------------------------------------
 
 
-def test_guard_never_times_out_while_held(manager: RoomManager) -> None:
-    """아무도 안 쏘면 30초를 눌러도 가드가 안 내려간다."""
-    room = _playing_room(manager)
-    p = _add_player(room)
+def test_guard_zones_spawn_once_per_guard() -> None:
+    """예전에는 가드가 유지되는 내내 6틱마다 뿌려서 회복량이 몇 배로 뻥튀기됐다."""
+    room, p = _room()
     cards.apply_card(p, "healing_field")
     p.inputs.block = True
 
-    _hold(room, p, 60 * 30)
+    for _ in range(180):  # 3초 동안 계속 누르고 있어도 한 장뿐이어야 한다
+        sim.update_player(room, p)
 
-    assert p.blocking, "시간이 지났다고 가드가 저절로 꺼지면 안 된다"
-    assert not p.guard_broken
-    assert p.block_meter == p.block_meter_max, "안 맞았으면 게이지도 그대로다"
-    assert any(z.type == "heal" for z in room.zones), "장판도 계속 깔려 있어야 한다"
+    assert len([z for z in room.zones if z.type == "heal"]) == 1
 
 
-def test_guard_drains_only_when_it_actually_blocks_something(manager: RoomManager) -> None:
-    room = _playing_room(manager)
-    p = _add_player(room)
-    p.inputs.block = True
-    _hold(room, p, 30)
-    assert p.block_meter == p.block_meter_max
+def test_healing_field_does_not_heal_the_enemy_standing_in_it() -> None:
+    room, p = _room()
+    enemy = Player(id="b", x=100.0, y=300.0)
+    enemy.hp = 50.0
+    room.players["b"] = enemy
+    room.zones.append(Zone("heal", p.cx, p.cy, 120.0, 30, p.id))
 
-    _shoot_at(room, p)
+    for _ in range(30):
+        sim.update_zones(room)
 
-    assert p.block_meter < p.block_meter_max, "막아 낸 만큼은 닳아야 한다"
-
-
-def test_guard_breaks_after_blocking_enough_shots(manager: RoomManager) -> None:
-    room = _playing_room(manager)
-    p = _add_player(room)
-    p.inputs.block = True
-    _hold(room, p, 1)
-
-    _break_guard(room, p)
-
-    assert not p.blocking, "게이지가 0 이면 버튼을 눌러도 가드가 서면 안 된다"
+    assert enemy.hp == 50.0, "내 회복 장판이 상대까지 살려 줬다"
 
 
-def test_broken_guard_recharges_while_the_button_is_held(manager: RoomManager) -> None:
-    """버튼을 놓지 않아도 게이지가 다시 찬다."""
-    room = _playing_room(manager)
-    p = _add_player(room)
-    p.inputs.block = True
-    _hold(room, p, 1)
-    _break_guard(room, p)
+def test_healing_field_does_not_heal_an_enemy_bot_either() -> None:
+    """훈련장에서도 같다 — 내 회복 장판은 나만 회복한다."""
+    from app.game.bots import create_bot
 
-    _hold(room, p, _recover_ticks(p))
+    room, p = _room()
+    room.mode = "training"
+    bot = create_bot(room, "dummy")
+    bot.x, bot.y = p.x, p.y
+    bot.hp = 20.0
+    room.zones.append(Zone("heal", p.cx, p.cy, 120.0, 60, p.id))
 
-    assert not p.guard_broken
-    assert p.blocking, "회복이 끝났으면 누르고 있던 가드가 다시 서야 한다"
+    for _ in range(60):
+        sim.update_zones(room)
 
-
-def test_healing_field_keeps_healing_across_a_guard_break(manager: RoomManager) -> None:
-    """HEALING FIELD: 가드가 깨졌다 회복된 뒤에도 장판이 다시 깔린다."""
-    room = _playing_room(manager)
-    p = _add_player(room)
-    cards.apply_card(p, "healing_field")
-    p.inputs.block = True
-    _hold(room, p, 1)
-    _break_guard(room, p)
-    room.zones.clear()
-
-    # 깨져 있는 동안에는 계속 눌러도 장판이 안 깔린다.
-    _hold(room, p, _recover_ticks(p) // 2)
-    assert p.guard_broken
-    assert not room.zones, "가드가 깨진 동안에는 장판이 깔리면 안 된다"
-
-    # 회복이 끝나면 누르고 있던 가드가 다시 서고 장판도 다시 깔린다.
-    _hold(room, p, _recover_ticks(p) + sim.GUARD_PERIOD * 2)
-
-    assert any(z.type == "heal" for z in room.zones), "가드가 돌아왔으면 회복 장판도 돌아와야 한다"
+    assert bot.hp == 20.0, "내 회복 장판이 봇까지 살려 줬다"
 
 
-def test_radiance_zone_spawns_on_every_guard_period(manager: RoomManager) -> None:
-    """RADIANCE 장판이 틱 위상과 무관하게 꾸준히 깔린다."""
-    room = _playing_room(manager)
-    p = _add_player(room)
-    cards.apply_card(p, "radiance")
+def test_radiance_on_hit_lands_under_the_shooter_not_the_victim() -> None:
+    """radiance 는 소유자만 회복하는 장판이다. 맞은 쪽 발밑에 깔면 회복은 안 되면서
+    "회복 장판이 적을 살린다"는 그림만 남는다."""
+    room, shooter = _room()
+    victim = Player(id="b", x=600.0, y=300.0)
+    room.players["b"] = victim
+    cards.apply_card(shooter, "radiance")
+
+    bullet = bullets.spawn_bullet(room, shooter, 0.0)
+    bullet.x, bullet.y = victim.cx, victim.cy
+    bullets._damage_player(room, bullet, victim)
+
+    zone = next(z for z in room.zones if z.type == "radiance")
+    assert (zone.x, zone.y) == (shooter.cx, shooter.cy)
+    assert zone.owner == shooter.id
+
+
+def test_implode_pulls_an_enemy_toward_the_center() -> None:
+    """속도만 건드리던 시절에는 마찰에 지워져서 아무도 끌려오지 않았다."""
+    room, p = _room()
+    enemy = Player(id="b", x=200.0, y=300.0)
+    room.players["b"] = enemy
+    cards.apply_card(p, "implode")
+    p.aim.x, p.aim.y = 200.0, 300.0
     p.inputs.block = True
 
-    _hold(room, p, sim.GUARD_PERIOD * 4)
+    sim.update_player(room, p)  # 가드 시작 → implode 장판 생성
+    assert any(z.type == "implode" for z in room.zones)
 
-    assert sum(1 for z in room.zones if z.type == "radiance") >= 3
+    before = enemy.x
+    for _ in range(30):
+        sim.update_zones(room)
 
-
-# --------------------------------------------------------------------------
-# 가드 중 점프
-# --------------------------------------------------------------------------
-
-
-def test_player_can_jump_while_guarding(manager: RoomManager) -> None:
-    room = _playing_room(manager)
-    p = _add_player(room)
-    p.inputs.block = True
-    p.inputs.jump = True
-
-    sim.update_player(room, p)
-
-    assert p.vy < 0, "가드 중에도 점프는 된다"
-    assert p.blocking, "점프해도 가드는 유지된다"
-    assert p.jumps == 1
+    assert enemy.x < before - 20, "끌어당김이 눈에 띄게 움직이지 않았다"
 
 
-def test_guard_jump_still_costs_a_jump(manager: RoomManager) -> None:
-    """가드 중 점프도 점프 횟수를 쓴다(누르고 있다고 계속 뜨지 않는다)."""
-    room = _playing_room(manager)
-    p = _add_player(room)
-    p.inputs.block = True
-    p.inputs.jump = True
+def test_toxic_cloud_is_weak_per_tick_but_lasts_four_seconds() -> None:
+    room, p = _room()
+    victim = Player(id="b", x=100.0, y=300.0)
+    room.players["b"] = victim
+    room.zones.append(
+        Zone("toxic", victim.cx, victim.cy, C.TOXIC_RADIUS, C.TOXIC_TICKS, p.id)
+    )
 
-    _hold(room, p, 10)
+    sim.update_zones(room)
+    assert victim.max_hp - victim.hp < 1.0, "한 틱에 아픈 장판이면 '오래 깔린다'가 무의미하다"
 
-    assert p.jumps == 1
+    for _ in range(C.TOXIC_TICKS - 1):
+        sim.update_zones(room)
 
-
-def test_stun_still_blocks_the_jump(manager: RoomManager) -> None:
-    room = _playing_room(manager)
-    p = _add_player(room)
-    p.dazzle_timer = 30
-    p.inputs.jump = True
-
-    sim.update_player(room, p)
-
-    assert p.jumps == 0
-    assert p.vy > 0, "기절 중에는 중력만 받는다"
+    assert not room.zones, "4초가 지나도 구름이 남아 있다"
+    total = victim.max_hp - victim.hp
+    assert 30.0 < total < 40.0

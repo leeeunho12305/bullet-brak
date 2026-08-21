@@ -3,7 +3,7 @@
 ROUNDS 스타일 2D PvP 물리 슈팅 게임. **FastAPI(서버 권위 60Hz 시뮬레이션) + React 19(Vite + TypeScript)** 모노레포.
 
 - 라운드 2승 = 1점, 먼저 5점을 내면 매치 승리
-- 라운드에서 진 쪽이 카드 5장 중 1장을 골라 빌드를 쌓는다 (카드 67종)
+- 라운드에서 진 쪽이 카드 5장 중 1장을 골라 빌드를 쌓는다 (카드 66종). 훈련장에서는 카드가 전부 열려 있어 아무 때나 원하는 것을 시험해 볼 수 있다
 - 물리 기반 전투: 넉백, 낙사, 도탄, 폭발, 가드 반사, 거리별 대미지 감쇠
 
 ---
@@ -23,29 +23,18 @@ pnpm dev                 # api(:8000) + web(:5173) 를 한 터미널에서 (Ctrl
 
 브라우저는 **http://localhost:5173** 하나만 보면 된다. vite dev 서버가 `/api` 와 `/ws` 를 FastAPI 로 프록시한다.
 
-| 명령 | 하는 일 |
-|---|---|
-| `pnpm bootstrap` | `pnpm install` + `apps/api/.venv` 생성 및 의존성 설치 |
-| `pnpm dev` | 백엔드 + 프론트 동시 실행. 로그에 `[api]` / `[web]` 접두어가 붙는다 |
-| `pnpm dev:api` / `pnpm dev:web` | 한쪽만 (터미널을 따로 쓰고 싶을 때) |
-| `pnpm test` | pytest + `tsc --noEmit` |
+### Docker (배포 전용)
 
-포트가 겹치면 `API_PORT` / `WEB_PORT` 로 바꾼다 (`WEB_PORT=5200 pnpm dev`).
-`python` 을 못 찾는다고 하면 `PYTHON=C:/Python312/python.exe pnpm bootstrap` 처럼 경로를 직접 준다.
-
-`make` 가 있으면 `make setup` / `make dev` 도 같은 일을 한다.
-
-> **venv 가 깨진 것 같으면** — `apps/api/.venv` 에 `Scripts/`(또는 `bin/`)는 있는데 `python.exe` 가
-> 없는 껍데기 상태가 되면 백엔드가 뜨지 않는다(도커에서 만든 venv 가 바인드 마운트로 새어
-> 들어오거나 생성이 중간에 끊긴 경우). `pnpm setup:api` 가 이 상태를 감지해 지우고 다시 만든다.
-
-### Docker
+**도커는 배포에만 쓴다.** 개발용 compose 스택과 Dockerfile 의 dev 스테이지는 없다 —
+로컬 개발 경로는 위의 `make dev` 하나뿐이다.
 
 ```bash
-make up          # 개발 스택 (핫 리로드)      -> http://localhost:5173
-make prod-up     # 운영 스택 (nginx 단일 진입점) -> http://localhost:8080
-make down / make prod-down
+make up      # 배포 스택 (api + postgres + nginx) -> http://localhost:8080
+make down
 ```
+
+`docker-compose.yml` 이 곧 배포 단위다(Dokploy/Coolify 가 이 파일을 그대로 읽는다).
+**`POSTGRES_PASSWORD` 가 없으면 기동을 거부한다** — `.env` 에 넣거나 환경변수로 준다.
 
 #### Windows + WSL 조합 메모
 
@@ -74,9 +63,8 @@ wsl --shutdown          # 그룹 반영
 vmIdleTimeout=-1
 ```
 
-레포가 `C:\...` 에 있고 도커가 WSL 에서 돌면 마운트가 `/mnt/c` 를 거쳐 **느리고 파일 변경 감지가 안 된다.** 이때만 `.env` 에 `WATCH_POLLING=true` 를 넣으면 폴링으로 동작한다. 아예 빠르게 하려면 레포를 WSL 파일시스템(`~/projects/...`)에 두고 거기서 `make up` 하는 것이 정석이다.
-
-> 일상 개발은 도커 없이 `make dev` 가 가장 빠르다. 도커는 운영 스택 검증(`make prod-up`)에 쓰는 것을 권한다.
+> 배포 스택은 소스를 마운트하지 않고 이미지에 굽기 때문에, 예전의 `/mnt/c` 마운트 성능·파일감지 문제는
+> 더 이상 없다. 일상 개발은 `make dev`, 도커는 배포(와 배포 전 검증)에만 쓴다.
 
 ### 검증
 
@@ -95,10 +83,9 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 
 ```
 .
-├─ Makefile                  개발/운영 엔트리포인트
+├─ Makefile                  개발/배포 엔트리포인트
 ├─ pnpm-workspace.yaml       apps/*, packages/*
-├─ docker-compose.yml        개발 스택 (소스 마운트 + 리로드)
-├─ docker-compose.prod.yml   운영 스택 (nginx + uvicorn)
+├─ docker-compose.yml        배포 스택 (nginx + uvicorn + postgres) — 도커는 이것뿐이다
 ├─ render.yaml               Render 배포 정의 (api=Docker, web=정적)
 ├─ .corepack.env             corepack auto-pin 차단 (런타임까지 적용)
 ├─ scripts/                  dev.mjs(api+web 동시 실행) · dev-env.mjs(경로·python 탐색)
@@ -115,6 +102,7 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 │  │  │  ├─ api/             routes.py(REST), ws.py(/ws/{code})
 │  │  │  ├─ game/            constants·models·cards·physics·bullets·bots
 │  │  │  │                   engine·sim(1틱 시뮬레이션)·stats(대미지 감쇠)
+│  │  │  │                   maps(맵 카탈로그)·blocks(점프대·이동발판·빙판·가시)
 │  │  │  │                   serialize(스냅샷)·rooms(방 매니저)
 │  │  │  ├─ schemas/         클라이언트 메시지 검증(pydantic)
 │  │  │  ├─ services/        chat(메시지 생성), hub(WS 브로드캐스트)
@@ -127,7 +115,8 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 │     │  ├─ net/             WebSocket 싱글턴
 │     │  ├─ store/           zustand — UI 상태만
 │     │  ├─ game/            renderer·avatars·useInput
-│     │  ├─ components/      GameCanvas·Hud·InfoPanel·KeyLegend·CardPicker·ChatBox 등
+│     │  ├─ components/      GameCanvas·Hud·InfoPanel·CardPicker·ChatBox
+│     │  │                   ControlsGuide(조작법)·Tutorial·MapPicker·MapEditor 등
 │     │  ├─ screens/         Lobby·Room·Game
 │     │  └─ hooks/           useLocalProfile
 │     ├─ Dockerfile          deps → dev / build → nginx runtime
@@ -154,6 +143,20 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 | 채팅 | `Enter` (해제 `Esc`) |
 | 정보 보기 | `Tab` 홀드 — 거리별 대미지 / 내 스탯 / 보유 카드 |
 
+조작법 전체는 로비 "플레이어" 패널 아래(캐릭터 꾸미기 밑)에 있다. 처음이라면 로비의 **📖 튜토리얼**을 먼저 보면 된다.
+
+## 맵과 블럭
+
+발판은 종류를 갖는다(`app/game/blocks.py`). 대기실에서 방장이 **🧱 맵 에디터**로 직접 배치할 수도 있다.
+
+| 블럭 | 효과 |
+|---|---|
+| 일반 블럭 | 위/아래/옆 전부 막힌다 |
+| 점프대 | 밟으면 높이 튀어오르고 공중 점프가 다시 찬다 |
+| 이동 발판 | 정해진 구간을 왕복하고, 올라탄 사람을 같이 나른다 |
+| 빙판 | 마찰이 거의 없다 |
+| 가시 | 닿아 있는 동안 피해를 입고 튕겨난다 |
+
 ---
 
 ## 설계 메모
@@ -167,15 +170,58 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 
 ## DB
 
-현재 **DB 없이 전부 인메모리**로 동작한다(서버를 재시작하면 방과 매치가 사라진다). 코인/외형은 브라우저 `localStorage` 에 있어 위조 가능하다.
+**Postgres 는 선택 사항이다.** `DATABASE_URL` 이 비어 있으면 서버는 예전처럼 순수 인메모리로 뜨고,
+계정·코인 영속화만 꺼진다. 게임 자체는 어느 쪽이든 똑같이 동작한다.
 
-계정, 서버 권위 코인/레벨, 스킨 소유권, 전적 랭킹 중 하나라도 필요해지면 `apps/api/app/db/` 에 Postgres + SQLAlchemy + Alembic 을 붙인다. 자세한 조건과 주의점은 [DEPLOYMENT.md](docs/DEPLOYMENT.md) Phase 4.
+| | `DATABASE_URL` 없음 | 있음 |
+|---|---|---|
+| 방/매치 상태 | 메모리 (재시작하면 소멸) | 메모리 (동일 — DB 에 넣지 않는다) |
+| 닉네임·아바타 | localStorage | 계정에 저장, 기기 간 동기화 |
+| 코인 | localStorage = **위조 가능** | 서버 권위 |
+| 로그인 (다른 기기) | 없음 | 아이디/비밀번호 · 인계 코드 |
+| `/api/auth/*`, `/api/me` | 503 | 정상 |
+
+- **신원**: 회원가입 화면이 없다. 앱을 열면 익명 계정이 자동 생성되고, 브라우저가 디바이스 토큰
+  (`localStorage.bulletBrakToken`)을 들고 있고 서버는 그 sha256 해시로 계정을 찾는다.
+  WS `join` 에 토큰을 실으면 그 판의 코인이 계정 잔액으로 확정된다. 계약은 [PROTOCOL.md](docs/PROTOCOL.md) §1.1.
+- **로그인**: 로비에서 아이디/비밀번호를 정하면 **쓰던 익명 계정이 그대로 승격된다**(코인이 따라온다).
+  다른 기기에서 그 아이디로 들어오면 같은 계정이 열린다. 비밀번호를 잊었을 때를 위해
+  **인계 코드**(`K7M2-9QPX-3W5B`)를 발급받아 둘 수 있다 — 이메일이 없는 구조라 복구 경로가 하나는 필요하다.
+  코드 평문은 발급 응답에서 한 번만 나오고, 재발급하면 옛 코드는 죽는다.
+- **비밀번호 해싱은 워커 스레드에서 돈다.** bcrypt 한 번이 60~100ms 인데 이 프로세스의
+  이벤트 루프는 60Hz 틱 루프와 같은 루프다 — 동기로 부르면 틱이 밀린다
+  (`app/services/passwords.py`, 가드는 `tests/test_passwords.py`).
+- **스키마**: `apps/api/app/db/` — SQLAlchemy 2.0(async) + Alembic. 마이그레이션은
+  **서버가 기동할 때 스스로 `upgrade head`** 를 돌린다(compose/Render 어디서든 동작이 같다).
+- **게임 루프는 DB 를 건드리지 않는다.** 60Hz 틱에 `await db` 가 끼면 틱이 밀린다.
+  DB 접근은 입장(join)·REST·매치 종료 같은 저빈도 지점뿐이다.
+- **구매도 서버 권위다.** 파츠 가격표는 `apps/api/app/game/shop_prices.json` 에 있고,
+  이 파일은 프런트 카탈로그에서 생성된다(`pnpm shop:prices`). 클라이언트는 아이템 키만 보내고
+  가격은 서버가 정한다.
+
+`make dev`(로컬)에는 Postgres 가 없어서 인메모리 모드로 돈다. DB 가 붙은 구성은
+`docker-compose.yml`(= 배포 스택) 하나뿐이다.
+
+### 파츠 가격표를 서버가 아는 방법
+
+가격의 단일 진실은 여전히 프런트(`apps/web/src/game/avatarParts.ts`)다. 등급(`tier`)만 적으면
+파일 하단의 **안정 정렬**이 인덱스를 확정하고, 눈 파츠는 눈모양 × 눈썹 조합으로 생성된다 —
+즉 인덱스↔가격 매핑을 사람이 옮겨 적으면 반드시 어긋난다.
+
+그래서 서버용 표는 **생성물**이다:
+
+```bash
+pnpm shop:prices    # avatarParts.ts 를 평가해 apps/api/app/game/shop_prices.json 재생성
+```
+
+**파츠를 추가/삭제하거나 등급을 바꿨으면 반드시 다시 돌리고 결과를 커밋한다.**
+안 돌리면 서버가 옛 가격으로 판정한다.
 
 ## 아직 없는 것
 
 기획서([docs/PvP_로그라이크_슈팅게임_개발문서.md](docs/PvP_로그라이크_슈팅게임_개발문서.md)) 대비 미구현:
 
-- 랜덤 맵 시스템 (현재 고정 맵 1종). 얼음/붕괴/회전/용암맵, 움직이는 발판
+- 붕괴/회전 발판 (점프대·이동발판·빙판·가시는 구현됨 — `app/game/blocks.py`)
 - 벽 점프 / 벽 슬라이드
 - 빠른 대전 매치메이킹 (현재는 방 코드 방식만)
 - 빌드 추천 표시, 시너지 이름 출력

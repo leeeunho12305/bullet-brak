@@ -1,9 +1,11 @@
 // 방 대기실: 코드 공유 / 참가자 목록 / 맵 선택(방장) / 게임 시작
 import { useCallback, useEffect, useRef, useState } from 'react';
+import MapEditor from '@/components/MapEditor';
 import MapPicker from '@/components/MapPicker';
 import PlayerLeftNotice from '@/components/PlayerLeftNotice';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
+import type { Platform } from '@/types/game';
 
 interface Props {
   onLeave: () => void;
@@ -15,6 +17,7 @@ export default function RoomScreen({ onLeave }: Props) {
   const error = useGameStore((s) => s.error);
 
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
   const copyTimer = useRef<number | null>(null);
 
   useEffect(
@@ -38,6 +41,14 @@ export default function RoomScreen({ onLeave }: Props) {
 
   const selectMap = useCallback((mapId: string) => {
     net.send({ type: 'set_map', map_id: mapId });
+  }, []);
+
+  const saveLayout = useCallback((platforms: Platform[]) => {
+    net.send({ type: 'set_platforms', platforms });
+  }, []);
+
+  const resetLayout = useCallback(() => {
+    net.send({ type: 'reset_platforms' });
   }, []);
 
   if (!room) return null;
@@ -119,8 +130,52 @@ export default function RoomScreen({ onLeave }: Props) {
             canEdit={isHost}
             onSelect={selectMap}
           />
+
+          {room.map ? (
+            <>
+              <div className="divider" />
+              <div className="room-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={!isHost}
+                  onClick={() => setEditing(true)}
+                >
+                  🧱 맵 에디터
+                </button>
+                {room.custom_map ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={!isHost}
+                    onClick={resetLayout}
+                  >
+                    원래 지형으로
+                  </button>
+                ) : null}
+              </div>
+              <p className="hint">
+                {room.custom_map
+                  ? '이 방의 지형은 방장이 직접 배치했습니다. 맵을 다시 고르면 원래대로 돌아가요.'
+                  : isHost
+                    ? '격자에 맞춰 블럭을 놓고, 맵 원래 지형까지 지워서 새로 지을 수 있어요.'
+                    : '맵 에디터는 방장만 쓸 수 있어요.'}
+              </p>
+            </>
+          ) : null}
         </section>
       </div>
+
+      {editing && room.map ? (
+        <MapEditor
+          map={room.map}
+          platforms={room.map.platforms}
+          edited={room.custom_map}
+          onSave={saveLayout}
+          onReset={resetLayout}
+          onClose={() => setEditing(false)}
+        />
+      ) : null}
     </div>
   );
 }

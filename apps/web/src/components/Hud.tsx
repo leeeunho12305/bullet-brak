@@ -12,10 +12,10 @@ const SCORE_TO_WIN = 5;
 /** 서버 틱레이트. 훈련장 카운트다운(틱)을 초로 바꾸는 데만 쓴다. */
 const TICK_RATE = 60;
 
-/** 카드 아이콘을 보여주기 위해 지나간 available_cards 를 기억해 둔다. */
 /** 정지 충전(windup)을 쓰는 카드들 — renderer.ts 의 FOCUS_CARDS 와 같은 목록이다. */
 const FOCUS_CARDS = new Set(['wind_up', 'careful_planning', 'ritual_countdown']);
 
+/** 카드 아이콘을 보여주기 위해 지나간 available_cards 를 기억해 둔다. */
 const cardCache = new Map<string, CardInfo>();
 
 interface StoreSlice {
@@ -31,9 +31,11 @@ interface HudPlayer {
   alive: boolean;
   score: number;
   roundWins: number;
+  /** 이번 라운드에 남은 가드 게이지 / 최대치 */
   guard: number;
-  guardBroken: boolean;
-  focus: number | null;
+  guardMax: number;
+  /** 지금 가드를 펼치고 있는가(게이지가 줄어드는 중) */
+  guarding: boolean;
   cooldown: number;
   charge: number;
   charging: boolean;
@@ -41,6 +43,8 @@ interface HudPlayer {
   silenced: boolean;
   poison: number;
   cold: boolean;
+  /** 집중 게이지(0~1). 집중 카드가 없으면 null 이라 게이지를 안 그린다. */
+  focus: number | null;
 }
 
 function toHudPlayer(p: PlayerSnap): HudPlayer {
@@ -53,10 +57,9 @@ function toHudPlayer(p: PlayerSnap): HudPlayer {
     alive: p.alive,
     score: p.score,
     roundWins: p.round_wins,
-    guard: p.block_meter_max > 0 ? p.block_meter / p.block_meter_max : 0,
-    guardBroken: p.guard_broken,
-    // 집중 게이지는 그걸 쓰는 카드를 가진 사람에게만 의미가 있다.
-    focus: p.cards.some((c) => FOCUS_CARDS.has(c)) ? Math.min(1, p.windup / MAX_CHARGE) : null,
+    guard: Math.max(0, Math.round(p.block_meter)),
+    guardMax: Math.max(1, Math.round(p.block_meter_max)),
+    guarding: p.blocking,
     cooldown: p.max_cooldown > 0 ? p.cooldown / p.max_cooldown : 0,
     charge: Math.min(1, p.charge / MAX_CHARGE),
     charging: p.charging,
@@ -64,6 +67,7 @@ function toHudPlayer(p: PlayerSnap): HudPlayer {
     silenced: p.silenced,
     poison: p.poison,
     cold: p.cold,
+    focus: p.cards.some((c) => FOCUS_CARDS.has(c)) ? Math.min(1, p.windup / MAX_CHARGE) : null,
   };
 }
 
@@ -148,11 +152,17 @@ function PlayerSide({ p, mine, side }: SideProps): JSX.Element {
         </span>
       </div>
       <div className="hud-sub">
-        <Meter
-          ratio={p.guard}
-          color={p.guardBroken ? '#ff6b6b' : '#4dabf7'}
-          label={p.guardBroken ? '가드 회복 중' : '가드 게이지'}
-        />
+        {/* 가드 게이지는 라운드마다 채워지고, 누르고 있는 동안에만 줄어든다.
+            남은 양을 눈으로도(막대) 숫자로도 보여 준다. */}
+        <div
+          className={`hud-guard${p.guarding ? ' is-on' : ''}`}
+          title={`가드 ${p.guard}/${p.guardMax} — 라운드마다 채워진다`}
+        >
+          <Meter ratio={p.guard / p.guardMax} color={p.guarding ? '#00e5ff' : '#4dabf7'} label="가드" />
+          <span className="hud-guard-text">
+            {p.guard}/{p.guardMax}
+          </span>
+        </div>
         <Meter ratio={1 - p.cooldown} color="#adb5bd" label="사격 쿨다운" />
         <Meter
           ratio={p.charge}
@@ -198,6 +208,12 @@ function TrainingCenter({ t }: { t: TrainingSnap }): JSX.Element {
   if (t.state === 'wave_clear') banner = `웨이브 ${t.wave} 클리어! 카드 선택 ${seconds}초`;
   else if (t.state === 'respawning') banner = `부활까지 ${seconds}초`;
 
+  // 훈련장은 시험해 보는 곳이다 — 웨이브를 깰 때까지 기다리지 않고 아무 때나 카드를 연다.
+  // 서버가 mode/phase 를 다시 검사하므로(engine.open_training_cards) 여기서는 힌트만 준다.
+  const openCards = (): void => {
+    if (net.isOpen()) net.send({ type: 'open_cards' });
+  };
+
   return (
     <div className="hud-score hud-training">
       <span className="hud-score-num">W{t.wave}</span>
@@ -208,6 +224,15 @@ function TrainingCenter({ t }: { t: TrainingSnap }): JSX.Element {
         <span title="사망">☠ {t.deaths}</span>
       </div>
       <div className="hud-score-hint">{banner ?? `최고 W${t.best_wave}`}</div>
+      <button
+        type="button"
+        className="hud-cards-btn"
+        disabled={t.state !== 'fighting'}
+        title="훈련장에서는 아무 때나 원하는 카드를 가져올 수 있습니다"
+        onClick={openCards}
+      >
+        🃏 카드 고르기
+      </button>
     </div>
   );
 }

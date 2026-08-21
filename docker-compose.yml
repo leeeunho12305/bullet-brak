@@ -1,54 +1,75 @@
-# 개발용 스택: 소스 마운트 + 핫 리로드.
-#   make up   (또는 docker compose up -d --build)
-# 브라우저는 http://localhost:5173 하나만 보면 된다 (vite 가 /api, /ws 를 api 로 프록시).
+# 배포 스택 — 이 저장소의 도커 구성은 이것 하나뿐이다.
+#   make up   (docker compose up -d --build)
+# 정적 번들을 nginx 가 서빙하고 /api, /ws 를 api 컨테이너로 프록시한다.
+# 진입점은 web 하나뿐이다: http://localhost:8080 (WEB_PROD_PORT 로 변경)
+#
+# ⚠ 로컬 개발에는 도커를 쓰지 않는다. `make dev` (venv + vite dev server) 가 유일한 개발 경로다.
+#
+# Dokploy / Coolify 는 이 파일을 그대로 읽는다. 대시보드에서 아래 환경변수를 넣어 준다:
+#   POSTGRES_PASSWORD (필수)  CORS_ORIGINS  WEB_PROD_PORT
+# 자세한 배포 절차는 docs/DEPLOYMENT.md Phase 2.5.
+#
+# ⚠ 프로젝트 이름이 예전 docker-compose.prod.yml 시절의 `bullet-brak-prod` 에서 바뀌었다.
+#   그때 만든 볼륨(`bullet-brak-prod_pgdata`)이 이미 있다면 이름이 달라져 새 빈 DB 로 뜬다.
+#   기존 데이터를 이어서 쓰려면 pg_dump 로 옮기거나 `docker compose -p bullet-brak-prod` 로 띄울 것.
 name: bullet-brak
 
 services:
   api:
     build:
       context: ./apps/api
-      target: dev
+      target: runtime
     environment:
-      DEBUG: ${DEBUG:-true}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
-      # 레포가 Windows 파일시스템에 있고 도커는 WSL 에서 돌 때 --reload 가 먹으려면 폴링이 필요하다.
-      WATCHFILES_FORCE_POLLING: ${WATCH_POLLING:-false}
+      DEBUG: 'false'
+      # nginx 를 거쳐 동일 오리진으로 들어오므로 CORS 는 사실상 불필요하다.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      DATABASE_URL: >-
+        postgresql+asyncpg://${POSTGRES_USER:-bulletbrak}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bulletbrak}
+      # 기동 시 alembic upgrade head 를 돌린다. replicas 가 1 이라 안전하다.
+      DB_AUTO_MIGRATE: 'true'
+    expose:
+      - '8000'
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    # ⚠ 절대 replicas 를 늘리지 말 것. 방 상태가 프로세스 메모리에 있다.
+    #   수평 확장 방법은 docs/DEPLOYMENT.md Phase 3 참고.
+    #   (마이그레이션도 여기서 도는 이상 인스턴스는 1대여야 한다.)
+    deploy:
+      replicas: 1
+    stop_grace_period: 20s
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bulletbrak}
+      # 기본값을 주지 않는다 — 비밀번호 없이 뜨면 그 자체가 사고다.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 를 반드시 설정할 것}
+      POSTGRES_DB: ${POSTGRES_DB:-bulletbrak}
     volumes:
-      - ./apps/api:/app
-      # 호스트의 .venv 가 컨테이너를 오염시키지 않도록 가린다.
-      - /app/.venv
-    ports:
-      - '${API_PORT:-8000}:8000'
+      - pgdata:/var/lib/postgresql/data
+    # 포트를 호스트로 노출하지 않는다. api 만 컨테이너 네트워크로 붙는다.
     healthcheck:
       test:
-        - CMD
-        - python
-        - -c
-        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2).status == 200 else 1)
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-bulletbrak} -d ${POSTGRES_DB:-bulletbrak}']
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    stop_grace_period: 30s
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      target: dev
-    environment:
-      # vite dev 서버가 프록시할 대상 (컨테이너 네트워크 내부 이름)
-      API_PROXY_TARGET: http://api:8000
-      VITE_HOST: 0.0.0.0
-      VITE_POLLING: ${WATCH_POLLING:-false}
-    volumes:
-      - ./apps/web:/repo/apps/web
-      # node_modules 는 이미지 안의 것을 쓴다(호스트 OS 바이너리 혼입 방지).
-      - /repo/apps/web/node_modules
-      - /repo/node_modules
+      target: runtime
     ports:
-      - '${WEB_PORT:-5173}:5173'
+      - '${WEB_PROD_PORT:-8080}:80'
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     restart: unless-stopped
+
+volumes:
+  pgdata:

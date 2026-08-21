@@ -75,10 +75,12 @@ interface ThumbProps {
   price: number | null;
   /** 잠겼는데 코인이 모자라는가(구매 버튼을 흐리게 표시) */
   tooPoor: boolean;
+  /** 다른 구매의 응답을 기다리는 중 — 잠긴 항목만 잠시 잠근다 */
+  busy: boolean;
   onSelect: () => void;
 }
 
-function PartThumb({ part, slot, color, selected, price, tooPoor, onSelect }: ThumbProps): JSX.Element {
+function PartThumb({ part, slot, color, selected, price, tooPoor, busy, onSelect }: ThumbProps): JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const locked = price !== null;
 
@@ -100,6 +102,7 @@ function PartThumb({ part, slot, color, selected, price, tooPoor, onSelect }: Th
     <button
       type="button"
       className={className}
+      disabled={locked && busy}
       onClick={onSelect}
       title={locked ? `${part.label} — ${price}코인` : part.label}
       aria-label={locked ? `${part.label} (${price}코인)` : part.label}
@@ -248,7 +251,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
   // 객체로 담는 이유: 같은 문구를 다시 띄워도 참조가 바뀌어야 2초 타이머가 다시 시작된다.
   const [notice, setNotice] = useState<{ text: string } | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
-  const { coins, isOwned, buyItem } = useLocalProfile();
+  const { coins, isOwned, buyItem, buying } = useLocalProfile();
 
   /** 안내 문구는 2초 뒤 저절로 사라진다. */
   useEffect(() => {
@@ -283,19 +286,22 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
     drawAvatar(ctx, value, pad, pad, BODY, BODY, { shadow: false });
   }, [value, open]);
 
-  /** 잠긴 파츠는 먼저 산다. 코인이 모자라면 선택하지 않고 안내만 남긴다. */
+  /** 잠긴 파츠는 먼저 산다. 구매가 거절되면 선택하지 않고 안내만 남긴다. */
   const selectPart = useCallback(
-    (category: PartCategory, index: number) => {
+    async (category: PartCategory, index: number) => {
       const shopKey = SHOP_CATEGORY[category] ?? category;
       if (!isOwned(shopKey, index)) {
-        const price = partPrice(category, index);
-        if (!buyItem(shopKey, index, price)) {
-          setNotice({ text: `코인이 부족합니다. ${price}코인이 필요해요. (보유 ${coins})` });
+        // 가격도 결과도 서버가 정한다. 실패 사유 문구는 훅이 만들어 준다.
+        const result = await buyItem(shopKey, index);
+        if (!result.ok) {
+          if (result.message) setNotice({ text: result.message });
           return;
         }
-        setNotice({
-          text: `${PART_TABLE[category][index]?.label ?? '아이템'} 구매 완료! -${price}코인`,
-        });
+        setNotice(
+          result.spent > 0
+            ? { text: `${PART_TABLE[category][index]?.label ?? '아이템'} 구매 완료! -${result.spent}코인` }
+            : null,
+        );
       } else {
         setNotice(null);
       }
@@ -307,7 +313,7 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
       else next.detail2 = index;
       onChange(next);
     },
-    [buyItem, coins, isOwned, onChange, value],
+    [buyItem, isOwned, onChange, value],
   );
 
   const setColor = useCallback(
@@ -433,7 +439,8 @@ function AvatarEditorInner(props: AvatarEditorProps): JSX.Element {
                   selected={activeIndex === i}
                   price={owned ? null : price}
                   tooPoor={!owned && coins < price}
-                  onSelect={() => selectPart(tab, i)}
+                  busy={buying}
+                  onSelect={() => void selectPart(tab, i)}
                 />
               );
             })}
