@@ -1,7 +1,8 @@
 // docs/PROTOCOL.md 와 1:1 대응. 서버가 보내는 snake_case 를 그대로 쓴다.
 
-export const WORLD_WIDTH = 800;
-export const WORLD_HEIGHT = 600;
+/** 월드 좌표계. 서버 constants.WIDTH / HEIGHT 와 같아야 한다(16:9). */
+export const WORLD_WIDTH = 1280;
+export const WORLD_HEIGHT = 720;
 export const MAX_CHARGE = 60;
 /** 라운드 2승 = 1점 (서버 constants.ROUNDS_TO_SCORE 와 같아야 한다) */
 export const ROUNDS_TO_SCORE = 2;

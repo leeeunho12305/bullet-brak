@@ -3,7 +3,7 @@
 이 문서는 **백엔드(FastAPI)와 프론트엔드(React)가 동시에 개발되어도 어긋나지 않도록** 하는 단일 기준이다.
 여기 적힌 키 이름/타입은 임의로 바꾸지 않는다. 바꿔야 하면 이 문서를 먼저 고친다.
 
-- 월드 좌표계: 고정 **800 x 600** (`WIDTH x HEIGHT`). 캔버스는 CSS로만 스케일한다.
+- 월드 좌표계: 고정 **1280 x 720** (`WIDTH x HEIGHT`). 캔버스는 CSS로만 스케일한다.
 - 틱레이트: **60Hz** (서버 권위 시뮬레이션). 매 틱 전체 스냅샷 브로드캐스트.
 - 직렬화: JSON. 모든 메시지는 `{"type": "...", ...payload}` 형태의 **평평한(flat) 객체**.
 - 키 네이밍: 서버/전송 = `snake_case`, 프론트 TS 타입도 **동일하게 snake_case 유지**(변환 레이어 없음).
@@ -198,7 +198,7 @@ MapTheme = { "bg": "#0b0d17", "grid": "rgba(...)", "platform": "#1b2438", "edge"
 MapInfo = {
   "id": "classic", "name": "클래식", "emoji": "🟦", "desc": "...",
   "theme": MapTheme,
-  "platforms": [Platform],          // 인게임과 같은 800x600 좌표계
+  "platforms": [Platform],          // 인게임과 같은 1280x720 좌표계
   "spawns": [ {"x": f, "y": f} ]    // 라운드 시작 위치(플레이어 수만큼 나눠 쓴다)
 }
 

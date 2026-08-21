@@ -1,17 +1,23 @@
 """게임 월드 상수. 순수 상수만 둔다(로직 금지)."""
 
-WIDTH = 800.0
-HEIGHT = 600.0
+WIDTH = 1280.0
+HEIGHT = 720.0
 TICK_RATE = 60
 TICK_SECONDS = 1.0 / TICK_RATE
 
 GRAVITY = 0.6
 FRICTION = 0.8
-ACCEL = 0.8
+#: 이동 입력 1틱당 가속. 최고 속도까지 약 8틱 — 톡 치면 튀어나가지 않고 묵직하게 붙는다.
+ACCEL = 0.65
 
 MAX_HP = 120.0
 PLAYER_SIZE = 30.0
-PLAYER_SPEED = 4.0
+#: 이동 입력으로 낼 수 있는 수평 속도 상한(px/틱).
+#: 이 값이 점프 한 번의 수평 도달 거리도 정한다 — 체공 약 53틱 × 속도 = 약 265px.
+#: 맵의 발판 간격은 그 도달 거리를 기준으로 잡혀 있다(maps.py 머리말).
+#: 예전에는 이 상한이 사실상 걸리지 않았다(가속분이 넉백으로 오인돼 쌓여 18 까지 올라갔다).
+#: sim.update_player / bots._physics 가 가속을 이 값에서 끊는다 — 값을 바꾸면 체감이 그대로 바뀐다.
+PLAYER_SPEED = 5.0
 JUMP_POWER = -16.0
 BASE_COOLDOWN = 15.0
 STRONG_COOLDOWN = 180.0
@@ -21,7 +27,8 @@ BASE_BULLET_SPEED = 15.0
 BASE_BULLET_DAMAGE = 20.0
 BASE_BULLET_SIZE = 5.0
 BASE_KNOCKBACK = 10.0
-BASE_BULLET_LIFE = 80
+#: 월드가 1280px 로 넓어졌다 — 80틱(1200px)이면 맵을 가로지르기 전에 탄이 사라졌다.
+BASE_BULLET_LIFE = 110
 
 # 거리별 대미지 감쇠: 탄환이 날아간 거리에 비례해 위력이 줄어든다.
 # 기본 탄(20) 기준 근접 30 -> 600px 이상 8 (레거시 DAMAGE_CLOSE/DAMAGE_FAR 수치).
@@ -108,12 +115,12 @@ BOT_TIERS: dict[str, dict[str, float]] = {
     },
     "rookie": {
         "hp": 100.0, "speed": 2.7, "jump_power": -14.0,
-        "fire_cooldown": 100.0, "damage": 7.0, "range": 420.0,
+        "fire_cooldown": 100.0, "damage": 7.0, "range": 670.0,
         "aim_error": 0.20, "lead": 0.0, "dodge": 0.12, "reaction": 24.0,
     },
     "veteran": {
         "hp": 140.0, "speed": 3.5, "jump_power": -15.0,
-        "fire_cooldown": 60.0, "damage": 10.0, "range": 640.0,
+        "fire_cooldown": 60.0, "damage": 10.0, "range": 1020.0,
         "aim_error": 0.06, "lead": 1.0, "dodge": 0.45, "reaction": 10.0,
     },
 }
@@ -137,14 +144,15 @@ BOT_SIGHT_SAMPLES = 12  # 시야 판정을 위해 사선을 몇 등분해 검사
 # 봇 탄환(플레이어 탄환보다 느리고 약하다 — 피할 수 있어야 훈련이 된다)
 BOT_BULLET_SPEED = 11.0
 BOT_BULLET_SIZE = 4.5
-BOT_BULLET_LIFE = 70
+BOT_BULLET_LIFE = 95
 BOT_KNOCKBACK = 7.0
 
+#: 맵을 못 고를 때의 최소 지형(클래식과 같은 배치). 실제 맵은 maps.py 가 쥐고 있다.
 PLATFORMS = [
-    {"x": 0.0, "y": 550.0, "width": 800.0, "height": 50.0},
-    {"x": 100.0, "y": 400.0, "width": 200.0, "height": 20.0},
-    {"x": 500.0, "y": 400.0, "width": 200.0, "height": 20.0},
-    {"x": 300.0, "y": 250.0, "width": 200.0, "height": 20.0},
+    {"x": 0.0, "y": 670.0, "width": 1280.0, "height": 50.0},
+    {"x": 150.0, "y": 530.0, "width": 280.0, "height": 20.0},
+    {"x": 850.0, "y": 530.0, "width": 280.0, "height": 20.0},
+    {"x": 490.0, "y": 390.0, "width": 300.0, "height": 20.0},
 ]
 
 AVATAR_PALETTE = [

@@ -228,15 +228,18 @@ def _jump(bot: Bot) -> None:
 
 
 def _physics(bot: Bot, room: Room) -> None:
+    # COLD BULLETS / FROST SLAM: 얼어 있는 동안은 최고 속도가 깎인다.
+    speed = bot.speed * (0.65 if bot.cold_timer > 0 else 1.0)
+
+    # 이동 입력은 speed 까지만 민다(플레이어와 같은 규칙). 이 상한이 없으면 가속분이
+    # 아래 넉백 감쇠에 매 틱 얹혀 티어 speed 와 무관하게 달려 나간다.
     if bot.dir == -1:
-        bot.vx -= 1.2
+        bot.vx = max(bot.vx - 1.2, min(bot.vx, -speed))
     elif bot.dir == 1:
-        bot.vx += 1.2
+        bot.vx = min(bot.vx + 1.2, max(bot.vx, speed))
 
     # 플레이어(sim.update_player)와 같은 규칙이다. 이동 속도를 넘는 부분은 넉백으로 얻은
     # 속도이므로 clamp/마찰로 지우지 않고 천천히 식힌다 — 봇도 총에 맞으면 밀려나야 한다.
-    # COLD BULLETS / FROST SLAM: 얼어 있는 동안은 최고 속도가 깎인다.
-    speed = bot.speed * (0.65 if bot.cold_timer > 0 else 1.0)
     over = abs(bot.vx) - speed
     if over > C.KNOCKBACK_MIN:
         bot.vx = math.copysign(speed + over * C.KNOCKBACK_DECAY, bot.vx)

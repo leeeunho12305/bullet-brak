@@ -78,6 +78,11 @@ def update_player(room: Room, p: Player) -> None:
     stunned = p.dazzle_timer > 0
     inp = p.inputs
 
+    # 이번 틱의 이동 속도 상한. 입력 처리보다 먼저 구해 둔다 —
+    # 가속이 이 상한을 넘겨 밀면 그 초과분이 아래에서 넉백으로 오인돼 계속 쌓인다.
+    # (COLD BULLETS 는 상한을 깎고, TASTE OF BLOOD 는 올린다)
+    speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0) * (1.35 if p.blood_timer > 0 else 1.0)
+
     # 가드는 게이지다. 누르고 있는 동안만 줄고, 손을 떼면 그 자리에서 멈춘다 —
     # 언제든 끊을 수 있다. 라운드가 끝날 때까지 다시 채워지지는 않는다.
     blocking = bool(inp.block) and p.block_meter > 0 and not stunned
@@ -97,10 +102,13 @@ def update_player(room: Room, p: Player) -> None:
         if ended and p.has("empower"):
             p.empower_ready = True
         if not stunned:
+            # 이동 입력은 speed 까지만 민다. 이미 넉백으로 더 빠르면 그 속도를 건드리지 않고
+            # (반대 방향 입력으로는 줄일 수 있다) — 이 상한이 없으면 가속이 매 틱 쌓여
+            # PLAYER_SPEED 와 상관없이 4배 가까운 속도로 달리게 된다.
             if inp.left:
-                p.vx -= C.ACCEL
+                p.vx = max(p.vx - C.ACCEL, min(p.vx, -speed))
             if inp.right:
-                p.vx += C.ACCEL
+                p.vx = min(p.vx + C.ACCEL, max(p.vx, speed))
             if inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
                 p.vy = p.jump_power
                 p.grounded = False
@@ -109,8 +117,7 @@ def update_player(room: Room, p: Player) -> None:
     if not inp.jump:
         inp.jump_consumed = False
 
-    # 이동 / 중력 / 경계 / 발판 (TASTE OF BLOOD 는 여기서 속도를 올린다)
-    speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0) * (1.35 if p.blood_timer > 0 else 1.0)
+    # 이동 / 중력 / 경계 / 발판
     over = abs(p.vx) - speed
     if over > C.KNOCKBACK_MIN:
         # 이동 입력으로 낼 수 있는 속도는 speed 까지다. 그보다 빠른 건 넉백/폭발로 얻은

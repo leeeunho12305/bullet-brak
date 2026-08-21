@@ -1,4 +1,4 @@
-// 800x600 고정 좌표계 캔버스(백버퍼는 표시 크기에 맞춰 늘린다).
+// 1280x720 고정 좌표계 캔버스(백버퍼는 표시 크기에 맞춰 늘린다).
 // rAF 루프에서 net.latest 를 직접 읽는다(React state 사용 금지).
 import { memo, useEffect, useRef } from 'react';
 import type { JSX, RefObject } from 'react';
@@ -41,8 +41,8 @@ function GameCanvasInner({ canvasRef }: GameCanvasProps): JSX.Element {
     let lastPhase: Phase | null = null;
     let lastMapId: string | null = null;
 
-    // 백버퍼는 "표시 크기 × 픽셀비율" 로 맞춘다. 전체화면에서는 캔버스가 800px 보다
-    // 훨씬 커지는데, 800×600 백버퍼를 늘려 그리면 선이 뭉개진다.
+    // 백버퍼는 "표시 크기 × 픽셀비율" 로 맞춘다. 전체화면에서는 캔버스가 1280px 보다
+    // 훨씬 커지는데, 1280×720 백버퍼를 늘려 그리면 선이 뭉개진다.
     // 표시 크기는 ResizeObserver 로만 잰다(매 프레임 clientWidth 를 읽으면 레이아웃이 강제된다).
     let cssWidth = canvas.clientWidth || WORLD_WIDTH;
     const observer = new ResizeObserver((entries) => {

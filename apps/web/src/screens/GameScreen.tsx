@@ -84,7 +84,7 @@ export default function GameScreen({ onLeave }: { onLeave: () => void }): JSX.El
       <div className="game-body">
         <div className="game-stage">
           <Hud />
-          {/* 남는 공간을 재는 상자. 전체화면에서 캔버스가 4:3 을 지킨 채 최대로 커지는 기준이 된다. */}
+          {/* 남는 공간을 재는 상자. 전체화면에서 캔버스가 16:9 를 지킨 채 최대로 커지는 기준이 된다. */}
           <div className="game-canvas-area">
             <div className="game-canvas-wrap">
               <GameCanvas canvasRef={canvasRef} />
