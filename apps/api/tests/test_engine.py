@@ -358,6 +358,7 @@ PLAYER_KEYS = {
     "block_meter",
     "block_meter_max",
     "blocking",
+    "guard_broken",
     "charging",
     "charge",
     "score",
@@ -366,6 +367,8 @@ PLAYER_KEYS = {
     "cards",
     "silenced",
     "poison",
+    "stunned",
+    "windup",
     "cold",
 }
 

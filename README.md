@@ -10,28 +10,34 @@ ROUNDS 스타일 2D PvP 물리 슈팅 게임. **FastAPI(서버 권위 60Hz 시�
 
 ## 빠른 시작
 
-```bash
-make setup     # 백엔드 venv + 프론트 pnpm 의존성
-make dev       # api(:8000) + web(:5173) 동시 실행
-```
-
-`make` 가 없으면 (Windows 기본 환경 등):
+도커도 make 도 필요 없다. **Node 20+ 와 Python 3.11+** 만 있으면 된다.
 
 ```bash
-# 1) 백엔드
-cd apps/api
-python -m venv .venv
-.venv/Scripts/activate                    # macOS/Linux: source .venv/bin/activate
-pip install -r requirements-dev.txt
-uvicorn app.main:app --reload --port 8000
-
-# 2) 프론트 (다른 터미널)
-corepack enable pnpm                      # pnpm 이 없다면 (관리자 권한 필요할 수 있음)
-pnpm install
-pnpm dev                                  # http://localhost:5173
+corepack enable pnpm     # pnpm 이 없을 때만 (관리자 권한이 필요할 수 있다)
+pnpm bootstrap           # 프론트 의존성 + 백엔드 venv 를 한 번에
+pnpm dev                 # api(:8000) + web(:5173) 를 한 터미널에서 (Ctrl+C 로 둘 다 종료)
 ```
+
+> `pnpm setup` 은 pnpm 의 내장 명령(PNPM_HOME/PATH 설정)이라 package.json 스크립트가 실행되지
+> 않는다. 그래서 이 저장소의 설치 스크립트 이름은 `bootstrap` 이다.
 
 브라우저는 **http://localhost:5173** 하나만 보면 된다. vite dev 서버가 `/api` 와 `/ws` 를 FastAPI 로 프록시한다.
+
+| 명령 | 하는 일 |
+|---|---|
+| `pnpm bootstrap` | `pnpm install` + `apps/api/.venv` 생성 및 의존성 설치 |
+| `pnpm dev` | 백엔드 + 프론트 동시 실행. 로그에 `[api]` / `[web]` 접두어가 붙는다 |
+| `pnpm dev:api` / `pnpm dev:web` | 한쪽만 (터미널을 따로 쓰고 싶을 때) |
+| `pnpm test` | pytest + `tsc --noEmit` |
+
+포트가 겹치면 `API_PORT` / `WEB_PORT` 로 바꾼다 (`WEB_PORT=5200 pnpm dev`).
+`python` 을 못 찾는다고 하면 `PYTHON=C:/Python312/python.exe pnpm bootstrap` 처럼 경로를 직접 준다.
+
+`make` 가 있으면 `make setup` / `make dev` 도 같은 일을 한다.
+
+> **venv 가 깨진 것 같으면** — `apps/api/.venv` 에 `Scripts/`(또는 `bin/`)는 있는데 `python.exe` 가
+> 없는 껍데기 상태가 되면 백엔드가 뜨지 않는다(도커에서 만든 venv 가 바인드 마운트로 새어
+> 들어오거나 생성이 중간에 끊긴 경우). `pnpm setup:api` 가 이 상태를 감지해 지우고 다시 만든다.
 
 ### Docker
 
@@ -79,6 +85,8 @@ make test        # pytest + tsc --noEmit
 make build       # 프론트 프로덕션 번들
 ```
 
+pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
+
 `make help` 로 전체 타깃 목록을 볼 수 있다. 모든 타깃은 루트 `package.json` 스크립트로도 미러링돼 있다(`pnpm test:api`, `pnpm up` 등).
 
 ---
@@ -93,7 +101,9 @@ make build       # 프론트 프로덕션 번들
 ├─ docker-compose.prod.yml   운영 스택 (nginx + uvicorn)
 ├─ render.yaml               Render 배포 정의 (api=Docker, web=정적)
 ├─ .corepack.env             corepack auto-pin 차단 (런타임까지 적용)
-├─ scripts/                  render-build.sh(pnpm 준비 → web 번들)
+├─ scripts/                  dev.mjs(api+web 동시 실행) · dev-env.mjs(경로·python 탐색)
+│                            setup-api.mjs(venv 생성/복구) · run-pytest.mjs
+│                            render-build.sh(pnpm 준비 → web 번들)
 │                            render-postinstall.mjs(기본 `yarn` 빌드 커맨드 우회)
 │                            serve-static.mjs(의존성 0 정적 서버)
 │                            strip-package-manager.mjs(packageManager 필드 제거)

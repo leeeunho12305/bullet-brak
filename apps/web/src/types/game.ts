@@ -113,6 +113,8 @@ export interface PlayerSnap {
   block_meter: number;
   block_meter_max: number;
   blocking: boolean;
+  /** 가드 게이지를 다 써서 가드가 깨진 상태(일정 비율까지 차야 다시 가드 가능). */
+  guard_broken: boolean;
   charging: boolean;
   charge: number;
   score: number;
@@ -122,6 +124,10 @@ export interface PlayerSnap {
   silenced: boolean;
   poison: number;
   cold: boolean;
+  /** DAZZLE / EMP / STATIC FIELD 로 굳은 상태 */
+  stunned: boolean;
+  /** 가만히 있을 때 차는 집중 게이지 (0~MAX_CHARGE) */
+  windup: number;
   /** 0.5초에 한 번만 실린다(대역폭 절약). 없으면 마지막으로 받은 값을 유지한다. */
   stats?: PlayerStats;
   damage_table?: DamageRow[];
@@ -142,6 +148,10 @@ export interface BotSnap {
   tier: BotTier;
   /** 봇이 겨누는 지점. 허수아비는 자기 위치라 시선이 안 그려진다. */
   aim: Vec;
+  silenced: boolean;
+  poison: number;
+  cold: boolean;
+  stunned: boolean;
 }
 
 export interface BulletSnap {

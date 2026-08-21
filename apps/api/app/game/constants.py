@@ -22,6 +22,27 @@ BASE_BULLET_DAMAGE = 20.0
 BASE_BULLET_SIZE = 5.0
 BASE_KNOCKBACK = 10.0
 BASE_BULLET_LIFE = 80
+# 한 번 튕길 때마다 늘어나는 탄 수명(틱). 도탄 카드를 먹었는데 벽에 맞고 바로
+# 꺼지면 튕길 기회 자체가 없다. 맵을 한 번 가로지르는 데 드는 틱(800px / 15px ≈ 54)
+# 보다 조금 크게 잡아, "몇 번 튕기느냐"는 시간이 아니라 max_bounces 가 정하게 한다.
+BOUNCE_LIFE_BONUS = 55
+# --- 카드 효과 수치 ---------------------------------------------------------
+EMPOWER_MULT = 1.6  # EMPOWER: 가드 후 첫 발 위력 배율
+OVERPOWER_MAX_BONUS = 0.6  # OVERPOWER: 상대가 빈사일 때 위력 +60%
+DEMONIC_MAX_BONUS = 0.8  # DEMONIC PACT: 내 체력이 바닥일 때 위력 +80%
+STEADY_FALLOFF_RELIEF = 0.5  # STEADY SHOT: 거리에 따른 위력 변동을 절반으로
+STEADY_LIFE_BONUS = 40  # STEADY SHOT: 탄 수명(틱)
+DAZZLE_HIT_TICKS = 18  # DAZZLE: 적중 시 기절 시간
+BLOOD_SPEED_MULT = 1.35  # TASTE OF BLOOD: 피해를 준 뒤 이동 속도 배율
+
+# 탄환 조향 세기(틱당 방향 보정 비율). 클수록 급하게 꺾인다.
+REMOTE_STEER = 0.08  # REMOTE: 주인의 마우스 커서를 실시간으로 좇는다
+RADAR_STEER = 0.04  # RADAR SHOT: 살짝 휘는 정도
+HOMING_STEER = 0.08  # HOMING: 확실히 따라간다
+CHASE_STEER = 0.13  # CHASE: 집요하게 따라붙는다
+
+# BURST 점사 간격(틱). 한 번 누르면 같은 방향으로 이 간격마다 한 발씩 더 나간다.
+BURST_INTERVAL = 4
 
 # 거리별 대미지 감쇠: 탄환이 날아간 거리에 비례해 위력이 줄어든다.
 # 기본 탄(20) 기준 근접 30 -> 600px 이상 8 (레거시 DAMAGE_CLOSE/DAMAGE_FAR 수치).
@@ -31,8 +52,13 @@ DAMAGE_FAR_MULT = 0.4
 DAMAGE_TABLE_DISTANCES = (0, 100, 200, 400, 600, 800)
 
 BLOCK_METER_MAX = 600.0
-BLOCK_DRAIN = 1.0
-BLOCK_REGEN = 1.0
+# 가드 게이지는 시간이 지난다고 닳지 않는다. 누르고 있는 동안 가드는 계속 유지되고,
+# 탄을 실제로 막아 낼 때만(bullets._reflect) 그 탄의 위력에 비례해 닳는다.
+# 기본 탄(위력 20) 기준 한 발에 60 → 꽉 찬 게이지로 10발을 받아친다.
+BLOCK_COST_PER_DAMAGE = 3.0
+BLOCK_REGEN = 2.0  # 가드를 놓으면 초당 120 회복(꽉 차는 데 5초)
+# 게이지를 다 쓰면 가드가 깨진다. 여기까지 다시 차야 가드를 올릴 수 있다.
+BLOCK_RECOVER_RATIO = 1.0
 
 ROUNDS_TO_SCORE = 2  # 라운드 2승 = 1점
 SCORE_TO_WIN = 5  # 5점 = 매치 승리

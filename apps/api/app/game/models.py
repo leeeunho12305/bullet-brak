@@ -64,15 +64,22 @@ class Player:
     revives: int = 0
     lifesteal: float = 0.0
     buckshot: int = 0
-    burst: int = 0
+    burst: int = 0  # BURST 카드: 한 번 누를 때 추가로 나가는 발수
+
+    # 점사 예약(한 번 누르면 같은 방향으로 burst 발이 더 나간다)
+    burst_queue: int = 0
+    burst_timer: int = 0
+    burst_angle: float = 0.0
 
     # 가드 / 강공격
     block_meter: float = C.BLOCK_METER_MAX
     block_meter_max: float = C.BLOCK_METER_MAX
     blocking: bool = False
+    guard_broken: bool = False  # 게이지 소진 → BLOCK_RECOVER_RATIO 까지 차야 해제
     charging: bool = False
     charge: float = 0.0
     windup: float = 0.0
+    empower_ready: bool = False  # EMPOWER: 가드로 충전됨, 다음 한 발에 소비
     still_ticks: int = 0
 
     # 상태이상 타이머(틱)
@@ -133,6 +140,11 @@ class Bot:
     evade_timer: int = 0
     #: 티어 파라미터 사본(constants.BOT_TIERS[tier])
     traits: dict[str, float] = field(default_factory=dict)
+    # 상태이상(틱). 플레이어와 같은 이름을 쓴다 — 장판/탄환이 둘을 같게 다룬다.
+    poison: int = 0
+    cold_timer: int = 0
+    dazzle_timer: int = 0
+    silence_timer: int = 0
 
     @property
     def alive(self) -> bool:

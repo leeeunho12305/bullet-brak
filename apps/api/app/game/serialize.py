@@ -79,6 +79,7 @@ def player_snap(room: Room, p: Player, loadout: bool = True) -> dict[str, Any]:
         "block_meter": p.block_meter,
         "block_meter_max": p.block_meter_max,
         "blocking": p.blocking,
+        "guard_broken": p.guard_broken,
         "charging": p.charging,
         "charge": p.charge,
         "score": room.scores.get(p.id, 0),
@@ -88,6 +89,9 @@ def player_snap(room: Room, p: Player, loadout: bool = True) -> dict[str, Any]:
         "silenced": p.silence_timer > 0,
         "poison": p.poison,
         "cold": p.cold_timer > 0,
+        "stunned": p.dazzle_timer > 0,
+        # 정지 충전(WIND UP / CAREFUL PLANNING / RITUAL COUNTDOWN)의 게이지.
+        "windup": p.windup,
     }
     # Tab 오버레이용. 매 틱 보내면 스냅샷의 38% 를 차지해서 0.5초에 한 번만 싣는다.
     # 클라이언트는 마지막으로 받은 값을 유지한다(PROTOCOL §3).
@@ -109,6 +113,11 @@ def bot_snap(b: Bot) -> dict[str, Any]:
         "customization": _customization(b.customization),
         "tier": b.tier,
         "aim": {"x": b.aim.x, "y": b.aim.y},
+        # 봇도 플레이어와 같은 상태이상을 받는다(훈련장에서 카드가 통해야 한다).
+        "silenced": b.silence_timer > 0,
+        "poison": b.poison,
+        "cold": b.cold_timer > 0,
+        "stunned": b.dazzle_timer > 0,
     }
 
 

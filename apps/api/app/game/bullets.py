@@ -21,11 +21,21 @@ from app.game.stats import bullet_falloff
 _INHERITED_FLAGS = (
     "explosive", "supernova", "bombs_away", "decay", "remote", "drill_ammo",
     "ricochet", "chase", "fast_forward", "grow", "silence", "cold", "poison",
-    "toxic_cloud", "target_bounce", "timed_detonation",
+    "toxic_cloud", "target_bounce", "timed_detonation", "dazzle", "steady_shot",
 )
 
 # 수명/도탄 소진 시 폭발하는 플래그
 _BLAST_FLAGS = ("explosive", "supernova", "bombs_away", "timed_detonation")
+
+
+def _weakest_enemy_ratio(room: Room, player: Player) -> float:
+    """살아 있는 적 중 가장 약한 쪽의 체력 비율(0~1). 적이 없으면 1.0."""
+    ratios = [
+        e.hp / e.max_hp
+        for e in room.entities()
+        if e.id != player.id and e.alive and e.max_hp > 0
+    ]
+    return clamp(min(ratios), 0.0, 1.0) if ratios else 1.0
 
 
 def spawn_bullet(room: Room, player: Player, angle: float, **extra: Any) -> Bullet:
@@ -44,8 +54,22 @@ def spawn_bullet(room: Room, player: Player, angle: float, **extra: Any) -> Bull
     careful = 1.2 if (player.has("careful_planning") and player.still_ticks >= 20) else 1.0
     wind_up = 1.0 + shot_charge * 0.75 if player.has("wind_up") else 1.0
     pristine = 1.2 if (player.has("pristine") and player.hp >= player.max_hp) else 1.0
+    # OVERPOWER: 상대가 약할수록 / DEMONIC PACT: 내가 약할수록 세진다.
+    overpower = 1.0
+    if player.has("overpower"):
+        overpower = 1.0 + (1.0 - _weakest_enemy_ratio(room, player)) * C.OVERPOWER_MAX_BONUS
+    demonic = 1.0
+    if player.has("demonic_pact") and player.max_hp > 0:
+        missing = clamp(1.0 - player.hp / player.max_hp, 0.0, 1.0)
+        demonic = 1.0 + missing * C.DEMONIC_MAX_BONUS
     damage_mult = (
-        player.damage_mult * float(extra.get("damage_mult", 1.0)) * careful * wind_up * pristine
+        player.damage_mult
+        * float(extra.get("damage_mult", 1.0))
+        * careful
+        * wind_up
+        * pristine
+        * overpower
+        * demonic
     )
 
     spread = float(extra.get("spread", 0.0))
@@ -66,15 +90,23 @@ def spawn_bullet(room: Room, player: Player, angle: float, **extra: Any) -> Bull
         vy *= 1.25
 
     flags: dict[str, Any] = {name: player.flags.get(name) for name in _INHERITED_FLAGS if player.has(name)}
-    # 유도는 homing/chase/radar_shot 중 아무거나 있으면 켜진다
-    if player.has("homing") or player.has("chase") or player.has("radar_shot"):
+    # 유도는 homing/chase/radar_shot 중 아무거나 있으면 켜진다. 세기는 카드마다 다르다.
+    steer = max(
+        C.CHASE_STEER if player.has("chase") else 0.0,
+        C.HOMING_STEER if player.has("homing") else 0.0,
+        C.RADAR_STEER if player.has("radar_shot") else 0.0,
+    )
+    if steer > 0:
         flags["homing"] = True
+        flags["homing_steer"] = steer
     if player.has("radiance"):
         flags["radiance"] = True
     if player.has("decay"):
         flags["decay_rate"] = 0.985
 
     life = int(extra.get("life", 50 if player.has("fast_forward") else C.BASE_BULLET_LIFE))
+    if player.has("steady_shot"):
+        life += C.STEADY_LIFE_BONUS
     pierce = int(extra.get("pierce", 1 if player.has("drill_ammo") else 0))
 
     return Bullet(
@@ -134,23 +166,60 @@ def _pay_shot_costs(player: Player) -> None:
         player.windup = clamp(player.windup + 8, 0.0, C.MAX_CHARGE)
 
 
+def _volley(room: Room, player: Player, angle: float, damage_mult: float = 1.0) -> None:
+    """한 번의 사격. buckshot/barrage 는 여기서 부채꼴로 퍼진다."""
+    count = player.buckshot + 1 if player.buckshot > 0 else (3 if player.has("barrage") else 1)
+    for i in range(count):
+        spread = (i - (count - 1) / 2) * 0.08 if count > 1 else 0.0
+        room.bullets.append(
+            spawn_bullet(room, player, angle, spread=spread, damage_mult=damage_mult)
+        )
+    _record(room, "shots", count)
+
+
 def fire(room: Room, player: Player) -> None:
-    """일반 사격. buckshot/barrage/burst 산탄 계산 포함."""
+    """일반 사격. BURST 는 여기서 나가지 않고 update_burst 가 이어서 쏜다."""
     if player.hp <= 0 or player.silence_timer > 0 or player.cooldown > 0:
         return
 
     angle = _aim_angle(player)
-    fire_count = player.buckshot + 1 if player.buckshot > 0 else (3 if player.has("barrage") else 1)
-    burst_count = 3 if player.burst > 0 else 1
-    total = fire_count * burst_count
+    # EMPOWER: 가드로 충전해 둔 한 발. 점사의 첫 발에만 실린다.
+    boost = 1.0
+    if player.empower_ready:
+        boost = C.EMPOWER_MULT
+        player.empower_ready = False
+    _volley(room, player, angle, damage_mult=boost)
 
-    for i in range(total):
-        spread = (i - (total - 1) / 2) * 0.08 if total > 1 else 0.0
-        room.bullets.append(spawn_bullet(room, player, angle, spread=spread))
+    # BURST: 퍼뜨리지 않고 "같은 방향으로" 시간차를 두고 더 쏜다.
+    if player.burst > 0:
+        player.burst_queue = player.burst
+        player.burst_timer = C.BURST_INTERVAL
+        player.burst_angle = angle
 
-    _record(room, "shots", total)
-    _pay_shot_costs(player)
+    _pay_shot_costs(player)  # 한 번 누른 것 = 한 번의 사격이므로 비용도 한 번만
     player.cooldown = player.max_cooldown
+
+
+def update_burst(room: Room, player: Player) -> None:
+    """예약된 점사를 1틱 진행시킨다(sim.update_player 가 매 틱 부른다)."""
+    if player.burst_queue <= 0:
+        return
+    if player.hp <= 0 or player.silence_timer > 0:
+        cancel_burst(player)
+        return
+
+    player.burst_timer -= 1
+    if player.burst_timer > 0:
+        return
+
+    _volley(room, player, player.burst_angle)
+    player.burst_queue -= 1
+    player.burst_timer = C.BURST_INTERVAL
+
+
+def cancel_burst(player: Player) -> None:
+    player.burst_queue = 0
+    player.burst_timer = 0
 
 
 def fire_strong(room: Room, player: Player) -> None:
@@ -159,12 +228,16 @@ def fire_strong(room: Room, player: Player) -> None:
         return
 
     ratio = clamp(player.charge, 0.0, C.MAX_CHARGE) / C.MAX_CHARGE
+    empower = 1.0
+    if player.empower_ready:
+        empower = C.EMPOWER_MULT
+        player.empower_ready = False
     room.bullets.append(
         spawn_bullet(
             room,
             player,
             _aim_angle(player),
-            damage_mult=1.0 + ratio * 0.6,
+            damage_mult=(1.0 + ratio * 0.6) * empower,
             size_bonus=2.0 + ratio * 4.0,
             damage=26.0 + ratio * 24.0,
             knockback=12.0 + ratio * 8.0,
@@ -190,23 +263,32 @@ def _record(room: Room, key: str, amount: float = 1) -> None:
 # --- 틱 처리 ---------------------------------------------------------------
 
 
+def _turn_toward(bullet: Bullet, tx: float, ty: float, steer: float) -> None:
+    """탄환 속도를 (tx, ty) 쪽으로 steer 만큼 비튼다. 속력은 유지한다."""
+    dx = tx - bullet.x
+    dy = ty - bullet.y
+    dist = math.hypot(dx, dy) or 1.0
+    speed = math.hypot(bullet.vx, bullet.vy) or 1.0
+    bullet.vx = bullet.vx * (1 - steer) + (dx / dist) * speed * steer
+    bullet.vy = bullet.vy * (1 - steer) + (dy / dist) * speed * steer
+
+
 def _steer(room: Room, bullet: Bullet) -> None:
-    """리모트 조종 + 최근접 적 유도."""
-    if not (bullet.has("remote") or bullet.has("homing") or bullet.has("target_bounce")):
+    """리모트 조종(마우스 커서 실시간 추적) + 최근접 적 유도."""
+    if not (bullet.has("remote") or bullet.has("homing")):
         return
 
-    speed = math.hypot(bullet.vx, bullet.vy) or 1.0
-
     if bullet.has("remote"):
+        # 주인이 살아 있으면 지금 커서를 좇는다. 주인이 죽거나 나가면 마지막
+        # 커서 위치(owner_aim)에 그대로 머문다 — 갑자기 방향이 튀지 않게.
         owner = room.players.get(bullet.owner)
-        aim = bullet.owner_aim if bullet.owner_aim else (owner.aim if owner else None)
-        if aim is not None:
-            tx = aim.x - bullet.x
-            ty = aim.y - bullet.y
-            dist = math.hypot(tx, ty) or 1.0
-            steer = 0.08
-            bullet.vx = bullet.vx * (1 - steer) + (tx / dist) * speed * steer
-            bullet.vy = bullet.vy * (1 - steer) + (ty / dist) * speed * steer
+        if owner is not None and owner.alive:
+            bullet.owner_aim.x = owner.aim.x
+            bullet.owner_aim.y = owner.aim.y
+        _turn_toward(bullet, bullet.owner_aim.x, bullet.owner_aim.y, C.REMOTE_STEER)
+
+    if not bullet.has("homing"):
+        return
 
     target = None
     closest = float("inf")
@@ -220,13 +302,8 @@ def _steer(room: Room, bullet: Bullet) -> None:
 
     if target is None:
         return
-    tx = target.cx - bullet.x
-    ty = target.cy - bullet.y
-    dist = math.hypot(tx, ty) or 1.0
-    speed = math.hypot(bullet.vx, bullet.vy) or 1.0
-    steer = 0.08 if bullet.has("homing") else 0.05
-    bullet.vx = bullet.vx * (1 - steer) + (tx / dist) * speed * steer
-    bullet.vy = bullet.vy * (1 - steer) + (ty / dist) * speed * steer
+    # 유도 세기는 카드마다 다르다(RADAR SHOT < HOMING < CHASE).
+    _turn_toward(bullet, target.cx, target.cy, float(bullet.flags.get("homing_steer", C.HOMING_STEER)))
 
 
 def _detonate(room: Room, bullet: Bullet, damage: float, radius: float, knockback: float) -> None:
@@ -241,23 +318,29 @@ def _expire(room: Room, bullet: Bullet, damage_ratio: float) -> None:
     bullet.active = False
 
 
+def _bounced(bullet: Bullet) -> None:
+    """도탄 1회. 튕길 때마다 수명이 늘어난다(BOUNCE_LIFE_BONUS)."""
+    bullet.bounces += 1
+    bullet.life += C.BOUNCE_LIFE_BONUS
+
+
 def _bounce_walls(bullet: Bullet) -> None:
     if bullet.x < 0:
         bullet.x = 0.0
         bullet.vx *= -1
-        bullet.bounces += 1
+        _bounced(bullet)
     elif bullet.x > C.WIDTH:
         bullet.x = C.WIDTH
         bullet.vx *= -1
-        bullet.bounces += 1
+        _bounced(bullet)
     if bullet.y < 0:
         bullet.y = 0.0
         bullet.vy *= -1
-        bullet.bounces += 1
+        _bounced(bullet)
     elif bullet.y > C.HEIGHT:
         bullet.y = C.HEIGHT
         bullet.vy *= -1
-        bullet.bounces += 1
+        _bounced(bullet)
 
 
 def _hit_platforms(room: Room, bullet: Bullet) -> None:
@@ -272,9 +355,10 @@ def _hit_platforms(room: Room, bullet: Bullet) -> None:
                 bullet.vy *= -1
             else:
                 bullet.vx *= -1
-            bullet.bounces += 1
+            _bounced(bullet)
             if bullet.has("target_bounce"):
                 bullet.flags["homing"] = True
+                bullet.flags.setdefault("homing_steer", C.HOMING_STEER)
             if bullet.has("bombs_away"):
                 damage = bullet.damage * 0.35 * bullet_falloff(bullet)
                 _detonate(room, bullet, damage, 70.0, 12.0)
@@ -295,11 +379,20 @@ def _reflect(room: Room, bullet: Bullet, player: Player) -> None:
     """가드 반사: 속도 반전 + 소유권 이전, echo 면 반격탄 1발."""
     previous_owner_id = bullet.owner
     attacker = room.players.get(previous_owner_id)
+
+    # 가드 게이지는 여기서만 닳는다. 센 탄일수록 많이 깎는다.
+    cost = bullet.damage * bullet_falloff(bullet) * C.BLOCK_COST_PER_DAMAGE
+    if player.has("shields_up"):
+        cost *= 0.75
+    player.block_meter = max(0.0, player.block_meter - cost)
     bullet.vx *= -1.35
     bullet.vy *= -1.35
     bullet.owner = player.id
     bullet.owner_aim = Vec(player.aim.x, player.aim.y)
-    bullet.bounces += 1
+    # 반사는 도탄이 아니다. bounces 를 올리면 도탄 카드가 없는 탄(max_bounces=0)이
+    # 되받아친 다음 틱에 그대로 꺼져서 가드 반사가 아무 의미가 없어진다.
+    # 되돌아갈 만큼의 수명은 새로 준다.
+    bullet.life = max(bullet.life, C.BASE_BULLET_LIFE)
     # 반사한 순간이 새 발사 지점이다(거리 감쇠 기준 재설정) + 위력은 반사한 쪽 배율로 환산.
     bullet.start_x, bullet.start_y = bullet.x, bullet.y
     if attacker is not None and attacker.damage_mult:
@@ -314,6 +407,22 @@ def _reflect(room: Room, bullet: Bullet, player: Player) -> None:
     room.bullets.append(spawn_bullet(room, player, angle, damage_mult=0.65, speed_mult=1.1))
 
 
+def _apply_status(bullet: Bullet, target: Player | Bot) -> None:
+    """적중 상태이상. 플레이어든 봇이든 똑같이 건다.
+
+    봇에게 안 걸면 훈련장에서 SILENCE/COLD/POISON/DAZZLE 이 통째로 무효가 된다.
+    """
+    poison_stacks = int(bullet.flags.get("poison", 0) or 0)
+    if poison_stacks > 0:
+        target.poison += 10 * poison_stacks
+    if bullet.has("cold"):
+        target.cold_timer = max(target.cold_timer, 60)
+    if bullet.has("silence"):
+        target.silence_timer = max(target.silence_timer, 60)
+    if bullet.has("dazzle"):
+        target.dazzle_timer = max(target.dazzle_timer, C.DAZZLE_HIT_TICKS)
+
+
 def _damage_player(room: Room, bullet: Bullet, player: Player) -> None:
     owner = room.players.get(bullet.owner)
     knockback_mult = owner.knockback_mult if owner else 1.0
@@ -324,14 +433,7 @@ def _damage_player(room: Room, bullet: Bullet, player: Player) -> None:
     player.vx += bullet.vx * 0.4 * knockback_mult
     player.vy -= 4
 
-    # 상태이상
-    poison_stacks = int(bullet.flags.get("poison", 0) or 0)
-    if poison_stacks > 0:
-        player.poison += 10 * poison_stacks
-    if bullet.has("cold"):
-        player.cold_timer = max(player.cold_timer, 60)
-    if bullet.has("silence"):
-        player.silence_timer = max(player.silence_timer, 60)
+    _apply_status(bullet, player)
 
     # 소유자 보상
     if owner is not None:
@@ -392,6 +494,7 @@ def _hit_bots(room: Room, bullet: Bullet) -> None:
         bot.hp -= hit_damage
         bot.vx += bullet.vx * 0.4
         bot.vy -= 4
+        _apply_status(bullet, bot)
 
         _record(room, "damage_dealt", hit_damage)
         # 명중률은 탄환 1발당 한 번만 센다(관통탄이 여러 번 세지 않도록).

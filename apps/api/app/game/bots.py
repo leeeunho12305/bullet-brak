@@ -155,6 +155,8 @@ def _try_fire(room: Room, bot: Bot, target: Player, has_los: bool) -> None:
     cooldown = bot.trait("fire_cooldown")
     if cooldown <= 0 or bot.cooldown > 0:  # 허수아비는 cooldown 이 0 이라 영영 못 쏜다
         return
+    if bot.silence_timer > 0:  # SILENCE: 맞은 동안은 총을 못 쏜다
+        return
     if not has_los:  # 발판 너머로는 쏘지 않는다
         return
     dist = math.hypot(target.cx - bot.cx, target.cy - bot.cy)
@@ -230,7 +232,8 @@ def _physics(bot: Bot, platforms: list[dict[str, float]]) -> None:
     elif bot.dir == 1:
         bot.vx += 1.2
 
-    bot.vx = max(-bot.speed, min(bot.speed, bot.vx))
+    speed = bot.speed * (0.65 if bot.cold_timer > 0 else 1.0)  # COLD BULLETS / FROST SLAM
+    bot.vx = max(-speed, min(speed, bot.vx))
     if bot.dir == 0:
         bot.vx *= C.FRICTION
 
@@ -259,6 +262,23 @@ def _physics(bot: Bot, platforms: list[dict[str, float]]) -> None:
 # --------------------------------------------------------------------------
 
 
+#: 매 틱 1 씩 줄어드는 상태이상 타이머(플레이어 sim._TIMERS 와 같은 역할)
+_TIMERS = ("cold_timer", "dazzle_timer", "silence_timer")
+
+
+def _tick_status(room: Room, bot: Bot) -> None:
+    """상태이상 타이머와 독 피해. 플레이어(sim.update_player)와 같은 규칙이다."""
+    for attr in _TIMERS:
+        value = getattr(bot, attr)
+        if value > 0:
+            setattr(bot, attr, value - 1)
+    if bot.poison > 0 and room.tick % 30 == 0:
+        bot.hp -= 1
+        bot.poison -= 1
+        if bot.hp <= 0:
+            kill_bot(bot)
+
+
 def update_bot(room: Room, bot: Bot) -> None:
     """봇 1틱: 타이머 → 인지/조준 → 사격 → 이동 → 물리."""
     if bot.cooldown > 0:
@@ -267,6 +287,17 @@ def update_bot(room: Room, bot: Bot) -> None:
         bot.jump_cooldown -= 1
     if bot.reaction_timer > 0:
         bot.reaction_timer -= 1
+
+    _tick_status(room, bot)
+    if not bot.alive:
+        return
+
+    # 기절(DAZZLE / EMP / STATIC FIELD): 조준도 사격도 이동도 못 하고 굳는다.
+    if bot.dazzle_timer > 0:
+        bot.dir = 0
+        bot.evade_timer = 0
+        _physics(bot, room.platforms)
+        return
 
     target = _nearest_player(room, bot)
     fights = target is not None and bot.trait("fire_cooldown") > 0

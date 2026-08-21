@@ -106,10 +106,13 @@ PlayerSnap = {
   "aim": {"x": f, "y": f},
   "cooldown": f, "max_cooldown": f,
   "block_meter": f, "block_meter_max": f, "blocking": bool,
+  "guard_broken": bool,                   // 게이지 소진으로 가드가 깨진 상태
   "charging": bool, "charge": f,          // 강공격 (0~60)
   "score": int, "round_wins": int, "coins": int,
   "cards": ["glass_cannon", ...],
-  "silenced": bool, "poison": int, "cold": bool,
+  "silenced": bool, "poison": int, "cold": bool, "stunned": bool,
+  "windup": f,                            // 정지 충전 게이지(0~60). WIND UP / CAREFUL
+                                          // PLANNING / RITUAL COUNTDOWN 이 쓴다
   // Tab 오버레이용 — 아래 두 필드는 대전 중 0.5초(30틱)에 한 번만 실린다.
   // 없는 틱에는 클라이언트가 마지막으로 받은 값을 그대로 유지한다.
   "stats": { "damage_mult","max_hp","speed","cooldown","bullet_speed","bullet_size",
@@ -118,6 +121,7 @@ PlayerSnap = {
 }
 
 BotSnap = { "id","x","y","width","height","hp","max_hp","customization",
+            "silenced","poison","cold","stunned",   // 봇도 플레이어와 같은 상태이상을 받는다
             "tier": "dummy"|"rookie"|"veteran",   // 난이도. 클라가 이름표/테두리로 구분
             "aim": {"x": f, "y": f} }             // 봇이 겨누는 지점(허수아비는 자기 위치)
 
@@ -173,7 +177,15 @@ Snapshot = {
 - 월드 경계: 좌우 벽과 **천장(`y = 0`)은 막혀 있다**(플레이어/봇 모두 `vy` 가 0으로 끊긴다).
   바닥만 뚫려 있다 — 낙사가 협곡·부유섬 맵의 규칙이기 때문이다. 탄환은 네 면 모두에서 튕긴다.
 - 낙사: `y > HEIGHT + 100` 이면 즉사.
-- 가드: `block_meter` 소모, 총알 반사(×-1.35, 소유권 이전).
+- 가드: 총알 반사(×-1.35, 소유권 이전). 가드 중에도 점프는 된다(좌우 이동은 막힌다).
+  **`block_meter` 는 시간으로 닳지 않는다** — 누르고 있는 한 가드와 가드 장판은
+  계속 유지되고, 탄을 실제로 받아쳤을 때만 `위력 × BLOCK_COST_PER_DAMAGE` 만큼 닳는다.
+  0 이 되면 가드가 깨져(`guard_broken`) 게이지가 꽉 찰 때까지(`BLOCK_RECOVER_RATIO`)
+  다시 못 올린다. 회복은 버튼을 누른 채로도 진행된다(기본값 기준 5초).
+- 가드 장판(`sim.GUARD_ZONES`) 중 적을 건드리는 것(shockwave/implode/static/emp/frost)의
+  반경은 봇이 유지하는 거리(`bots.NEAR_DISTANCE` = 190px)보다 커야 훈련장에서도 닿는다.
+- 장판(zone)은 `heal`/`radiance` 는 소유자에게만, `HARMFUL_ZONES` 는 소유자를 빼고
+  모두에게 적용된다.
 - 강공격: `strong_start`~`strong_release` 차징(0~60), 발사 후 쿨다운 180틱.
 - **training 모드(훈련장)**: 웨이브 방식. 라운드/점수/매치 승리가 없다.
   - 웨이브마다 정해진 구성의 봇이 스폰된다. 봇 티어는 3종:

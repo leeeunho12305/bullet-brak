@@ -11,23 +11,32 @@ import math
 from app.game import bullets as _bullets
 from app.game import constants as C
 from app.game.bots import fall_check as bot_fall_check
+from app.game.bots import kill_bot as bot_kill
 from app.game.bots import update_bot
 from app.game.models import Bot, Player, Room, Zone
 from app.game.physics import clamp, handle_lethal, resolve_platform_collision
 
 #: 가드 중 생성되는 장판: (카드 플래그, 존 타입, 반경, 지속틱)
+#:
+#: 적을 건드리는 장판(shockwave~frost)의 반경은 봇이 유지하는 거리(bots.NEAR_DISTANCE
+#: = 190px)보다 커야 한다. 예전에는 전부 110~140 이라 훈련장에서는 봇이 원 안으로
+#: 들어오는 일이 없어 EMP 같은 카드가 통째로 "작동 안 하는" 것처럼 보였다.
+#: 회복 장판(radiance/heal)은 내 발밑에만 필요하므로 작게 둔다.
 GUARD_ZONES: tuple[tuple[str, str, float, int], ...] = (
     ("radiance", "radiance", 100.0, 18),
     ("healing_field", "heal", 120.0, 60),
-    ("shockwave", "shockwave", 110.0, 1),
-    ("implode", "implode", 140.0, 30),
-    ("static_field", "static", 130.0, 45),
-    ("emp", "emp", 120.0, 12),
-    ("frost_slam", "frost", 120.0, 14),
+    ("shockwave", "shockwave", 200.0, 1),
+    ("implode", "implode", 220.0, 30),
+    ("static_field", "static", 200.0, 45),
+    ("emp", "emp", 230.0, 12),
+    ("frost_slam", "frost", 200.0, 14),
 )
 
 #: 소유자에게는 적용하지 않는 장판 타입
 HARMFUL_ZONES = frozenset({"toxic", "static", "emp", "frost", "implode", "shockwave", "chilling"})
+
+#: 소유자에게만 적용하는 장판 타입 — 회복을 적에게까지 나눠 주면 카드가 자해가 된다
+FRIENDLY_ZONES = frozenset({"heal", "radiance"})
 
 #: 가드 장판/톱날 생성 주기(레거시는 매 틱 생성 → 장판 폭증. 성능상 6틱마다로 제한)
 GUARD_PERIOD = 6
@@ -49,6 +58,7 @@ def update_player(room: Room, p: Player) -> None:
 
     if p.cooldown > 0:
         p.cooldown -= 1
+    _bullets.update_burst(room, p)  # BURST 예약분(같은 방향 연발)
     if p.charging:
         p.charge = clamp(p.charge + 2, 0.0, C.MAX_CHARGE)
 
@@ -70,31 +80,43 @@ def update_player(room: Room, p: Player) -> None:
 
     stunned = p.dazzle_timer > 0
     inp = p.inputs
-    blocking = bool(inp.block) and p.block_meter > 0 and not stunned
+    # 게이지를 다 쓰면 가드가 깨지고, 꽉 찰 때까지 다시 못 올린다. 이 "깨짐" 상태가
+    # 없으면 게이지 0 근처에서 "1틱 가드 → 1틱 회복"이 반복돼(사실상 무한 가드)
+    # 6틱 주기인 가드 장판이 안 깔린다.
+    if p.block_meter <= 0:
+        p.guard_broken = True
+    elif p.guard_broken and p.block_meter >= p.block_meter_max * C.BLOCK_RECOVER_RATIO:
+        p.guard_broken = False
+    blocking = bool(inp.block) and not stunned and not p.guard_broken
     p.blocking = blocking
 
     if blocking:
         p.vx *= 0.5
+        # 게이지는 시간으로 닳지 않는다 — 누르고 있는 한 가드 카드 효과도 계속 나간다.
+        # 닳는 건 탄을 실제로 받아쳤을 때뿐이다(bullets._reflect).
         _guard_effects(room, p)
-        p.block_meter = max(0.0, p.block_meter - (0.75 if p.has("shields_up") else C.BLOCK_DRAIN))
     else:
         if not stunned:
             if inp.left:
                 p.vx -= C.ACCEL
             if inp.right:
                 p.vx += C.ACCEL
-            if inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
-                p.vy = p.jump_power
-                p.grounded = False
-                p.jumps += 1
-                inp.jump_consumed = True
-        regen = 1.25 if p.has("shields_up") else C.BLOCK_REGEN
+        regen = C.BLOCK_REGEN * (1.25 if p.has("shields_up") else 1.0)
         p.block_meter = min(p.block_meter_max, p.block_meter + regen)
+
+    # 점프는 가드 중에도 된다(가드는 이동만 둔하게 할 뿐 발을 묶지 않는다).
+    if not stunned and inp.jump and p.jumps < max(1, p.max_jumps) and not inp.jump_consumed:
+        p.vy = p.jump_power
+        p.grounded = False
+        p.jumps += 1
+        inp.jump_consumed = True
     if not inp.jump:
         inp.jump_consumed = False
 
     # 이동 / 중력 / 경계 / 발판
     speed = p.speed * (0.65 if p.cold_timer > 0 else 1.0)
+    if p.blood_timer > 0:  # TASTE OF BLOOD
+        speed *= C.BLOOD_SPEED_MULT
     p.vx = clamp(p.vx, -speed, speed)
     if not inp.left and not inp.right:
         p.vx *= C.FRICTION
@@ -127,6 +149,8 @@ def _guard_effects(room: Room, p: Player) -> None:
     mag = math.hypot(dx, dy) or 1.0
     ux, uy = dx / mag, dy / mag
 
+    if p.has("empower"):
+        p.empower_ready = True  # 가드를 놓은 뒤 쏘는 첫 발에 실린다
     if p.has("shield_charge"):
         p.vx += ux * 5
         p.vy += uy * 2
@@ -170,6 +194,7 @@ def _corpse_physics(room: Room, p: Player) -> None:
     """사망 플레이어 시체는 중력만 받고 발판 위에 눕는다."""
     p.blocking = False
     p.charging = False
+    _bullets.cancel_burst(p)
     p.vy += C.GRAVITY
     p.x += p.vx
     p.y += p.vy
@@ -206,6 +231,7 @@ def kill(p: Player) -> None:
     p.block_meter = 0.0
     p.silence_timer = 0
     p.poison = 0
+    _bullets.cancel_burst(p)
 
 
 def check_fall_death(room: Room) -> None:
@@ -241,8 +267,14 @@ def update_zones(room: Room) -> None:
     for zone in room.zones:
         zone.duration -= 1
         harmful = zone.type in HARMFUL_ZONES
+        friendly = zone.type in FRIENDLY_ZONES
         for entity in entities:
-            if not entity.alive or (harmful and zone.owner == entity.id):
+            if not entity.alive:
+                continue
+            mine = zone.owner == entity.id
+            if harmful and mine:
+                continue
+            if friendly and not mine:
                 continue
             _apply_zone(zone, entity)
     room.zones = [z for z in room.zones if z.duration > 0]
@@ -264,15 +296,12 @@ def _apply_zone(z: Zone, e: Player | Bot) -> None:
         e.hp = min(e.max_hp, e.hp + 0.25 * power)
     elif kind == "toxic":
         e.hp -= 0.7 * power
-        if is_player:
-            e.poison += 1
+        e.poison += 1
     elif kind in ("static", "emp"):
-        if is_player:
-            e.silence_timer = max(e.silence_timer, 25)
-            e.dazzle_timer = max(e.dazzle_timer, 20)
+        e.silence_timer = max(e.silence_timer, 25)
+        e.dazzle_timer = max(e.dazzle_timer, 20)
     elif kind == "frost":
-        if is_player:
-            e.cold_timer = max(e.cold_timer, 50)
+        e.cold_timer = max(e.cold_timer, 50)
     elif kind == "implode":
         e.vx += (-dx / norm) * 0.35 * power
         e.vy += (-dy / norm) * 0.35 * power
@@ -282,5 +311,5 @@ def _apply_zone(z: Zone, e: Player | Bot) -> None:
     elif kind == "chilling":
         e.vx *= 0.92
 
-    if is_player and e.hp <= 0:
-        handle_lethal(e)
+    if e.hp <= 0:
+        handle_lethal(e) if is_player else bot_kill(e)

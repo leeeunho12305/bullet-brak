@@ -13,6 +13,9 @@ const SCORE_TO_WIN = 5;
 const TICK_RATE = 60;
 
 /** 카드 아이콘을 보여주기 위해 지나간 available_cards 를 기억해 둔다. */
+/** 정지 충전(windup)을 쓰는 카드들 — renderer.ts 의 FOCUS_CARDS 와 같은 목록이다. */
+const FOCUS_CARDS = new Set(['wind_up', 'careful_planning', 'ritual_countdown']);
+
 const cardCache = new Map<string, CardInfo>();
 
 interface StoreSlice {
@@ -29,6 +32,8 @@ interface HudPlayer {
   score: number;
   roundWins: number;
   guard: number;
+  guardBroken: boolean;
+  focus: number | null;
   cooldown: number;
   charge: number;
   charging: boolean;
@@ -49,6 +54,9 @@ function toHudPlayer(p: PlayerSnap): HudPlayer {
     score: p.score,
     roundWins: p.round_wins,
     guard: p.block_meter_max > 0 ? p.block_meter / p.block_meter_max : 0,
+    guardBroken: p.guard_broken,
+    // 집중 게이지는 그걸 쓰는 카드를 가진 사람에게만 의미가 있다.
+    focus: p.cards.some((c) => FOCUS_CARDS.has(c)) ? Math.min(1, p.windup / MAX_CHARGE) : null,
     cooldown: p.max_cooldown > 0 ? p.cooldown / p.max_cooldown : 0,
     charge: Math.min(1, p.charge / MAX_CHARGE),
     charging: p.charging,
@@ -140,13 +148,24 @@ function PlayerSide({ p, mine, side }: SideProps): JSX.Element {
         </span>
       </div>
       <div className="hud-sub">
-        <Meter ratio={p.guard} color="#4dabf7" label="가드 게이지" />
+        <Meter
+          ratio={p.guard}
+          color={p.guardBroken ? '#ff6b6b' : '#4dabf7'}
+          label={p.guardBroken ? '가드 회복 중' : '가드 게이지'}
+        />
         <Meter ratio={1 - p.cooldown} color="#adb5bd" label="사격 쿨다운" />
         <Meter
           ratio={p.charge}
           color={p.charging ? '#ff2e97' : 'rgba(255,212,59,0.55)'}
           label="강공격 차징"
         />
+        {p.focus !== null && (
+          <Meter
+            ratio={p.focus}
+            color={p.focus >= 1 ? '#c0eb75' : 'rgba(192,235,117,0.6)'}
+            label={p.focus >= 1 ? '집중 완료' : '집중 게이지'}
+          />
+        )}
       </div>
       <div className="hud-bottom">
         <ScoreOrb wins={p.roundWins} color={p.color} />

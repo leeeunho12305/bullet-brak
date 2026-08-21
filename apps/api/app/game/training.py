@@ -146,9 +146,11 @@ def _tick_respawn(room: Room, state: TrainingState, player: Any) -> None:
     player.grounded = False
     player.jumps = 0
     player.cooldown = 0.0
+    player.burst_queue = player.burst_timer = 0
     player.charging = False
     player.charge = 0.0
     player.block_meter = player.block_meter_max
+    player.guard_broken = False
     player.poison = 0
     player.cold_timer = player.dazzle_timer = player.silence_timer = 0
     player.echo_cooldown = player.blood_timer = 0

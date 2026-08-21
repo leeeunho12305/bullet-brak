@@ -7,6 +7,9 @@ import { drawAvatar } from './avatars';
 const GRID = 40;
 const TAU = Math.PI * 2;
 
+/** 정지 충전(windup)을 쓰는 카드들 — 이 중 하나라도 있어야 집중 게이지를 그린다. */
+const FOCUS_CARDS = new Set(['wind_up', 'careful_planning', 'ritual_countdown']);
+
 /** 맵 정보가 아직 안 왔을 때 쓰는 기본 테마(= classic) */
 const DEFAULT_THEME: MapTheme = {
   bg: '#0b0d17',
@@ -34,7 +37,7 @@ const ZONE_COLORS: Record<string, string> = {
   frost: '#74c0fc',
   chilling: '#74c0fc',
   cold: '#74c0fc',
-  emp: '#4dabf7',
+  emp: '#00c2ff',
   static: '#4dabf7',
   implode: '#b197fc',
   shockwave: '#b197fc',
@@ -196,8 +199,16 @@ function drawBar(
   ctx.fillRect(x, y, w * Math.max(0, Math.min(1, ratio)), h);
 }
 
-/** 상태이상(침묵/독/냉기) 표시 */
-function drawStatus(ctx: CanvasRenderingContext2D, p: PlayerSnap, cx: number, cy: number, r: number, t: number): void {
+/** 상태이상 표시에 필요한 최소 정보 — 플레이어와 봇이 함께 쓴다. */
+interface StatusLike {
+  cold: boolean;
+  poison: number;
+  silenced: boolean;
+  stunned: boolean;
+}
+
+/** 상태이상(냉기/독/침묵/기절) 표시 */
+function drawStatus(ctx: CanvasRenderingContext2D, p: StatusLike, cx: number, cy: number, r: number, t: number): void {
   if (p.cold) {
     ctx.save();
     ctx.globalAlpha = 0.28;
@@ -232,6 +243,19 @@ function drawStatus(ctx: CanvasRenderingContext2D, p: PlayerSnap, cx: number, cy
     ctx.textAlign = 'center';
     ctx.fillStyle = '#dee2e6';
     ctx.fillText('🔇', cx + r + 8, cy - r);
+    ctx.restore();
+  }
+  if (p.stunned) {
+    // 머리 위를 도는 별 — 굳었다는 걸 한눈에 알리는 신호다.
+    ctx.save();
+    ctx.fillStyle = '#ffd43b';
+    for (let i = 0; i < 3; i += 1) {
+      const a = t / 140 + (i * TAU) / 3;
+      ctx.globalAlpha = 0.55 + 0.45 * Math.sin(t / 120 + i);
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(a) * (r + 3), cy - r - 8 + Math.sin(a) * 4, 2.4, 0, TAU);
+      ctx.fill();
+    }
     ctx.restore();
   }
 }
@@ -288,6 +312,22 @@ function drawPlayer(
     ctx.restore();
   }
 
+  // 집중 게이지 (WIND UP / CAREFUL PLANNING / RITUAL COUNTDOWN) — 가만히 있으면 찬다
+  if (p.windup > 0 && p.cards.some((c) => FOCUS_CARDS.has(c))) {
+    const ratio = Math.max(0, Math.min(1, p.windup / MAX_CHARGE));
+    ctx.save();
+    ctx.strokeStyle = ratio >= 1 ? '#c0eb75' : 'rgba(192, 235, 117, 0.65)';
+    ctx.lineWidth = 3;
+    if (ratio >= 1) {
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#c0eb75';
+    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, w * 0.95, -Math.PI / 2, -Math.PI / 2 + TAU * ratio);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // 강공격 차징 링
   if (p.charging) {
     const ratio = Math.max(0, Math.min(1, p.charge / MAX_CHARGE));
@@ -311,7 +351,9 @@ function drawPlayer(
   // 머리 위 HP / 가드 / 닉네임
   const barY = ly - 14;
   drawBar(ctx, lx, barY, w, 6, p.hp / Math.max(1, p.max_hp), isMe ? '#00e5ff' : '#ff2e97');
-  drawBar(ctx, lx, barY + 8, w, 3, p.block_meter / Math.max(1, p.block_meter_max), '#4dabf7');
+  // 가드가 깨진 동안은 게이지를 붉게 — 왜 가드가 안 올라가는지 보이게 한다.
+  const guardColor = p.guard_broken ? '#ff6b6b' : '#4dabf7';
+  drawBar(ctx, lx, barY + 8, w, 3, p.block_meter / Math.max(1, p.block_meter_max), guardColor);
 
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
   ctx.font = 'bold 11px system-ui, sans-serif';
@@ -320,7 +362,7 @@ function drawPlayer(
   ctx.textAlign = 'left';
 }
 
-function drawBot(ctx: CanvasRenderingContext2D, b: BotSnap, lx: number, ly: number): void {
+function drawBot(ctx: CanvasRenderingContext2D, b: BotSnap, lx: number, ly: number, t: number): void {
   const dead = b.hp <= 0;
   if (dead) {
     ctx.save();
@@ -331,6 +373,7 @@ function drawBot(ctx: CanvasRenderingContext2D, b: BotSnap, lx: number, ly: numb
     return;
   }
   drawAvatar(ctx, b.customization, lx, ly, b.width, b.height, { shadow: true });
+  drawStatus(ctx, b, lx + b.width / 2, ly + b.height / 2, b.width / 2, t);
   drawBar(ctx, lx, ly - 12, b.width, 5, b.hp / Math.max(1, b.max_hp), '#ff6b6b');
 }
 
@@ -394,7 +437,7 @@ export function renderFrame(
   for (let i = 0; i < bots.length; i += 1) {
     const b = bots[i];
     const l = smooth(b.id, b.x, b.y, alpha);
-    drawBot(ctx, b, l.x, l.y);
+    drawBot(ctx, b, l.x, l.y, t);
   }
 
   const players = snap.players;

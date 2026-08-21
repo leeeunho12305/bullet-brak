@@ -18,9 +18,18 @@ def falloff_at(distance: float) -> float:
     return C.DAMAGE_CLOSE_MULT + (C.DAMAGE_FAR_MULT - C.DAMAGE_CLOSE_MULT) * t
 
 
+def _steady(mult: float) -> float:
+    """STEADY SHOT: 1.0 쪽으로 당겨서 거리에 따른 위력 변동을 줄인다.
+
+    가까이서 덜 세지는 대신 멀리서도 덜 약해진다(1.5~0.4 -> 1.25~0.7).
+    """
+    return 1.0 + (mult - 1.0) * C.STEADY_FALLOFF_RELIEF
+
+
 def bullet_falloff(bullet: Bullet) -> float:
     """탄환이 발사 지점에서 지금까지 날아온 거리 기준 배율."""
-    return falloff_at(math.hypot(bullet.x - bullet.start_x, bullet.y - bullet.start_y))
+    mult = falloff_at(math.hypot(bullet.x - bullet.start_x, bullet.y - bullet.start_y))
+    return _steady(mult) if bullet.has("steady_shot") else mult
 
 
 def base_shot_damage(player: Player) -> float:
@@ -31,8 +40,12 @@ def base_shot_damage(player: Player) -> float:
 def damage_table(player: Player) -> list[dict[str, float]]:
     """Tab 오버레이용 거리별 대미지 표."""
     base = base_shot_damage(player)
+    steady = player.has("steady_shot")
     return [
-        {"distance": float(d), "damage": round(base * falloff_at(d), 1)}
+        {
+            "distance": float(d),
+            "damage": round(base * (_steady(falloff_at(d)) if steady else falloff_at(d)), 1),
+        }
         for d in C.DAMAGE_TABLE_DISTANCES
     ]
 
@@ -50,5 +63,6 @@ def stat_summary(player: Player) -> dict[str, float]:
         "bounces": float(player.max_bounces),
         "knockback": round(player.knockback_mult, 2),
         "block_meter_max": round(player.block_meter_max, 0),
-        "shots_per_fire": float(shots * (3 if player.burst else 1)),
+        # BURST 는 퍼지는 게 아니라 같은 방향으로 이어 쏘는 발수다(1 + burst 회).
+        "shots_per_fire": float(shots * (1 + player.burst)),
     }

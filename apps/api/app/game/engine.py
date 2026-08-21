@@ -14,7 +14,7 @@ from app.game import constants as C
 from app.game import maps, sim, training
 from app.game.bullets import update_bullets
 from app.game.cards import apply_card, random_cards, reset_card_state
-from app.game.models import Room
+from app.game.models import Player, Room
 from app.game.physics import clamp
 
 #: 라운드 종료 시점의 승자 id 를 방 코드별로 기억(타이머 만료 때 사용).
@@ -94,7 +94,7 @@ def open_card_pick(room: Room) -> None:
         return
     room.phase = "picking"
     room.loser_to_pick = player.id
-    room.available_cards = _pick_card_ids(C.CARD_CHOICES)
+    room.available_cards = _pick_card_ids(C.CARD_CHOICES, player)
 
 
 def _resolve_round_over(room: Room) -> None:
@@ -124,11 +124,15 @@ def _resolve_round_over(room: Room) -> None:
     loser_id = next((pid for pid in room.players if pid != winner.id), None)
     room.phase = "picking"
     room.loser_to_pick = loser_id
-    room.available_cards = _pick_card_ids(C.CARD_CHOICES)
+    room.available_cards = _pick_card_ids(C.CARD_CHOICES, room.players.get(loser_id or ""))
 
 
-def _pick_card_ids(n: int) -> list[str]:
+def _pick_card_ids(n: int, player: Player | None = None) -> list[str]:
+    """카드 선택지 n 장. 고르는 사람이 이미 가진 카드는 빼고 뽑는다."""
+    owned = tuple(player.cards) if player is not None else ()
     try:
+        return [getattr(c, "id", c) for c in random_cards(n, owned)]
+    except TypeError:  # random_cards 가 owned 를 안 받는 구버전/스텁
         return [getattr(c, "id", c) for c in random_cards(n)]
     except Exception:
         return []
@@ -224,13 +228,16 @@ def reset_round(room: Room) -> None:
         p.vx = p.vy = 0.0
         p.hp = p.max_hp
         p.cooldown = 0.0
+        p.burst_queue = p.burst_timer = 0
         p.charging = False
         p.charge = 0.0
         p.windup = 0.0
+        p.empower_ready = False
         p.still_ticks = 0
         p.grounded = False
         p.jumps = 0
         p.blocking = False
+        p.guard_broken = False
         p.block_meter = p.block_meter_max
         p.poison = 0
         p.cold_timer = p.dazzle_timer = p.silence_timer = 0
@@ -274,6 +281,7 @@ def reset_match(room: Room) -> None:
         p.width = p.height = C.PLAYER_SIZE
         p.block_meter_max = C.BLOCK_METER_MAX
         p.block_meter = C.BLOCK_METER_MAX
+        p.guard_broken = False
         p.charging = False
         p.charge = 0.0
         p.cards.clear()
