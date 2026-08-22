@@ -6,7 +6,7 @@
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-width: 1180px;
+  max-width: 1720px;
   margin: 0 auto;
   padding: 12px;
 }
@@ -33,18 +33,24 @@
 }
 .game-body { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
 .game-stage {
-  flex: 1 1 640px;
+  flex: 1 1 900px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.game-canvas-wrap { position: relative; width: 100%; max-width: 800px; margin: 0 auto; }
+/* 캔버스는 월드 크기(1280x720)까지 커진다. 세로가 모자란 화면에서는 뷰포트 높이에
+   맞춰 줄인다 — 그러지 않으면 캔버스 아래쪽이 화면 밖으로 밀려난다. */
+.game-canvas-wrap {
+  position: relative;
+  width: min(100%, 1280px, calc((100vh - 230px) * 16 / 9));
+  margin: 0 auto;
+}
 .game-canvas {
   display: block;
   width: 100%;
-  max-width: 800px;
-  aspect-ratio: 4 / 3;
+  max-width: 1280px;
+  aspect-ratio: 16 / 9;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--bg);
@@ -102,7 +108,7 @@
 .is-fullscreen .game-stage { min-height: 0; }
 .is-fullscreen .hud-root { max-width: none; }
 /* HUD 를 뺀 나머지 공간. container-type: size 로 이 상자를 기준 삼아
-   캔버스가 "가로/세로 중 모자란 쪽"에 맞춰 4:3 을 지킨 채 최대로 커진다. */
+   캔버스가 "가로/세로 중 모자란 쪽"에 맞춰 16:9 를 지킨 채 최대로 커진다. */
 .is-fullscreen .game-canvas-area {
   flex: 1 1 auto;
   min-height: 0;
@@ -115,7 +121,7 @@
   max-width: none;
   margin: 0;
   width: 100%; /* 컨테이너 쿼리 단위를 모르는 브라우저용 대비값 */
-  width: min(100cqw, calc(100cqh * 4 / 3));
+  width: min(100cqw, calc(100cqh * 16 / 9));
 }
 .is-fullscreen .game-canvas { max-width: none; }
 .is-fullscreen .chat-box { flex: 0 0 clamp(220px, 18vw, 300px); height: auto; }
@@ -144,7 +150,7 @@
   align-items: start;
   gap: 10px;
   width: 100%;
-  max-width: 800px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 .hud-side {

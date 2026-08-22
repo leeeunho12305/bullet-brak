@@ -464,7 +464,7 @@ textarea {
 .map-tile-art {
   position: relative;
   display: block;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   border-radius: 6px;
   overflow: hidden;
   background: var(--bg);
@@ -836,7 +836,7 @@ textarea {
 .editor-canvas {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg);

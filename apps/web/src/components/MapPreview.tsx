@@ -1,4 +1,4 @@
-// 맵 미리보기 — 서버가 준 발판/스폰 좌표를 800x600 viewBox 에 그대로 그린다.
+// 맵 미리보기 — 서버가 준 발판/스폰 좌표를 1280x720 viewBox 에 그대로 그린다.
 // 인게임 캔버스와 같은 좌표계라 실제 지형과 1:1 로 대응한다.
 import { memo } from 'react';
 import type { JSX } from 'react';

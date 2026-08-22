@@ -18,6 +18,22 @@ export interface UseInputOptions {
   myId?: string | null;
 }
 
+/**
+ * 게임 입력으로 삼으면 안 되는 UI 위인가.
+ *
+ * 예전에는 "캔버스 안을 클릭했는가"로 걸렀다. 그러면 조준선을 캔버스 밖까지 끌고 나갔을 때
+ * — 화면 가장자리를 노릴 때 늘 그렇게 된다 — 발사가 통째로 먹히지 않았다.
+ * 지금은 버튼/입력/채팅처럼 진짜 눌러야 하는 것만 제외하고, 나머지 여백은 전부 발사로 친다.
+ */
+function isUiTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      'button, a, input, textarea, select, label, [role="button"], .chat-box, .info-panel',
+    ),
+  );
+}
+
 /** 채팅 입력 중이면 게임 입력을 먹지 않는다. */
 function isTyping(): boolean {
   const el = document.activeElement;
@@ -171,6 +187,8 @@ export function useInput(
       flushInput();
     };
 
+    // 캔버스 밖 좌표도 그대로 월드 좌표로 환산한다(월드 밖으로 나가도 clamp 하지 않는다) —
+    // 조준은 "어느 지점"이 아니라 "어느 방향"이라, 가두면 화면 가장자리에서 각이 꺾인다.
     const updateAim = (e: MouseEvent): void => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -212,11 +230,8 @@ export function useInput(
 
     const onMouseDown = (e: MouseEvent): void => {
       if (!isEnabled() || isTyping()) return;
-      const canvas = canvasRef.current;
-      if (canvas && e.target instanceof Node && !canvas.contains(e.target) && e.target !== canvas) {
-        // 캔버스 밖(버튼/채팅 등) 클릭은 게임 입력으로 처리하지 않는다.
-        return;
-      }
+      // 버튼/채팅 위를 눌렀을 때만 비켜 준다. 그 밖의 여백은 캔버스 밖이라도 발사로 친다.
+      if (isUiTarget(e.target)) return;
       updateAim(e);
       if (e.button === 0) {
         e.preventDefault();

@@ -224,7 +224,9 @@ def _slide(manager: RoomManager, ground: dict) -> tuple[float, Player]:
     player = room.players["a"]
     player.x = 100.0
     player.y = ground["y"] - player.height  # 공중에서 시작하면 낙하 중 마찰이 먼저 먹는다
-    player.vx, player.vy = 5.0, 0.0
+    # 이동 속도 상한으로 민다. 리터럴을 쓰면 PLAYER_SPEED 를 낮췄을 때 초과분이
+    # 넉백으로 취급돼(sim 의 KNOCKBACK_DECAY) 마찰 대신 천천히 식는다.
+    player.vx, player.vy = C.PLAYER_SPEED, 0.0
     _run(room, 40)
     return player.x - 100.0, player
 

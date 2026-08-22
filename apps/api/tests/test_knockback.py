@@ -192,3 +192,60 @@ def test_buckshot_is_nearly_useless_at_range() -> None:
         total += before - target.hp
 
     assert total < 12.0, f"400px 밖 산탄이 아직 {total:.1f} 나 아프다"
+# --------------------------------------------------------------------------
+# 이동 입력은 상한을 넘지 못한다
+# --------------------------------------------------------------------------
+#
+# 넉백을 살리느라 "speed 를 넘는 속도는 건드리지 않는다"는 규칙이 생겼는데, 이동 가속이
+# 그 판정보다 먼저 들어가는 바람에 가속분이 넉백으로 오인돼 매 틱 94%씩 쌓였다.
+# 그래서 방향키를 1~2초만 눌러도 PLAYER_SPEED 와 상관없이 약 18px/틱 까지 올라갔고,
+# 상수를 낮춰도 체감이 전혀 바뀌지 않았다.
+
+
+def _run_holding(entity, room, ticks: int, update) -> float:
+    top = 0.0
+    for _ in range(ticks):
+        room.tick += 1
+        update(room, entity)
+        top = max(top, abs(entity.vx))
+    return top
+
+
+def test_holding_a_direction_never_exceeds_the_speed_cap() -> None:
+    room, _, mover = _room()
+    room.platforms = [{"x": 0.0, "y": 400.0, "width": C.WIDTH, "height": 40.0, "type": "solid"}]
+    mover.y = 400.0 - mover.height
+    mover.inputs.right = True
+
+    top = _run_holding(mover, room, 180, sim.update_player)
+
+    assert top <= mover.speed + 1e-6, f"이동 입력만으로 {top:.1f} 까지 올라갔다(상한 {mover.speed})"
+
+
+def test_a_bot_holding_a_direction_never_exceeds_its_tier_speed() -> None:
+    from app.game.bots import _physics, create_bot
+
+    room = Room(code="334455")
+    room.phase = "playing"
+    room.platforms = [{"x": 0.0, "y": 400.0, "width": C.WIDTH, "height": 40.0, "type": "solid"}]
+    bot = create_bot(room, "veteran")
+    bot.x, bot.y = 100.0, 400.0 - bot.height
+    bot.dir = 1
+
+    top = _run_holding(bot, room, 180, lambda r, b: _physics(b, r))
+
+    assert top <= bot.speed + 1e-6, f"봇이 티어 속도({bot.speed})를 넘어 {top:.1f} 로 달린다"
+
+
+def test_knockback_still_outruns_the_cap_while_holding_the_same_way() -> None:
+    """상한을 걸더라도 맞아서 얻은 속도는 그대로 남아야 한다."""
+    room, shooter, target = _room()
+    _hit(room, shooter, target)
+    pushed = target.vx
+    assert pushed > target.speed
+
+    target.inputs.right = True  # 밀려나는 방향으로 입력을 유지한다
+    sim.update_player(room, target)
+
+    assert target.vx > target.speed, "입력이 넉백 속도를 상한으로 깎아 버렸다"
+    assert target.vx < pushed, "넉백이 식지 않는다"
