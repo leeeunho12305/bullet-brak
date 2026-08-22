@@ -1,4 +1,5 @@
 // docs/PROTOCOL.md 와 1:1 대응. 서버가 보내는 snake_case 를 그대로 쓴다.
+import type { RankChange } from '@/types/ranked';
 
 export const WORLD_WIDTH = 800;
 export const WORLD_HEIGHT = 600;
@@ -71,6 +72,8 @@ export const RANDOM_MAP_ID = 'random';
 export interface RoomState {
   code: string;
   mode: Mode;
+  /** 경쟁전 방인가. 대기실/게임 화면이 이 값으로 안내와 랭크 표시를 바꾼다. */
+  ranked: boolean;
   max_players: number;
   phase: Phase;
   /** 방장이 고른 값. 'random' 일 수 있다. */
@@ -312,6 +315,12 @@ export type ServerMessage =
     }
   /** 누군가 방을 나갔다. 남아 있는 사람에게만 온다(나간 본인은 이미 연결이 끊겼다). */
   | { type: 'player_left'; player_id: string; nickname: string; players_left: number }
+  /**
+   * 경쟁전 매치의 랭크 변동. **`match_over` 보다 한 박자 늦게 온다** — 서버가 DB 에
+   * 기록을 마친 뒤에 보내기 때문이다. 키는 player_id 이고, 랭크가 걸리지 않은 판에서는
+   * 아예 오지 않는다.
+   */
+  | { type: 'rank_update'; changes: Record<string, RankChange> }
   | { type: 'error'; message: string };
 
 export type ClientMessage =

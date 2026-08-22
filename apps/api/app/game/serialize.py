@@ -198,6 +198,8 @@ def room_state(room: Room) -> dict[str, Any]:
     return {
         "code": room.code,
         "mode": room.mode,
+        #: 경쟁전 방인가. 대기실/게임 화면이 이 값으로 안내 문구와 랭크 표시를 바꾼다.
+        "ranked": room.ranked,
         "max_players": room.max_players,
         "phase": room.phase,
         # map_id 는 방장이 고른 값("random" 일 수 있고), map 은 지금 깔린 실제 맵이다.

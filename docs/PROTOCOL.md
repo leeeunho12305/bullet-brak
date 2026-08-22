@@ -15,8 +15,8 @@
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/health` | - | `{"status":"ok","db":"on"\|"off"}` — DB 상태와 무관하게 항상 200 |
-| POST | `/api/rooms` | `{"mode":"pvp"\|"training","max_players":2,"map_id":"classic"}` | `{"code":"123456","mode":"pvp","max_players":2,"map_id":"classic"}` |
-| GET | `/api/rooms/{code}` | - | `{"code","mode","max_players","player_count","phase","map_id"}` / 404 `{"detail":"..."}` |
+| POST | `/api/rooms` | `{"mode":"pvp"\|"training","max_players":2,"map_id":"classic","ranked":false}` | `{"code":"123456","mode":"pvp","max_players":2,"map_id":"classic","ranked":false}` |
+| GET | `/api/rooms/{code}` | - | `{"code","mode","max_players","player_count","phase","map_id","ranked"}` / 404 `{"detail":"..."}` |
 | GET | `/api/cards` | - | `[{"id","name","desc","category","color","emoji"}]` |
 | GET | `/api/maps` | - | `[MapInfo]` — 발판·스폰·테마까지. 대기실 미리보기가 그대로 그린다 |
 
@@ -24,6 +24,11 @@
 
 `map_id`: 맵 id 또는 `"random"`. 모르는 값이면 서버가 기본 맵(`classic`)으로 되돌린다.
 `"random"` 이면 **라운드마다** 맵이 바뀐다(훈련장은 낙사 없는 맵 중에서만 뽑는다).
+
+`ranked`: 경쟁전 방. 켜면 **서버가 조건을 강제한다** — `max_players` 는 2, `map_id` 는
+`"random"` 이 되고, 요청에 실린 값은 무시된다. DB 가 없는 배포에서는 503 이다
+(랭크는 기록이 남아야 뜻이 있다). 훈련장에 켜면 조용히 무시되고 `ranked:false` 로 돌아온다.
+**응답의 `ranked` 가 확정값이다** — 요청값이 아니라 이 값을 믿어야 한다.
 
 ### 1.1 계정 (`/api/auth`, `/api/me`)
 
@@ -135,6 +140,50 @@ POST /api/auth/redeem   { "code": "k7m2 9qpx 3w5b" }   // 하이픈·대소문�
   (`pnpm shop:prices` — 자세한 건 DEPLOYMENT.md Phase 4).
 - `coins`/`owned_items` 는 **구매 후 확정 상태**다. 클라이언트는 그대로 덮어쓰면 된다.
 
+### 1.2 경쟁전 (`/api/ranked`)
+
+발로란트식이다. **티어**(아이언 1 ~ 레디언트, 25칸)와 **RR**(디비전 안에서 0~99)이
+화면에 보이는 값이고, 그 뒤에서 **숨은 MMR**(Elo)이 RR 증감폭을 정한다.
+계산은 전부 `app/services/ranked.py` 의 순수 함수다.
+
+| Method | Path | 인증 | Response |
+|---|---|---|---|
+| GET | `/api/ranked/tiers` | - | `[TierInfo]` — 티어 표. **DB 가 없어도 200** (코드 상수라서) |
+| GET | `/api/ranked/seasons` | - | `[Season]` |
+| GET | `/api/ranked/leaderboard?season_id=&limit=` | - | `{"season":Season,"entries":[LeaderboardEntry]}` |
+| GET | `/api/ranked/me` | Bearer | `{"season":Season,"rank":RankStats,"position":int\|null}` |
+| GET | `/api/ranked/matches?limit=&ranked_only=` | Bearer | `{"entries":[MatchRecord]}` |
+
+```jsonc
+TierInfo = { "index": 15, "group": "platinum", "group_name": "플래티넘",
+             "division": 3, "name": "플래티넘 3", "color": "#3fb6c8" }
+// index 1~25, 0 은 미배치. division 은 1~3 이고 레디언트만 0(디비전 없음).
+
+RankStats = { "tier": 15, "rr": 41, "placements": 5, "placement_total": 5, "placed": true,
+              "peak_tier": 16, "peak_rr": 12, "wins": 38, "losses": 7,
+              "streak": 3, "best_streak": 22, "rounds_won": 204, "rounds_lost": 129 }
+// streak 은 양수면 연승, 음수면 연패.
+```
+
+**규칙**
+
+- **배치전 5판.** 그동안 `placed:false` 이고 티어가 없다(RR 도 안 움직인다). 5판을 채우면
+  숨은 MMR 이 가리키는 티어에 30 RR 로 꽂힌다.
+- **승급/강등.** 100 RR 을 채우면 다음 디비전으로(초과분을 최소 10 RR 로 들고 간다),
+  0 RR 밑으로 떨어지면 **그 판은 살려 주고**(강등 보호) 다음에 또 지면 내려간다(80 RR).
+  아이언 1 아래와 레디언트 위로는 나가지 않는다.
+- **RR 증감.** 승리 +10~50 / 패배 -10~-50. 라운드 점수 차(압승·접전)와, 숨은 MMR 이 표시
+  티어보다 얼마나 위/아래인지가 그 폭을 정한다.
+- **숨은 MMR 은 어떤 응답에도 실리지 않는다.** 보이는 순간 사람들이 티어가 아니라 그
+  숫자를 보고 놀게 된다.
+- **리더보드는 배치를 마친 사람만** 오른다(`tier > 0`).
+- **시즌(액트).** 활성 시즌은 항상 하나. 시즌이 바뀌면 랭크는 배치부터 다시 보지만
+  MMR 은 평균 쪽으로 20% 당겨 일부 물려받는다. 지난 시즌의 프로필 행은 지우지 않는다.
+
+**기록**은 일반전도 남는다(`matches` / `match_participants`). 랭크 변동만 경쟁전에 붙는다.
+계정이 지워져도 매치 행은 남고 `account_id` 만 NULL 이 된다 — 상대의 전적에서 그 판이
+통째로 사라지면 기록이 아니라 착시가 된다. 닉네임은 **그 판 시점의 값**을 복사해 둔다.
+
 ---
 
 ## 2. WebSocket
@@ -143,6 +192,16 @@ POST /api/auth/redeem   { "code": "k7m2 9qpx 3w5b" }   // 하이픈·대소문�
 
 접속 직후 클라이언트가 **반드시** `join` 을 1회 보낸다. 서버는 `welcome` 으로 응답한다.
 방이 없거나 가득 찼으면 서버는 `error` 를 보내고 close(코드 4404 / 4409).
+
+**경쟁전 방(`ranked`)은 입장 조건이 더 있다.** 아래에 걸리면 `error` + close 4401 이다.
+
+- `token` 이 없거나 그 토큰으로 계정을 못 찾으면 거절한다(기록할 곳이 없다).
+- 같은 계정이 이미 그 방에 있으면 거절한다 — 탭 두 개로 자기 자신과 붙으면 RR 을
+  원하는 대로 옮길 수 있다.
+
+경쟁전에서는 `set_map` / `set_platforms` / `reset_platforms` 가 **항상 거절된다**(방장이어도).
+맵은 라운드마다 서버가 무작위로 정한다 — 방장이 자기가 잘하는 맵이나 지형을 깔아 놓고
+시작하면 그 판은 이미 같은 조건의 경기가 아니다.
 
 ### 2.1 Client → Server
 
@@ -175,10 +234,26 @@ POST /api/auth/redeem   { "code": "k7m2 9qpx 3w5b" }   // 하이픈·대소문�
 | `chat` | `{"message":ChatMessage}` |
 | `event` | `{"event":"round_over"\|"match_over"\|"card_phase"\|"game_started","winner_id":str\|null,"loser_id":str\|null}` |
 | `player_left` | `{"player_id":str,"nickname":str,"players_left":int}` — 남은 사람에게만. 뒤이어 오는 `room_state` 보다 **먼저** 보낸다 |
+| `rank_update` | `{"changes":{player_id: RankChange}}` — 경쟁전 매치의 랭크 변동. **`match_over` 보다 한 박자 늦다**(서버가 DB 에 기록한 뒤에 보낸다). 랭크가 걸리지 않은 판에서는 아예 오지 않는다 |
 | `error` | `{"message":str}` |
 
 `player_left`: 2인 방에서 한 명이 나가면 서버가 매치를 접고 `phase` 를 `waiting` 으로 되돌린다.
 남은 사람 입장에서는 화면이 갑자기 대기실로 바뀌므로, 그 이유를 알리는 메시지가 반드시 필요하다.
+
+**경쟁전에서 매치 도중에 나가면 그 판은 패배로 기록된다**(탈주). 아니면 "질 것 같으면
+나간다"가 최적 전략이 되기 때문이다. 남은 사람은 승리로 기록되고 `rank_update` 를 받는다.
+
+```jsonc
+RankChange = {
+  "won": true, "rr_delta": 21,
+  "placement": false,            // 배치전이 아직 진행 중이라 티어가 없다
+  "placement_played": 5, "placement_total": 5,
+  "placed_now": false,           // 이 판으로 배치가 끝나 티어가 처음 정해졌다
+  "promoted": false, "demoted": false,
+  "tier_before": 15, "tier_after": 15, "rr_before": 20, "rr_after": 41,
+  "tier": TierInfo               // 변동 후 티어의 표시 정보
+}
+```
 
 ---
 
@@ -413,7 +488,7 @@ def spawn_points(room=None) -> list[tuple[float, float]]
 
 # app/game/rooms.py  (RoomManager)
 class RoomManager:
-    def create(mode, max_players, map_id="classic") -> Room
+    def create(mode, max_players, map_id="classic", ranked=False) -> Room
     def get(code) -> Room | None
     def remove(code) -> None
     rooms: dict[str, Room]
@@ -421,14 +496,38 @@ class RoomManager:
 # app/game/engine.py
 def tick_room(room: Room) -> None        # 1틱 시뮬레이션(플레이어/봇/총알/존/라운드판정)
 def snapshot(room: Room) -> dict         # PROTOCOL 3장 Snapshot 그대로
-def set_map(room, map_id) -> bool        # 방장 선택(waiting/finished 에서만). custom_layout 을 버린다
-def set_platforms(room, raw) -> bool     # 맵 에디터 저장(검증은 blocks.normalize_all)
-def clear_platforms(room) -> bool        # 맵 원본 지형으로 되돌리기
+# 아래 넷은 app/game/layout.py 가 구현하고 engine 이 그대로 다시 내보낸다(호출부는 engine 으로 쓴다).
+def set_map(room, map_id) -> bool        # 방장 선택(waiting/finished 에서만). 경쟁전은 항상 거절
+def set_platforms(room, raw) -> bool     # 맵 에디터 저장(검증은 blocks.normalize_all). 경쟁전은 항상 거절
+def clear_platforms(room) -> bool        # 맵 원본 지형으로 되돌리기. 경쟁전은 항상 거절
 def prepare_map(room) -> None            # 라운드 시작 전 맵 확정("random" 이면 리롤)
 
 # app/game/serialize.py
 def room_state(room: Room) -> dict
+
+# app/services/ranked.py  (순수 계산 — DB/FastAPI 를 import 하지 않는다)
+TIERS: tuple[TierInfo, ...]                    # 아이언 1 ~ 레디언트 (25칸)
+def tier_info(index) -> TierInfo               # 0 이면 미배치
+def expected_tier(mmr) -> int                  # 숨은 MMR 이 가리키는 티어
+def rr_delta(state, *, won, score, opponent_score) -> int
+def apply_match(state, *, opponent_mmr, won, score, opponent_score) -> RankChange
+def soft_reset(state) -> RankState             # 시즌 이월(MMR 20% 만 평균으로 당긴다)
+
+# app/services/matches.py  (DB — 매치 기록과 랭크 반영)
+async def record(session, outcome: MatchOutcome) -> dict[player_id, RankChange dict]
+async def leaderboard(session, season_id, *, limit) -> list[dict]
+async def history(session, account_id, *, limit, ranked_only) -> list[dict]
+async def position_of(session, profile) -> int | None
+
+# app/services/results.py  (틱 루프 <-> DB 사이의 다리)
+def capture_finish(room) -> MatchOutcome | None   # 동기. 값만 복사한다
+def capture_forfeit(room, leaver) -> MatchOutcome | None
+def schedule(outcome) -> None                     # 백그라운드 태스크로 기록 + rank_update 브로드캐스트
 ```
+
+**틱 루프는 DB 를 기다리지 않는다.** `main._tick_once` 는 `match_over` 를 감지하면
+`results.capture_finish(room)` 으로 결과를 **값으로 복사**해서 `results.schedule` 에 던지고
+곧바로 다음 프레임으로 간다. 기록에 실패해도 게임은 아무 영향을 받지 않는다.
 
 ---
 

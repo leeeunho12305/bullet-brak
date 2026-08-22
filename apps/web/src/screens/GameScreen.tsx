@@ -16,6 +16,7 @@ import PlayerLeftNotice from '@/components/PlayerLeftNotice';
 import type { Phase, RoomState } from '@/types/game';
 import '@/styles/game.css';
 import '@/styles/overlay.css';
+import '@/styles/ranked.css';
 
 const SAMPLE_MS = 200;
 

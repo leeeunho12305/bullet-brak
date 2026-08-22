@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.ranked import router as ranked_router
 from app.api.routes import router as api_router
 from app.api.ws import router as ws_router
 from app.config import get_settings
@@ -21,6 +22,7 @@ from app.game import constants as C
 from app.game import engine
 from app.game.rooms import room_manager
 from app.game.serialize import room_state, snapshot
+from app.services import results
 from app.services.hub import hub
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -58,6 +60,10 @@ async def _tick_once(code: str) -> None:
     event = engine.phase_event(room, prev_phase)
     if event is not None:
         await hub.broadcast(code, event)
+        if event["event"] == "match_over":
+            # 결과를 값으로 복사해서 백그라운드 태스크에 던지고 곧바로 다음 틱으로 간다.
+            # 여기서 DB 를 기다리면 그 프레임이 통째로 밀린다.
+            results.schedule(results.capture_finish(room))
 
 
 def _sweep() -> None:
@@ -130,6 +136,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(api_router)
     app.include_router(auth_router)
+    app.include_router(ranked_router)
     app.include_router(ws_router)
     return app
 

@@ -6,6 +6,7 @@ import RoomScreen from '@/screens/RoomScreen';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
 import { bootstrapIdentity } from '@/api/identity';
+import { loadTiers } from '@/api/ranked';
 import { loadOwnedItems } from '@/hooks/useLocalProfile';
 
 /**
@@ -28,8 +29,13 @@ function useIdentity(): void {
     }).then((account) => {
       if (cancelled) return;
       const state = useGameStore.getState();
-      if (account) state.applyAccount(account);
-      else state.markLocalOnly();
+      if (!account) {
+        state.markLocalOnly();
+        return;
+      }
+      state.applyAccount(account);
+      // 뱃지 색·이름의 원본은 서버다. 랭크 카드보다 먼저 받아 두면 깜빡이지 않는다.
+      void loadTiers().then(() => useGameStore.getState().refreshRank());
     });
 
     return () => {

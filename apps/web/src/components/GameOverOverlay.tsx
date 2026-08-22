@@ -2,6 +2,7 @@
 // 둘 다 YES 를 누르면 서버가 곧바로 다음 매치를 시작한다(대기실을 거치지 않는다).
 import { memo, useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
+import RankUpdate from '@/components/RankUpdate';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
 import type { Phase } from '@/types/game';
@@ -49,6 +50,10 @@ interface GameOverOverlayProps {
 function GameOverOverlayInner({ onLeave }: GameOverOverlayProps): JSX.Element | null {
   const myId = useGameStore((s: StoreSlice) => s.playerId);
   const storePhase = useGameStore((s: StoreSlice) => s.phase);
+  // 경쟁전이면 RR 변동 칸을 띄운다. 값은 서버가 기록을 마친 뒤에 도착하므로
+  // 그전까지는 rankChange 가 null 이고 RankUpdate 가 "집계 중"을 보여 준다.
+  const isRanked = useGameStore((s) => s.room?.ranked ?? false);
+  const rankChange = useGameStore((s) => s.rankChange);
   const [view, setView] = useState<ResultView>(EMPTY);
   // 서버 왕복 전에 버튼이 눌린 티가 나도록 하는 낙관적 표시.
   const [voted, setVoted] = useState<'yes' | 'no' | null>(null);
@@ -126,6 +131,8 @@ function GameOverOverlayInner({ onLeave }: GameOverOverlayProps): JSX.Element | 
       <p className={`result-title${iWon ? ' win' : ' lose'}`}>{iWon ? 'VICTORY' : 'DEFEAT'}</p>
       {view.winnerId && <p className="result-winner">{view.winnerName} TAKES THE MATCH</p>}
       <p className="result-score">{view.score}</p>
+
+      {isRanked ? <RankUpdate change={rankChange} /> : null}
 
       <h2 className="rematch-q">REMATCH?</h2>
       <div className="rematch-choices">

@@ -30,6 +30,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+# 경쟁전 테이블(시즌/랭크/매치 기록)은 파일 길이 때문에 따로 뒀다. alembic env.py 가
+# import 하는 모듈은 여기 하나뿐이라, 이 줄이 있어야 Base.metadata 에 등록된다.
+from app.db.ranked_models import (  # noqa: F401  (metadata 등록용 — 지우지 말 것)
+    Match,
+    MatchParticipant,
+    RankProfile,
+    Season,
+)
+
 #: Postgres 면 JSONB, 그 외(sqlite 테스트)는 일반 JSON
 JSONVariant = JSON().with_variant(JSONB(), "postgresql")
 

@@ -33,9 +33,19 @@ async def health() -> HealthResponse:
 
 @router.post("/rooms", response_model=CreateRoomResponse, status_code=201)
 async def create_room(body: CreateRoomRequest) -> CreateRoomResponse:
+    """방 생성. 경쟁전은 DB 가 있어야 만들 수 있다.
+
+    랭크는 기록이 남아야 뜻이 있다. DB 가 없는 배포에서 경쟁전 방을 열어 주면 판은
+    돌아가는데 아무것도 안 남아서, 플레이어 입장에서는 그냥 고장 난 기능이 된다.
+    """
+    if body.ranked and not db_ready():
+        raise HTTPException(status_code=503, detail="이 서버에서는 경쟁전을 할 수 없습니다.")
     try:
         room = room_manager.create(
-            mode=body.mode, max_players=body.max_players, map_id=body.map_id
+            mode=body.mode,
+            max_players=body.max_players,
+            map_id=body.map_id,
+            ranked=body.ranked,
         )
     except RoomError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -44,6 +54,7 @@ async def create_room(body: CreateRoomRequest) -> CreateRoomResponse:
         mode=room.mode,
         max_players=room.max_players,
         map_id=room.map_id,
+        ranked=room.ranked,
     )
 
 
@@ -59,6 +70,7 @@ async def get_room(code: str) -> RoomInfoResponse:
         player_count=len(room.players),
         phase=room.phase,
         map_id=room.map_id,
+        ranked=room.ranked,
     )
 
 

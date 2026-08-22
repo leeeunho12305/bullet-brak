@@ -5,6 +5,7 @@ ROUNDS 스타일 2D PvP 물리 슈팅 게임. **FastAPI(서버 권위 60Hz 시�
 - 라운드 2승 = 1점, 먼저 5점을 내면 매치 승리
 - 라운드에서 진 쪽이 카드 5장 중 1장을 골라 빌드를 쌓는다 (카드 66종). 훈련장에서는 카드가 전부 열려 있어 아무 때나 원하는 것을 시험해 볼 수 있다
 - 물리 기반 전투: 넉백, 낙사, 도탄, 폭발, 가드 반사, 거리별 대미지 감쇠
+- **일반전과 경쟁전이 나뉜다.** 경쟁전은 발로란트식 티어(아이언 1 ~ 레디언트)와 RR 로 굴러가고, 순위표와 전적이 남는다
 
 ---
 
@@ -102,11 +103,12 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 │  │  │  ├─ api/             routes.py(REST), ws.py(/ws/{code})
 │  │  │  ├─ game/            constants·models·cards·physics·bullets·bots
 │  │  │  │                   engine·sim(1틱 시뮬레이션)·stats(대미지 감쇠)
-│  │  │  │                   maps(맵 카탈로그)·blocks(점프대·이동발판·빙판·가시)
+│  │  │  │                   maps(맵 카탈로그)·blocks(점프대·이동발판·빙판·가시)·layout(맵 선택)
 │  │  │  │                   serialize(스냅샷)·rooms(방 매니저)
 │  │  │  ├─ schemas/         클라이언트 메시지 검증(pydantic)
-│  │  │  ├─ services/        chat(메시지 생성), hub(WS 브로드캐스트)
-│  │  │  └─ db/              (비어 있음) 영속화가 필요해지면 여기에
+│  │  │  ├─ services/        chat·hub(WS 브로드캐스트)·accounts·passwords
+│  │  │  │                   ranked(랭크 계산)·matches(기록)·seasons·results(틱→DB 다리)
+│  │  │  └─ db/              SQLAlchemy 모델 + alembic 마이그레이션
 │  │  ├─ tests/              pytest
 │  │  └─ Dockerfile          dev / runtime 멀티스테이지
 │  └─ web/                   React + Vite
@@ -116,7 +118,8 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 │     │  ├─ store/           zustand — UI 상태만
 │     │  ├─ game/            renderer·avatars·useInput
 │     │  ├─ components/      GameCanvas·Hud·InfoPanel·CardPicker·ChatBox
-│     │  │                   ControlsGuide(조작법)·Tutorial·MapPicker·MapEditor 등
+│     │  │                   ControlsGuide(조작법)·Tutorial·MapPicker·MapEditor
+│     │  │                   RankBadge·RankPanel·RankedModal·RankUpdate(경쟁전) 등
 │     │  ├─ screens/         Lobby·Room·Game
 │     │  └─ hooks/           useLocalProfile
 │     ├─ Dockerfile          deps → dev / build → nginx runtime
@@ -179,6 +182,7 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 | 닉네임·아바타 | localStorage | 계정에 저장, 기기 간 동기화 |
 | 코인 | localStorage = **위조 가능** | 서버 권위 |
 | 로그인 (다른 기기) | 없음 | 아이디/비밀번호 · 인계 코드 |
+| 경쟁전 · 전적 | 없음 (방 생성 자체가 503) | 티어/RR · 순위표 · 매치 기록 |
 | `/api/auth/*`, `/api/me` | 503 | 정상 |
 
 - **신원**: 회원가입 화면이 없다. 앱을 열면 익명 계정이 자동 생성되고, 브라우저가 디바이스 토큰
@@ -194,7 +198,8 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 - **스키마**: `apps/api/app/db/` — SQLAlchemy 2.0(async) + Alembic. 마이그레이션은
   **서버가 기동할 때 스스로 `upgrade head`** 를 돌린다(compose/Render 어디서든 동작이 같다).
 - **게임 루프는 DB 를 건드리지 않는다.** 60Hz 틱에 `await db` 가 끼면 틱이 밀린다.
-  DB 접근은 입장(join)·REST·매치 종료 같은 저빈도 지점뿐이다.
+  매치가 끝나면 틱은 결과를 **값으로 복사**해서 백그라운드 태스크에 던지고 곧바로 다음
+  프레임으로 간다(`app/services/results.py`). 기록에 실패해도 게임은 멈추지 않는다.
 - **구매도 서버 권위다.** 파츠 가격표는 `apps/api/app/game/shop_prices.json` 에 있고,
   이 파일은 프런트 카탈로그에서 생성된다(`pnpm shop:prices`). 클라이언트는 아이템 키만 보내고
   가격은 서버가 정한다.
@@ -217,12 +222,35 @@ pnpm shop:prices    # avatarParts.ts 를 평가해 apps/api/app/game/shop_prices
 **파츠를 추가/삭제하거나 등급을 바꿨으면 반드시 다시 돌리고 결과를 커밋한다.**
 안 돌리면 서버가 옛 가격으로 판정한다.
 
+## 경쟁전
+
+로비에서 **일반전**과 **경쟁전** 방을 따로 만든다. 일반전은 예전 그대로고(인원·맵을 방장이
+고르고, 결과는 전적에만 남는다), 경쟁전은 발로란트의 경쟁전을 1:1 에 맞게 옮긴 것이다.
+
+- **티어**: 아이언 1 ~ 불멸 3 (8계급 × 3디비전) + 레디언트 = 25칸.
+- **RR(랭크 레이팅)**: 디비전 안에서 0~99. 100 을 채우면 승급, 0 밑으로 떨어지면
+  **한 번은 살려 주고**(강등 보호) 다음에 또 지면 강등된다.
+- **숨은 MMR**: 실제 실력 점수(Elo). 화면에 절대 안 보이고, RR 을 얼마나 주고 깎을지를
+  이 값이 정한다 — 티어보다 실력이 높으면 승리 RR 이 커져서 제자리를 빨리 찾는다.
+- **배치전 5판**: 그동안은 티어가 없고, 다 채우면 MMR 이 가리키는 티어에 꽂힌다.
+- **시즌(액트)**: 시즌이 바뀌면 배치부터 다시 보되 MMR 을 일부 물려받는다. 지난 시즌의
+  티어 기록은 지우지 않는다.
+
+경쟁전 방은 서버가 조건을 강제한다. **1:1 고정**, **맵은 라운드마다 무작위**(방장도 못 고르고
+맵 에디터도 막힌다), **양쪽 다 로그인 필수**. 같은 계정으로 두 번 들어올 수 없고,
+**매치 도중에 나가면 패배로 기록된다** — 아니면 "질 것 같으면 나간다"가 최적 전략이 된다.
+
+매치 기록은 일반전도 남는다(로비 → 경쟁전 카드 → 순위표·전적). 계약은
+[PROTOCOL.md](docs/PROTOCOL.md) §1.2 이고, 계산은 `apps/api/app/services/ranked.py`
+(순수 함수 — DB 없이 그대로 테스트된다, `tests/test_ranked.py`).
+
 ## 아직 없는 것
 
 기획서([docs/PvP_로그라이크_슈팅게임_개발문서.md](docs/PvP_로그라이크_슈팅게임_개발문서.md)) 대비 미구현:
 
 - 붕괴/회전 발판 (점프대·이동발판·빙판·가시는 구현됨 — `app/game/blocks.py`)
 - 벽 점프 / 벽 슬라이드
-- 빠른 대전 매치메이킹 (현재는 방 코드 방식만)
+- 빠른 대전 매치메이킹 (경쟁전은 있지만 아직 방 코드로 만난다 — 대기열이 없다)
+- 시즌 자동 롤오버 (`matches.start_next_season` 은 있고, 부르는 곳이 아직 없다)
 - 빌드 추천 표시, 시너지 이름 출력
 - 관전 모드, 레벨/경험치 보상, 스킨 상점 서버 연동

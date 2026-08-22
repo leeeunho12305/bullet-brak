@@ -37,6 +37,9 @@ class Player:
     nickname: str = "익명"
     customization: dict[str, Any] = field(default_factory=lambda: dict(C.DEFAULT_CUSTOMIZATION))
     coins: int = 0
+    #: 이번 매치에서 번 코인만 따로 센 값(`coins` 는 계정 잔액이라 그 차이를 못 읽는다).
+    #: 매치가 끝날 때 이 값만큼을 계정에 더한다. start_game 이 0 으로 되돌린다.
+    coins_earned: int = 0
 
     #: 로그인(디바이스 토큰)에 성공한 경우의 계정 id. DB 가 꺼져 있거나 토큰이
     #: 없으면 None 이고, 그때 이 플레이어의 진행은 아무 데도 남지 않는다.
@@ -248,6 +251,9 @@ class TrainingState:
 class Room:
     code: str
     mode: Mode = "pvp"
+    #: 경쟁전 방인가. 켜져 있으면 입장에 계정이 필요하고, 매치 결과가 랭크(RR)에 반영된다.
+    #: 방을 만들 때 정해지고 이후로는 바뀌지 않는다 — 도중에 켜지면 그 판의 전제가 달라진다.
+    ranked: bool = False
     max_players: int = 2
     phase: Phase = "waiting"
     players: dict[str, Player] = field(default_factory=dict)
@@ -276,6 +282,12 @@ class Room:
     bullet_seq: int = 0
     bot_seq: int = 0
     round_end_timer: int = 0  # >0 이면 라운드 종료 연출 카운트다운
+
+    #: 이번 매치에서 지금까지 끝난 라운드 수. 점수를 낼 때 초기화되는 round_wins 와 달리
+    #: 매치가 끝날 때까지 누적된다(기록에 "몇 라운드짜리 판이었는지"를 남기기 위한 값).
+    rounds_played: int = 0
+    #: 매치가 시작된 시각(time.monotonic). 기록의 소요 시간을 재는 데만 쓴다.
+    started_at: float = 0.0
     #: 훈련장 진행 상태. pvp 방에서는 None 이다.
     training: TrainingState | None = None
 

@@ -62,7 +62,7 @@ export default function RoomScreen({ onLeave }: Props) {
   return (
     <div className="screen">
       <header className="brand">
-        <h1>대기실</h1>
+        <h1>{room.ranked ? '경쟁전 대기실' : '대기실'}</h1>
       </header>
 
       {error ? (
@@ -84,6 +84,12 @@ export default function RoomScreen({ onLeave }: Props) {
           <p className="hint" style={{ textAlign: 'center' }}>
             친구에게 코드를 알려주세요. ({players.length} / {room.max_players}명)
           </p>
+          {room.ranked ? (
+            <p className="ranked-notice">
+              ⚔ 경쟁전 — 결과가 랭크에 반영됩니다. 맵은 라운드마다 무작위로 정해지고,
+              도중에 나가면 <strong>패배로 기록</strong>돼요.
+            </p>
+          ) : null}
 
           <div className="divider" />
 
@@ -124,14 +130,20 @@ export default function RoomScreen({ onLeave }: Props) {
         </section>
 
         <section className="panel">
+          {/* 경쟁전은 맵을 아무도 못 고른다(서버가 거부한다). 고를 수 없는 것을
+              눌러 보게 두는 대신, 왜 없는지를 적어 둔다. */}
           <MapPicker
             selected={room.map_id}
             active={room.map ?? null}
-            canEdit={isHost}
+            canEdit={isHost && !room.ranked}
             onSelect={selectMap}
           />
 
-          {room.map ? (
+          {room.ranked ? (
+            <p className="hint">
+              경쟁전에서는 맵과 지형을 고를 수 없어요 — 라운드마다 서버가 무작위로 정합니다.
+            </p>
+          ) : room.map ? (
             <>
               <div className="divider" />
               <div className="room-actions">

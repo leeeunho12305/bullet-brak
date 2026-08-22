@@ -1,5 +1,6 @@
 // REST 클라이언트 — docs/PROTOCOL.md §1
 import type { CardInfo, Customization, MapInfo, Mode, Phase } from '@/types/game';
+import type { LeaderboardPage, MatchRecord, MyRank, Season, TierInfo } from '@/types/ranked';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
@@ -101,6 +102,12 @@ export interface CreateRoomBody {
   max_players: number;
   /** 맵 id 또는 'random'. 생략하면 서버 기본 맵. */
   map_id?: string;
+  /**
+   * 경쟁전 방. 켜면 서버가 인원을 2명, 맵을 'random' 으로 **강제하고** 입장에 계정을
+   * 요구한다 — 그래서 위의 max_players/map_id 는 이때 무시된다.
+   * DB 가 없는 서버에서는 503 이다(랭크는 남길 곳이 있어야 뜻이 있다).
+   */
+  ranked?: boolean;
 }
 
 export interface CreateRoomResponse {
@@ -108,6 +115,8 @@ export interface CreateRoomResponse {
   mode: Mode;
   max_players: number;
   map_id: string;
+  /** 서버가 확정한 값. 요청이 거절됐을 수도 있으므로 이 값을 믿어야 한다. */
+  ranked: boolean;
 }
 
 export interface RoomSummary {
@@ -117,6 +126,7 @@ export interface RoomSummary {
   player_count: number;
   phase: Phase;
   map_id: string;
+  ranked: boolean;
 }
 
 /** 서버가 내려주는 에러(detail)를 그대로 담는 예외 */
@@ -260,6 +270,36 @@ export const api = {
   issueRecoveryCode(token: string): Promise<RecoveryCodeResponse> {
     return request<RecoveryCodeResponse>('/api/me/recovery-code', {
       method: 'POST',
+      headers: bearer(token),
+    });
+  },
+
+  // ── 경쟁전 ──────────────────────────────────────────────────────────
+  // tiers 를 뺀 나머지는 DB 가 없으면 503 이다(계정 API 와 같은 규칙).
+
+  /** 티어 표. 코드 상수라 DB 가 없어도 200 이고, 한 번 받아 캐시해 두면 된다. */
+  getTiers(): Promise<TierInfo[]> {
+    return request<TierInfo[]>('/api/ranked/tiers');
+  },
+
+  getSeasons(): Promise<Season[]> {
+    return request<Season[]>('/api/ranked/seasons');
+  },
+
+  /** 내 랭크. 경쟁전을 한 번도 안 했으면 전부 기본값으로 온다(에러가 아니다). */
+  getMyRank(token: string): Promise<MyRank> {
+    return request<MyRank>('/api/ranked/me', { headers: bearer(token) });
+  },
+
+  /** 순위표. 로그인 없이도 볼 수 있다. */
+  getLeaderboard(limit = 100): Promise<LeaderboardPage> {
+    return request<LeaderboardPage>(`/api/ranked/leaderboard?limit=${limit}`);
+  },
+
+  /** 내 최근 전적. rankedOnly 를 켜면 경쟁전만. */
+  getMatches(token: string, limit = 20, rankedOnly = false): Promise<{ entries: MatchRecord[] }> {
+    const query = `limit=${limit}&ranked_only=${rankedOnly ? 'true' : 'false'}`;
+    return request<{ entries: MatchRecord[] }>(`/api/ranked/matches?${query}`, {
       headers: bearer(token),
     });
   },

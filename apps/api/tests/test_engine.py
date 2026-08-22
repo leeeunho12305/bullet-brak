@@ -560,6 +560,7 @@ def test_room_state_shape(manager: RoomManager) -> None:
     assert set(state) == {
         "code",
         "mode",
+        "ranked",
         "max_players",
         "phase",
         "map_id",

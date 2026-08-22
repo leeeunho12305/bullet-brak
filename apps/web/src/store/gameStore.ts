@@ -17,7 +17,9 @@ import {
   saveOwnedItems,
 } from '@/hooks/useLocalProfile';
 import { pushProfileDebounced } from '@/api/identity';
+import { fetchMyRank } from '@/api/ranked';
 import type { AccountResponse } from '@/api/client';
+import type { MyRank, RankChange } from '@/types/ranked';
 
 /** 채팅은 최근 30개만 유지 */
 export const CHAT_LIMIT = 30;
@@ -78,6 +80,19 @@ export interface GameState {
   applyAccount(account: AccountResponse): void;
   markLocalOnly(): void;
 
+  /**
+   * 내 경쟁전 랭크. null 이면 아직 못 받았거나 이 서버에 경쟁전이 없다.
+   * "배치 중"과는 다르다 — 그건 `myRank.rank.placed === false` 다.
+   */
+  myRank: MyRank | null;
+  /**
+   * 방금 끝난 경쟁전의 내 랭크 변동. 종료 오버레이가 이걸로 ±RR 을 띄운다.
+   * 매치가 끝나고 서버가 DB 에 기록한 뒤에 채워지므로 **잠깐 null 인 구간이 있다.**
+   */
+  rankChange: RankChange | null;
+  /** 서버에서 내 랭크를 다시 읽어 온다(로비 진입 / 경쟁전 종료 후). */
+  refreshRank(): Promise<void>;
+
   // 내부 액션 (connection.ts 가 호출)
   applyServerMessage(msg: ServerMessage): void;
   setStatus(s: ConnectionStatus, error?: string | null): void;
@@ -89,7 +104,15 @@ const profile = loadProfile();
 /** 세션(방) 관련 상태만 초기화. 프로필은 유지한다. */
 function sessionDefaults(): Pick<
   GameState,
-  'status' | 'error' | 'playerId' | 'room' | 'phase' | 'chat' | 'lastEvent' | 'playerLeft'
+  | 'status'
+  | 'error'
+  | 'playerId'
+  | 'room'
+  | 'phase'
+  | 'chat'
+  | 'lastEvent'
+  | 'playerLeft'
+  | 'rankChange'
 > {
   return {
     status: 'idle',
@@ -100,6 +123,7 @@ function sessionDefaults(): Pick<
     chat: [],
     lastEvent: null,
     playerLeft: null,
+    rankChange: null,
   };
 }
 
@@ -113,6 +137,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
   localOnly: false,
   loginId: null,
   hasRecoveryCode: false,
+  myRank: null,
+  rankChange: null,
 
   setNickname(v) {
     saveNickname(v);
@@ -156,7 +182,12 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 
   markLocalOnly() {
-    set({ localOnly: true });
+    set({ localOnly: true, myRank: null });
+  },
+
+  async refreshRank() {
+    // 실패는 null 로만 나타난다(fetchMyRank 가 예외를 삼킨다) — 로비를 막지 않는다.
+    set({ myRank: await fetchMyRank() });
   },
 
   applyServerMessage(msg) {
@@ -195,6 +226,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
       }
 
       case 'event': {
+        // 새 판이 시작되면 지난 매치의 RR 변동은 더 이상 화면에 있으면 안 된다.
+        if (msg.event === 'game_started') set({ rankChange: null });
         set({
           lastEvent: {
             event: msg.event,
@@ -202,6 +235,17 @@ export const useGameStore = create<GameState>()((set, get) => ({
             loser_id: msg.loser_id,
           },
         });
+        break;
+      }
+
+      case 'rank_update': {
+        const { playerId } = get();
+        const mine = playerId ? msg.changes[playerId] : undefined;
+        if (mine) {
+          set({ rankChange: mine });
+          // 로비로 돌아갔을 때 카드가 옛 값이면 안 되므로 서버 값을 다시 읽는다.
+          void get().refreshRank();
+        }
         break;
       }
 

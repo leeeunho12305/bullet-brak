@@ -1,0 +1,314 @@
+/* 경쟁전 — 티어 뱃지 · 랭크 카드 · 순위표 · 전적 · 종료 오버레이의 RR 칸.
+   변수(--panel, --line, --accent …)는 global.css 의 것을 그대로 쓴다.
+
+   티어 색은 CSS 에 적지 않는다. 서버가 준 값이 인라인 스타일(--rank-color)로 들어오므로
+   계급을 하나 추가해도 이 파일은 손댈 필요가 없다. */
+
+/* ---------- 뱃지 ---------- */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.rank-badge svg {
+  display: block;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+}
+.rank-badge-name {
+  font-weight: 700;
+  color: var(--rank-color, var(--text));
+}
+
+/* ---------- 로비 랭크 카드 ---------- */
+.rank-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.rank-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rank-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rank-card-title strong {
+  font-size: 1.1rem;
+  color: var(--rank-color, var(--text));
+}
+.rank-card-sub {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.rank-card-hint {
+  margin: 0;
+}
+
+/* 승급/배치 진행 게이지. 랭크 카드와 종료 오버레이가 같은 것을 쓴다. */
+.rank-meter {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.rank-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  /* 종료 오버레이에서 예전 RR 자리에서 새 자리로 미끄러지는 연출 */
+  transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rank-meter > span {
+    transition: none;
+  }
+}
+
+.rank-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+.rank-stats > div {
+  text-align: center;
+}
+.rank-stats dt {
+  font-size: 0.68rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.rank-stats dd {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.rank-stats dd.is-up {
+  color: var(--ok);
+}
+.rank-stats dd.is-down {
+  color: var(--danger);
+}
+
+/* 경쟁전 방 만들기 버튼. 일반전(btn-primary)과 확실히 구분돼야 한다. */
+.btn-ranked {
+  margin-top: 8px;
+  border-color: var(--warn);
+  color: var(--warn);
+  font-weight: 700;
+}
+.btn-ranked:hover:not(:disabled) {
+  background: rgba(255, 212, 59, 0.12);
+}
+
+/* 대기실 상단 안내 띠 */
+.ranked-notice {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 212, 59, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 212, 59, 0.08);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* ---------- 순위표 / 전적 모달 ---------- */
+.ranked-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.rank-board,
+.match-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 28px auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.rank-row.is-me {
+  outline: 1px solid var(--accent);
+}
+.rank-pos {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: right;
+}
+.rank-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rank-who strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-who .muted {
+  font-size: 0.72rem;
+}
+.rank-rr {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent-2);
+}
+.rank-rr small {
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+.rank-wl {
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+/* 좁은 화면에서는 승/패 칸을 접는다 — 순위·이름·RR 이 먼저다. */
+@media (max-width: 560px) {
+  .rank-row {
+    grid-template-columns: 24px auto 1fr auto;
+  }
+  .rank-wl {
+    display: none;
+  }
+}
+
+.match-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border-left: 3px solid transparent;
+}
+.match-row.is-win {
+  border-left-color: var(--ok);
+}
+.match-row.is-loss {
+  border-left-color: var(--danger);
+}
+.match-result {
+  font-weight: 800;
+  text-align: center;
+}
+.match-row.is-win .match-result {
+  color: var(--ok);
+}
+.match-row.is-loss .match-result {
+  color: var(--danger);
+}
+.match-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.match-main .muted {
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 0.7rem;
+}
+.match-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+.match-tag.is-ranked {
+  background: rgba(255, 212, 59, 0.14);
+  color: var(--warn);
+}
+.match-rr {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+.match-row.is-win .match-rr {
+  color: var(--ok);
+}
+.match-row.is-loss .match-rr {
+  color: var(--danger);
+}
+
+/* ---------- 매치 종료 오버레이의 RR 칸 ---------- */
+.rank-update {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 340px);
+  margin: 4px auto 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(12, 15, 28, 0.72);
+  text-align: left;
+}
+.rank-update.is-pending {
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.rank-update.has-banner {
+  border-color: var(--warn);
+}
+.rank-update-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.rank-update-body > strong {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rank-delta {
+  font-variant-numeric: tabular-nums;
+}
+.rank-delta.is-up {
+  color: var(--ok);
+}
+.rank-delta.is-down {
+  color: var(--danger);
+}
+.rank-update-note {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.rank-update-note.is-banner {
+  color: var(--warn);
+  font-weight: 700;
+}
+.rank-update-note.is-banner.is-down {
+  color: var(--danger);
+}

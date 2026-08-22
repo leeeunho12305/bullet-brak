@@ -4,18 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
-import random
-import uuid
-from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from app.db import db_ready, session_scope
+from app.api.ws_join import create_player, load_identity, ranked_denial
 from app.game import constants as C
 from app.game import engine
 from app.game.bullets import fire, fire_strong
-from app.game.cards import reset_card_state
 from app.game.models import Player, Room
 from app.game.rooms import room_manager
 from app.game.serialize import room_state
@@ -31,14 +27,16 @@ from app.schemas.messages import (
     SetPlatformsMsg,
     parse_client_message,
 )
-from app.services import accounts as account_service
 from app.services import chat as chat_service
+from app.services import results
 from app.services.hub import hub
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 CLOSE_BAD_REQUEST = 4400
+#: 경쟁전 방인데 계정이 없다. 기록할 곳이 없는 사람에게 랭크를 걸 수는 없다.
+CLOSE_NEEDS_ACCOUNT = 4401
 CLOSE_NOT_FOUND = 4404
 CLOSE_FULL = 4409
 
@@ -61,9 +59,14 @@ async def game_ws(ws: WebSocket, code: str, nickname: str = Query(default="익�
             return
 
         # 신원 조회는 입장 시 딱 한 번이다(틱 루프가 아니라 여기서만 DB 를 만진다).
-        identity = await _load_identity(join.token)
+        identity = await load_identity(join.token)
 
-        player = _create_player(room, join, nickname, identity)
+        denied = ranked_denial(room, identity)
+        if denied is not None:
+            await _fail(ws, denied, CLOSE_NEEDS_ACCOUNT)
+            return
+
+        player = create_player(room, join, nickname, identity)
         room.players[player.id] = player
         room.scores.setdefault(player.id, 0)
         room.round_wins.setdefault(player.id, 0)
@@ -106,84 +109,10 @@ async def _await_join(ws: WebSocket) -> JoinMsg | None:
     return payload if isinstance(payload, JoinMsg) else None
 
 
-@dataclass(slots=True)
-class _Identity:
-    """계정에서 떼어낸 값 사본.
-
-    ORM 객체를 세션 밖으로 들고 나가면 lazy load 가 터진다. 필요한 필드만 복사한다.
-    """
-
-    account_id: str
-    nickname: str
-    customization: dict[str, Any]
-    coins: int
-
-
-async def _load_identity(token: str | None) -> _Identity | None:
-    """디바이스 토큰 -> 계정. DB 가 꺼져 있거나 토큰이 없으면 None(= 비로그인 입장).
-
-    DB 오류로 입장이 막히면 안 되므로 예외는 삼키고 비로그인으로 떨어뜨린다.
-    """
-    if not token or not db_ready():
-        return None
-    try:
-        async with session_scope() as session:
-            account = await account_service.resolve_token(session, token)
-            if account is None:
-                return None
-            return _Identity(
-                account_id=account.id,
-                nickname=account.nickname,
-                customization=dict(account.customization or {}),
-                coins=account.coins,
-            )
-    except Exception:
-        logger.exception("계정 조회 실패 — 비로그인으로 입장시킨다.")
-        return None
-
-
-def _create_player(
-    room: Room, join: JoinMsg, query_nickname: str, identity: _Identity | None = None
-) -> Player:
-    nick = join.nickname
-    if nick == "익명":
-        # 쿼리스트링 -> 계정 닉네임 순으로 되짚는다. 아바타 편집기는 클라이언트에
-        # 있고 변경 시 PATCH /api/me 로 올라가므로, 명시적으로 보낸 값이 우선이다.
-        nick = (query_nickname or "").strip()[:16] or (identity.nickname if identity else "") or "익명"
-
-    custom = join.customization.model_dump()
-    custom["color"] = _pick_color(room, custom.get("color"))
-
-    x, y = engine.random_spawn(room)
-    player = Player(
-        id=uuid.uuid4().hex[:8],
-        nickname=nick,
-        customization=custom,
-        # 로그인 상태면 코인은 계정 잔액이다. join.coins(클라이언트 신고값)는 버린다.
-        coins=identity.coins if identity else join.coins,
-        account_id=identity.account_id if identity else None,
-        x=x,
-        y=y,
-    )
-    try:
-        reset_card_state(player)
-    except Exception:
-        logger.exception("reset_card_state 실패")
-    return player
-
-
 def _is_host(room: Room, player: Player) -> bool:
     """방장 = 가장 먼저 입장한 사람. 클라이언트 RoomScreen 의 판정과 같은 규칙이다."""
     first = next(iter(room.players), None)
     return first is None or first == player.id
-
-
-def _pick_color(room: Room, requested: str | None) -> str:
-    taken = {str(p.customization.get("color")) for p in room.players.values()}
-    if requested and requested not in taken:
-        return requested
-    available = [c for c in C.AVATAR_PALETTE if c not in taken]
-    return random.choice(available) if available else C.AVATAR_PALETTE[0]
 
 
 # --------------------------------------------------------------------------
@@ -331,6 +260,15 @@ async def _cleanup(code: str, player_id: str | None) -> None:
     if room is None:
         return
     left = room.players.pop(player_id, None)
+    # 경쟁전 도중 이탈은 패배로 기록한다 — 아니면 "질 것 같으면 나간다"가 최적 전략이 된다.
+    # room.scores 를 지우기 **전에** 결과를 복사해 둬야 나간 사람의 점수가 남는다.
+    if (
+        room.ranked
+        and left is not None
+        and room.phase in ("playing", "round_over", "picking")
+        and len(room.players) == 1
+    ):
+        results.schedule(results.capture_forfeit(room, left))
     room.scores.pop(player_id, None)
     room.round_wins.pop(player_id, None)
     room.rematch_votes.discard(player_id)

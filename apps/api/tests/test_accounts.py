@@ -305,33 +305,33 @@ async def test_game_endpoints_work_without_db(offline_client) -> None:
 
 async def test_join_uses_account_coins_not_client_value(db) -> None:
     """클라이언트가 코인을 신고해도 로그인 상태면 계정 잔액이 이긴다."""
-    from app.api.ws import _create_player, _load_identity
+    from app.api.ws_join import create_player, load_identity
     from app.game.rooms import room_manager
 
     async with db_session.session_scope() as s:
         _, token = await account_service.create_anonymous(s, nickname="주인", seed_coins=42)
 
-    identity = await _load_identity(token)
+    identity = await load_identity(token)
     assert identity is not None
 
     room = room_manager.create(mode="pvp", max_players=2)
     join = JoinMsg.model_validate({"nickname": "주인", "coins": 9_999_999, "token": token})
-    player = _create_player(room, join, "", identity)
+    player = create_player(room, join, "", identity)
 
     assert player.coins == 42
     assert player.account_id == identity.account_id
 
 
 async def test_join_without_token_stays_anonymous(db) -> None:
-    from app.api.ws import _create_player, _load_identity
+    from app.api.ws_join import create_player, load_identity
     from app.game.rooms import room_manager
 
-    identity = await _load_identity(None)
+    identity = await load_identity(None)
     assert identity is None
 
     room = room_manager.create(mode="pvp", max_players=2)
     join = JoinMsg.model_validate({"nickname": "손님", "coins": 77})
-    player = _create_player(room, join, "", identity)
+    player = create_player(room, join, "", identity)
 
     # 비로그인은 예전 동작 그대로 — 클라이언트 값을 쓰고 계정에 묶이지 않는다.
     assert player.coins == 77
@@ -340,9 +340,9 @@ async def test_join_without_token_stays_anonymous(db) -> None:
 
 async def test_bad_token_falls_back_to_anonymous(db) -> None:
     """모르는 토큰으로 입장이 막히면 안 된다(그냥 비로그인 취급)."""
-    from app.api.ws import _load_identity
+    from app.api.ws_join import load_identity
 
-    assert await _load_identity("쓰레기토큰") is None
+    assert await load_identity("쓰레기토큰") is None
 
 
 # --------------------------------------------------------------------------

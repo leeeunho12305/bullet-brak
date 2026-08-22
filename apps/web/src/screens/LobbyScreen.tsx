@@ -4,6 +4,8 @@ import type { FormEvent } from 'react';
 import AccountModal from '@/components/AccountModal';
 import AvatarEditor from '@/components/AvatarEditor';
 import ControlsGuide from '@/components/ControlsGuide';
+import RankPanel from '@/components/RankPanel';
+import RankedModal from '@/components/RankedModal';
 import Tutorial from '@/components/Tutorial';
 import { ApiError, api } from '@/api/client';
 import { net } from '@/net/connection';
@@ -11,6 +13,7 @@ import { useGameStore } from '@/store/gameStore';
 import { useLocalProfile } from '@/hooks/useLocalProfile';
 import { RANDOM_MAP_ID } from '@/types/game';
 import type { MapInfo } from '@/types/game';
+import '@/styles/ranked.css';
 
 const NICKNAME_MAX = 12;
 const CODE_LENGTH = 6;
@@ -28,6 +31,8 @@ export default function LobbyScreen() {
   // 계정을 못 받았다 — 코인/아이템이 이 브라우저에만 남는다(서버에 DB 가 없는 배포).
   const localOnly = useGameStore((s) => s.localOnly);
   const loginId = useGameStore((s) => s.loginId);
+  // null 이면 이 서버에 경쟁전이 없거나(DB 없음) 아직 계정을 못 받은 상태다.
+  const myRank = useGameStore((s) => s.myRank);
 
   const [code, setCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(2);
@@ -37,6 +42,7 @@ export default function LobbyScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [tutorial, setTutorial] = useState(false);
   const [account, setAccount] = useState(false);
+  const [board, setBoard] = useState(false);
 
   // 시작 맵. 방을 만든 뒤 대기실에서 방장이 언제든 바꿀 수 있다.
   useEffect(() => {
@@ -66,9 +72,14 @@ export default function LobbyScreen() {
     [nickname, customization, coins],
   );
 
-  /** 방 생성 후 곧바로 WS 접속 */
+  /**
+   * 방 생성 후 곧바로 WS 접속.
+   *
+   * 경쟁전은 인원(2명)과 맵(무작위)을 **서버가 정한다** — 여기서 보낸 값은 무시되고,
+   * 그래서 화면의 인원/맵 선택도 경쟁전에는 적용되지 않는다.
+   */
   const openRoom = useCallback(
-    async (mode: 'pvp' | 'training') => {
+    async (mode: 'pvp' | 'training', ranked = false) => {
       setLocalError(null);
       setBusy(true);
       try {
@@ -76,6 +87,7 @@ export default function LobbyScreen() {
           mode,
           max_players: mode === 'training' ? 1 : maxPlayers,
           map_id: mapId,
+          ranked,
         });
         net.connect(room.code, profile());
       } catch (e) {
@@ -126,6 +138,7 @@ export default function LobbyScreen() {
 
       {tutorial ? <Tutorial onClose={() => setTutorial(false)} /> : null}
       {account ? <AccountModal onClose={() => setAccount(false)} /> : null}
+      {board ? <RankedModal onClose={() => setBoard(false)} /> : null}
 
       {message ? (
         <div className="alert" role="alert">
@@ -159,6 +172,14 @@ export default function LobbyScreen() {
             <p className="hint">
               💾 계정에 연결되지 않아 코인과 아이템이 이 브라우저에만 저장돼요.
             </p>
+          ) : null}
+
+          {myRank ? (
+            <>
+              <div className="divider" />
+              <h2 className="section-title">경쟁전</h2>
+              <RankPanel rank={myRank} onOpenBoard={() => setBoard(true)} />
+            </>
           ) : null}
 
           <div className="divider" />
@@ -220,8 +241,27 @@ export default function LobbyScreen() {
             onClick={() => void openRoom('pvp')}
           >
             {connecting ? <span className="spinner" aria-hidden /> : null}
-            방 만들기
+            일반전 방 만들기
           </button>
+
+          {/* 경쟁전은 계정이 있어야만 보인다 — 랭크는 남길 곳이 있어야 뜻이 있다. */}
+          {myRank ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-ranked btn-block"
+                disabled={connecting}
+                onClick={() => void openRoom('pvp', true)}
+              >
+                {connecting ? <span className="spinner" aria-hidden /> : null}
+                ⚔ 경쟁전 방 만들기
+              </button>
+              <p className="hint">
+                1:1 · 맵은 라운드마다 무작위 · 상대도 로그인해야 들어올 수 있어요.
+                {myRank.rank.placed ? ' 결과가 RR 에 반영됩니다.' : ' 배치 5판을 마치면 티어가 정해져요.'}
+              </p>
+            </>
+          ) : null}
 
           <div className="divider" />
 

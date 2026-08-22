@@ -32,15 +32,28 @@ class RoomManager:
 
     # -- CRUD --------------------------------------------------------------
     def create(
-        self, mode: Mode = "pvp", max_players: int = 2, map_id: str = maps.DEFAULT_ID
+        self,
+        mode: Mode = "pvp",
+        max_players: int = 2,
+        map_id: str = maps.DEFAULT_ID,
+        ranked: bool = False,
     ) -> Room:
         if len(self.rooms) >= self.max_rooms:
             raise RoomError("서버가 가득 찼습니다.")
         if not maps.is_valid_selection(map_id):
             map_id = maps.DEFAULT_ID
+
+        # 경쟁전은 1:1 고정이고 맵은 무작위다. 인원과 맵을 방장이 정할 수 있으면
+        # 그건 이미 같은 조건의 경기가 아니다.
+        ranked = bool(ranked) and mode == "pvp"
+        if ranked:
+            max_players = 2
+            map_id = maps.RANDOM_ID
+
         room = Room(
             code=self._new_code(),
             mode=mode if mode in ("pvp", "training") else "pvp",
+            ranked=ranked,
             max_players=max(1, min(8, int(max_players))),
             map_id=map_id,
         )
