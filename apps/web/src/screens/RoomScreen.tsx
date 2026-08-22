@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MapEditor from '@/components/MapEditor';
 import MapPicker from '@/components/MapPicker';
+import RankBadge from '@/components/RankBadge';
 import PlayerLeftNotice from '@/components/PlayerLeftNotice';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
@@ -86,8 +87,8 @@ export default function RoomScreen({ onLeave }: Props) {
           </p>
           {room.ranked ? (
             <p className="ranked-notice">
-              ⚔ 경쟁전 — 결과가 랭크에 반영됩니다. 맵은 라운드마다 무작위로 정해지고,
-              도중에 나가면 <strong>패배로 기록</strong>돼요.
+              ⚔ 경쟁전 — 결과가 랭크(RR)에 반영됩니다. 도중에 나가면{' '}
+              <strong>패배로 기록</strong>돼요.
             </p>
           ) : null}
 
@@ -97,6 +98,8 @@ export default function RoomScreen({ onLeave }: Props) {
             {players.map((p) => (
               <li key={p.id} className={`player-item${p.id === playerId ? ' is-me' : ''}`}>
                 <span className="player-dot" style={{ background: p.customization.color }} />
+                {/* 티어는 배치를 마친 사람에게만 있다(0 = 미배치/비로그인). */}
+                {p.tier > 0 ? <RankBadge tier={p.tier} size={20} /> : null}
                 <span className="player-name">{p.nickname || '익명'}</span>
                 <span className="player-tag">
                   {p.id === players[0]?.id ? '방장' : ''}
@@ -131,19 +134,25 @@ export default function RoomScreen({ onLeave }: Props) {
 
         <section className="panel">
           {/* 경쟁전은 맵을 아무도 못 고른다(서버가 거부한다). 고를 수 없는 것을
-              눌러 보게 두는 대신, 왜 없는지를 적어 둔다. */}
+              눌러 보게 두는 대신, 제목 옆에 방식을 적고 왜 없는지를 밝힌다. */}
           <MapPicker
             selected={room.map_id}
             active={room.map ?? null}
             canEdit={isHost && !room.ranked}
             onSelect={selectMap}
+            action={
+              <span className={`mode-badge${room.ranked ? ' is-ranked' : ''}`}>
+                {room.ranked ? '⚔ 경쟁전' : '일반전'}
+              </span>
+            }
+            lockNote={
+              room.ranked
+                ? '경쟁전은 맵을 고를 수 없어요 — 라운드마다 서버가 무작위로 정합니다.'
+                : undefined
+            }
           />
 
-          {room.ranked ? (
-            <p className="hint">
-              경쟁전에서는 맵과 지형을 고를 수 없어요 — 라운드마다 서버가 무작위로 정합니다.
-            </p>
-          ) : room.map ? (
+          {room.ranked ? null : room.map ? (
             <>
               <div className="divider" />
               <div className="room-actions">

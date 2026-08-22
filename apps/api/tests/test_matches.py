@@ -346,6 +346,58 @@ def test_casual_room_has_no_forfeit_penalty() -> None:
 
 
 # --------------------------------------------------------------------------
+# 입장 시 티어 싣기 (이름표용)
+# --------------------------------------------------------------------------
+
+
+async def test_join_carries_the_players_tier(db) -> None:
+    """이름 옆에 티어를 띄우려면 입장할 때 한 번 읽어 둬야 한다(틱 루프가 아니라 여기서)."""
+    from app.api.ws_join import load_identity
+    from app.schemas.messages import JoinMsg
+
+    async with db_session.session_scope() as s:
+        account, token = await account_service.create_anonymous(s, nickname="가")
+        a_id = account.id
+    async with db_session.session_scope() as s:
+        b, _ = await account_service.create_anonymous(s, nickname="나")
+        b_id = b.id
+
+    # 배치를 마쳐야 티어가 생긴다.
+    for _ in range(ranked.PLACEMENT_MATCHES):
+        async with db_session.session_scope() as s:
+            await match_service.record(s, _outcome(a_id, b_id))
+
+    identity = await load_identity(token)
+    assert identity is not None
+    assert identity.tier > 0
+
+    manager = RoomManager()
+    room = manager.create("pvp", 2)
+    from app.api.ws_join import create_player
+
+    player = create_player(room, JoinMsg(), "", identity)
+    assert player.tier == identity.tier
+    assert player.rr == identity.rr
+
+    room.players[player.id] = player
+    from app.game.serialize import room_state
+
+    assert room_state(room)["players"][0]["tier"] == identity.tier
+
+
+async def test_join_without_ranked_history_has_no_tier(db) -> None:
+    """경쟁전을 한 번도 안 했으면 이름 옆에 아무것도 안 붙는다(0)."""
+    from app.api.ws_join import load_identity
+
+    async with db_session.session_scope() as s:
+        _, token = await account_service.create_anonymous(s, nickname="새내기")
+
+    identity = await load_identity(token)
+    assert identity is not None
+    assert (identity.tier, identity.rr) == (0, 0)
+
+
+# --------------------------------------------------------------------------
 # REST
 # --------------------------------------------------------------------------
 

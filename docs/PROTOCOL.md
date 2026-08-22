@@ -279,14 +279,22 @@ MapInfo = {
 
 RoomState = {
   "code": "123456", "mode": "pvp", "max_players": 2, "phase": "waiting",
+  "ranked": false,                  // 경쟁전 방인가. 방을 만들 때 정해지고 바뀌지 않는다
   "map_id": "random",               // 방장이 고른 값. "random" 일 수 있다
   "map": MapInfo,                   // 지금 실제로 깔려 있는 맵(platforms 는 편집 결과가 반영된 값)
   "custom_map": false,              // 발판이 맵 원본이 아니라 방장이 에디터로 짠 배치인가
-  "players": [ { "id": "...", "nickname": "익명", "customization": Customization, "coins": 0 } ]
+  "players": [ {
+    "id": "...", "nickname": "익명", "customization": Customization, "coins": 0,
+    "tier": 15, "rr": 41            // 입장 시점의 경쟁전 티어/RR. 0 = 미배치 또는 비로그인
+  } ]
 }
 // phase: "waiting" | "playing" | "round_over" | "picking" | "finished"
 // 맵이 바뀌면(무작위 리롤 포함) 서버가 room_state 를 한 번 더 브로드캐스트한다.
 // 테마/이름을 60Hz 스냅샷에 싣지 않기 위한 장치다.
+//
+// tier/rr 이 **여기에만** 있고 PlayerSnap 에는 없는 이유: 매치 중에 바뀌지 않는 값이라
+// 60Hz 로 실어 보낼 이유가 없다. 인게임 이름표는 room_state 의 이 값을 id 로 찾아 쓴다.
+// 값은 입장(join) 시점에 계정의 랭크 프로필에서 한 번 읽는다(틱 루프는 DB 를 안 만진다).
 
 PlayerSnap = {
   "id": str, "nickname": str, "customization": Customization,

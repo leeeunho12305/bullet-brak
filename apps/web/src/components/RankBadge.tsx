@@ -28,7 +28,12 @@ function RankBadgeInner({ tier, size = 40, label = false, placement = false }: P
   const chevrons = info.division;
 
   return (
-    <span className="rank-badge" style={{ ['--rank-color' as string]: color }}>
+    <span
+      className="rank-badge"
+      style={{ ['--rank-color' as string]: color }}
+      // 목록에 들어가는 작은 뱃지는 모양만으로 못 읽는다. 올리면 이름이 뜨게 한다.
+      title={unranked ? '미배치' : info.name}
+    >
       <svg
         width={size}
         height={size * 1.125}

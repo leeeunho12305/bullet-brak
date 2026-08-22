@@ -3,6 +3,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import type { JSX } from 'react';
 import { net } from '@/net/connection';
 import { useGameStore } from '@/store/gameStore';
+import RankBadge from '@/components/RankBadge';
 import ScoreOrb from '@/components/ScoreOrb';
 import { MAX_CHARGE } from '@/types/game';
 import type { CardInfo, PlayerSnap, TrainingSnap } from '@/types/game';
@@ -21,6 +22,9 @@ const cardCache = new Map<string, CardInfo>();
 interface StoreSlice {
   playerId: string | null;
 }
+
+/** 빈 티어 표. 매 렌더마다 새 객체를 만들면 zustand 가 계속 다시 그린다. */
+const NO_TIERS: Record<string, number> = {};
 
 interface HudPlayer {
   id: string;
@@ -132,13 +136,16 @@ interface SideProps {
   p: HudPlayer;
   mine: boolean;
   side: 'left' | 'right';
+  /** 경쟁전 티어(1~25). 0 이면 미배치/비로그인이라 뱃지를 그리지 않는다. */
+  tier: number;
 }
 
-function PlayerSide({ p, mine, side }: SideProps): JSX.Element {
+function PlayerSide({ p, mine, side, tier }: SideProps): JSX.Element {
   return (
     <div className={`hud-side ${side}${p.alive ? '' : ' dead'}`}>
       <div className="hud-name">
         <span className="hud-swatch" style={{ background: p.color }} />
+        {tier > 0 ? <RankBadge tier={tier} size={16} /> : null}
         <strong>{p.nickname}</strong>
         {mine && <em className="hud-tag">나</em>}
         {p.silenced && <span title="침묵">🔇</span>}
@@ -239,6 +246,15 @@ function TrainingCenter({ t }: { t: TrainingSnap }): JSX.Element {
 
 function HudInner(): JSX.Element | null {
   const myId = useGameStore((s: StoreSlice) => s.playerId);
+  // 티어는 매치 중에 바뀌지 않으므로 60Hz 스냅샷이 아니라 room_state 에서 온다.
+  // 여기서 id -> 티어로 한 번 접어 두고 이름표에서 찾아 쓴다.
+  const roomPlayers = useGameStore((s) => s.room?.players);
+  const tiers = useMemo(() => {
+    if (!roomPlayers) return NO_TIERS;
+    const map: Record<string, number> = {};
+    for (const p of roomPlayers) map[p.id] = p.tier ?? 0;
+    return map;
+  }, [roomPlayers]);
   const players = useHudSample(myId);
   const training = useTrainingSample();
   const [left, right] = useMemo(() => [players[0], players[1]], [players]);
@@ -247,7 +263,7 @@ function HudInner(): JSX.Element | null {
 
   return (
     <div className="hud-root">
-      <PlayerSide p={left} mine={left.id === myId} side="left" />
+      <PlayerSide p={left} mine={left.id === myId} side="left" tier={tiers[left.id] ?? 0} />
       {training ? (
         <TrainingCenter t={training} />
       ) : (
@@ -259,7 +275,7 @@ function HudInner(): JSX.Element | null {
         </div>
       )}
       {training ? null : right ? (
-        <PlayerSide p={right} mine={right.id === myId} side="right" />
+        <PlayerSide p={right} mine={right.id === myId} side="right" tier={tiers[right.id] ?? 0} />
       ) : (
         <div className="hud-side right waiting">상대 대기 중…</div>
       )}

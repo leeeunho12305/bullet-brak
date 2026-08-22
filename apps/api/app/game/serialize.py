@@ -213,6 +213,10 @@ def room_state(room: Room) -> dict[str, Any]:
                 "nickname": p.nickname,
                 "customization": _customization(p.customization),
                 "coins": p.coins,
+                #: 입장 시점의 경쟁전 티어/RR. 0 이면 미배치이거나 비로그인이다.
+                #: 스냅샷(60Hz)이 아니라 여기에만 싣는다 — 매치 중에 바뀌지 않는 값이다.
+                "tier": p.tier,
+                "rr": p.rr,
             }
             for p in room.players.values()
         ],

@@ -568,7 +568,17 @@ def test_room_state_shape(manager: RoomManager) -> None:
         "custom_map",
         "players",
     }
-    assert set(state["players"][0]) == {"id", "nickname", "customization", "coins"}
+    # 티어/RR 은 이름표에 붙는 값이라 저빈도 메시지(room_state)로만 내려간다.
+    assert set(state["players"][0]) == {
+        "id",
+        "nickname",
+        "customization",
+        "coins",
+        "tier",
+        "rr",
+    }
+    # 비로그인 플레이어는 랭크가 없다.
+    assert (state["players"][0]["tier"], state["players"][0]["rr"]) == (0, 0)
 
 
 # --------------------------------------------------------------------------

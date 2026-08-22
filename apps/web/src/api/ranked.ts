@@ -54,12 +54,6 @@ export function tierOf(index: number): TierInfo {
   return tiers[index - 1] ?? { ...UNRANKED, index, name: `티어 ${index}` };
 }
 
-/** 배치 중이면 "배치 2/5", 아니면 "골드 2 · 34 RR". */
-export function rankLabel(rank: RankStats): string {
-  if (!rank.placed) return `배치 ${rank.placements}/${rank.placement_total}`;
-  return `${tierOf(rank.tier).name} · ${rank.rr} RR`;
-}
-
 /** 승률(%). 한 판도 안 했으면 0. */
 export function winRate(rank: Pick<RankStats, 'wins' | 'losses'>): number {
   const total = rank.wins + rank.losses;

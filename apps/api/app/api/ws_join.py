@@ -19,6 +19,8 @@ from app.game.cards import reset_card_state
 from app.game.models import Player, Room
 from app.schemas.messages import JoinMsg
 from app.services import accounts as account_service
+from app.services import matches as match_service
+from app.services import seasons as season_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,9 @@ class Identity:
     nickname: str
     customization: dict[str, Any]
     coins: int
+    #: 지금 시즌의 티어(1~25) / RR. 배치 전이거나 경쟁전을 안 했으면 0 이다.
+    tier: int = 0
+    rr: int = 0
 
 
 async def load_identity(token: str | None) -> Identity | None:
@@ -48,11 +53,23 @@ async def load_identity(token: str | None) -> Identity | None:
             account = await account_service.resolve_token(session, token)
             if account is None:
                 return None
+
+            # 이름표에 붙일 티어. 시즌이 아직 없거나 경쟁전을 한 번도 안 했으면 0 이다
+            # (여기서 시즌을 새로 열지는 않는다 — 그건 결과를 기록할 때의 일이다).
+            season = await season_service.current_season(session)
+            profile = (
+                await match_service.get_profile(session, account.id, season.id)
+                if season is not None
+                else None
+            )
+
             return Identity(
                 account_id=account.id,
                 nickname=account.nickname,
                 customization=dict(account.customization or {}),
                 coins=account.coins,
+                tier=profile.tier if profile else 0,
+                rr=profile.rr if profile else 0,
             )
     except Exception:
         logger.exception("계정 조회 실패 — 비로그인으로 입장시킨다.")
@@ -98,6 +115,8 @@ def create_player(
         # 로그인 상태면 코인은 계정 잔액이다. join.coins(클라이언트 신고값)는 버린다.
         coins=identity.coins if identity else join.coins,
         account_id=identity.account_id if identity else None,
+        tier=identity.tier if identity else 0,
+        rr=identity.rr if identity else 0,
         x=x,
         y=y,
     )

@@ -33,6 +33,17 @@ async def active_season(session: AsyncSession) -> Season:
     return season
 
 
+async def current_season(session: AsyncSession) -> Season | None:
+    """활성 시즌을 **읽기만** 한다. 없으면 None — 만들지 않는다.
+
+    입장(join)처럼 "있으면 좋고 없으면 그만"인 자리에서 쓴다. 시즌을 여는 것은
+    경쟁전 결과를 기록할 때(`active_season`)의 일이지, 누가 방에 들어왔을 때가 아니다.
+    """
+    return await session.scalar(
+        select(Season).where(Season.is_active.is_(True)).order_by(Season.id.desc()).limit(1)
+    )
+
+
 async def list_seasons(session: AsyncSession) -> list[Season]:
     rows = await session.scalars(select(Season).order_by(Season.id.desc()))
     return list(rows.all())

@@ -279,6 +279,24 @@ textarea {
   background: var(--line);
 }
 
+/* 항목이 많아 세로로 길어지는 패널(로비의 "게임 시작")에서만 여백을 조인다.
+   전역 .field/.divider 를 줄이면 다른 화면까지 같이 흔들린다. */
+.panel-tight {
+  padding: 16px 20px;
+}
+.panel-tight .section-title {
+  margin-bottom: 8px;
+}
+.panel-tight .field {
+  margin-bottom: 10px;
+}
+.panel-tight .divider {
+  margin: 12px 0;
+}
+.panel-tight .hint {
+  margin-top: 5px;
+}
+
 .stack {
   display: flex;
   flex-direction: column;
@@ -637,6 +655,11 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+/* 목록 뒤에 설명이 이어지는 단계(경쟁전)에서 문단이 마지막 항목에 달라붙지 않게 한다. */
+.tut-list + p,
+.tut-blocks + p {
+  margin-top: 12px;
 }
 .tut-list li {
   padding-left: 12px;

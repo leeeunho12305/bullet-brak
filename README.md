@@ -119,7 +119,7 @@ pnpm 만 쓴다면 `pnpm test` / `pnpm build` 가 같은 일을 한다.
 │     │  ├─ game/            renderer·avatars·useInput
 │     │  ├─ components/      GameCanvas·Hud·InfoPanel·CardPicker·ChatBox
 │     │  │                   ControlsGuide(조작법)·Tutorial·MapPicker·MapEditor
-│     │  │                   RankBadge·RankPanel·RankedModal·RankUpdate(경쟁전) 등
+│     │  │                   RankBadge·RankChip·RankPanel·RankedModal·RankUpdate(경쟁전) 등
 │     │  ├─ screens/         Lobby·Room·Game
 │     │  └─ hooks/           useLocalProfile
 │     ├─ Dockerfile          deps → dev / build → nginx runtime
@@ -240,7 +240,7 @@ pnpm shop:prices    # avatarParts.ts 를 평가해 apps/api/app/game/shop_prices
 맵 에디터도 막힌다), **양쪽 다 로그인 필수**. 같은 계정으로 두 번 들어올 수 없고,
 **매치 도중에 나가면 패배로 기록된다** — 아니면 "질 것 같으면 나간다"가 최적 전략이 된다.
 
-매치 기록은 일반전도 남는다(로비 → 경쟁전 카드 → 순위표·전적). 계약은
+매치 기록은 일반전도 남는다(로비 왼쪽의 랭크 한 줄을 누르면 순위표·전적이 열린다). 계약은
 [PROTOCOL.md](docs/PROTOCOL.md) §1.2 이고, 계산은 `apps/api/app/services/ranked.py`
 (순수 함수 — DB 없이 그대로 테스트된다, `tests/test_ranked.py`).
 

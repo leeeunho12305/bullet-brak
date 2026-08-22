@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import RankBadge from '@/components/RankBadge';
+import RankPanel from '@/components/RankPanel';
 import { fetchLeaderboard, fetchMatches, tierOf, winRate } from '@/api/ranked';
 import { useGameStore } from '@/store/gameStore';
 import type { LeaderboardEntry, MatchRecord } from '@/types/ranked';
@@ -17,7 +18,8 @@ interface Props {
 
 export default function RankedModal({ onClose }: Props): JSX.Element {
   const accountId = useGameStore((s) => s.accountId);
-  const seasonName = useGameStore((s) => s.myRank?.season.name ?? '경쟁전');
+  const myRank = useGameStore((s) => s.myRank);
+  const seasonName = myRank?.season.name ?? '경쟁전';
 
   const [tab, setTab] = useState<Tab>('board');
   const [board, setBoard] = useState<LeaderboardEntry[] | null>(null);
@@ -83,7 +85,11 @@ export default function RankedModal({ onClose }: Props): JSX.Element {
           </div>
 
           {tab === 'board' ? (
-            <Leaderboard entries={board} meId={accountId} />
+            <>
+              {/* 로비에서 뺀 자세한 성적(승률·연승·최고 티어)을 여기로 옮겼다. */}
+              {myRank ? <RankPanel rank={myRank} /> : null}
+              <Leaderboard entries={board} meId={accountId} />
+            </>
           ) : (
             <History rows={history} />
           )}

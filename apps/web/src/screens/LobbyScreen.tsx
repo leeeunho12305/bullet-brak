@@ -4,7 +4,7 @@ import type { FormEvent } from 'react';
 import AccountModal from '@/components/AccountModal';
 import AvatarEditor from '@/components/AvatarEditor';
 import ControlsGuide from '@/components/ControlsGuide';
-import RankPanel from '@/components/RankPanel';
+import RankChip from '@/components/RankChip';
 import RankedModal from '@/components/RankedModal';
 import Tutorial from '@/components/Tutorial';
 import { ApiError, api } from '@/api/client';
@@ -174,13 +174,7 @@ export default function LobbyScreen() {
             </p>
           ) : null}
 
-          {myRank ? (
-            <>
-              <div className="divider" />
-              <h2 className="section-title">경쟁전</h2>
-              <RankPanel rank={myRank} onOpenBoard={() => setBoard(true)} />
-            </>
-          ) : null}
+          {myRank ? <RankChip rank={myRank} onClick={() => setBoard(true)} /> : null}
 
           <div className="divider" />
 
@@ -195,7 +189,7 @@ export default function LobbyScreen() {
           </button>
         </section>
 
-        <section className="panel">
+        <section className="panel panel-tight">
           <h2 className="section-title">게임 시작</h2>
 
           <div className="field">
@@ -241,27 +235,8 @@ export default function LobbyScreen() {
             onClick={() => void openRoom('pvp')}
           >
             {connecting ? <span className="spinner" aria-hidden /> : null}
-            일반전 방 만들기
+            방 만들기
           </button>
-
-          {/* 경쟁전은 계정이 있어야만 보인다 — 랭크는 남길 곳이 있어야 뜻이 있다. */}
-          {myRank ? (
-            <>
-              <button
-                type="button"
-                className="btn btn-ranked btn-block"
-                disabled={connecting}
-                onClick={() => void openRoom('pvp', true)}
-              >
-                {connecting ? <span className="spinner" aria-hidden /> : null}
-                ⚔ 경쟁전 방 만들기
-              </button>
-              <p className="hint">
-                1:1 · 맵은 라운드마다 무작위 · 상대도 로그인해야 들어올 수 있어요.
-                {myRank.rank.placed ? ' 결과가 RR 에 반영됩니다.' : ' 배치 5판을 마치면 티어가 정해져요.'}
-              </p>
-            </>
-          ) : null}
 
           <div className="divider" />
 
@@ -294,6 +269,28 @@ export default function LobbyScreen() {
           </form>
 
           <div className="divider" />
+
+          {/* 경쟁전은 계정이 있어야만 보인다 — 랭크는 남길 곳이 있어야 뜻이 있다.
+              DB 가 없는 배포에서는 myRank 가 null 이라 이 칸이 통째로 빠진다. */}
+          {myRank ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-ranked btn-block"
+                disabled={connecting}
+                onClick={() => void openRoom('pvp', true)}
+              >
+                {connecting ? <span className="spinner" aria-hidden /> : null}
+                ⚔ 경쟁전 (1:1 · 랭크가 걸립니다)
+              </button>
+              <p className="hint">
+                맵 무작위 · 상대도 로그인 필요
+                {myRank.rank.placed
+                  ? ' · 결과가 RR 에 반영됩니다'
+                  : ` · 배치 ${myRank.rank.placement_total}판을 마치면 티어가 정해져요`}
+              </p>
+            </>
+          ) : null}
 
           <button
             type="button"

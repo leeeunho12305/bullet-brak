@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { JSX, ReactNode } from 'react';
 import ControlsGuide from '@/components/ControlsGuide';
+import TierLadder from '@/components/TierLadder';
 import { MAX_PART_PRICE, MIN_PAID_PRICE } from '@/game/avatars';
 import { BLOCK_INFO, BLOCK_TYPES, COINS_MATCH_WIN, COINS_ROUND_WIN, ROUNDS_TO_SCORE } from '@/types/game';
 
@@ -130,6 +131,42 @@ const STEPS: Step[] = [
     ),
   },
   {
+    title: '경쟁전',
+    emoji: '⚔',
+    body: (
+      <>
+        <p>
+          로비의 <strong>경쟁전</strong> 버튼으로 만드는 1:1 방입니다. 규칙은 일반전과 똑같지만,
+          결과가 <strong>내 티어와 RR</strong>에 남습니다.
+        </p>
+        <ul className="tut-list">
+          <li>
+            <strong>배치전 5판</strong> — 먼저 다섯 판을 치르면 실력에 맞는 티어가 정해집니다.
+            그전까지는 티어가 없어요.
+          </li>
+          <li>
+            <strong>RR(랭크 레이팅)</strong> — 이기면 오르고 지면 내려갑니다.{' '}
+            <strong>100을 채우면 승급</strong>, 0 밑으로 떨어지면 <strong>한 번은 봐주고</strong>{' '}
+            그다음에 또 지면 강등돼요. 크게 이길수록 더 받고, 아깝게 지면 덜 깎입니다.
+          </li>
+          <li>
+            <strong>공정하게</strong> — 맵은 라운드마다 서버가 무작위로 정하고(아무도 못 고릅니다),
+            양쪽 다 로그인해야 들어올 수 있습니다. 도중에 나가면 <strong>패배로 기록</strong>돼요.
+          </li>
+        </ul>
+
+        <p>
+          티어는 아래 순서입니다. 계급마다 <strong>1 · 2 · 3</strong> 세 칸이 있고,
+          맨 위 <strong>레디언트</strong>만 한 칸이에요.
+        </p>
+        <TierLadder />
+        <p className="hint">
+          내 티어와 순위표·전적은 로비 왼쪽의 티어 줄을 눌러서 볼 수 있어요.
+        </p>
+      </>
+    ),
+  },
+  {
     title: '시작하기',
     emoji: '🚀',
     body: (
@@ -140,6 +177,9 @@ const STEPS: Step[] = [
           </li>
           <li>
             <strong>방 만들기</strong> — 6자리 코드를 친구에게 알려주면 됩니다.
+          </li>
+          <li>
+            <strong>경쟁전</strong> — 티어를 걸고 하는 1:1. 규칙에 익숙해진 뒤에 눌러 보세요.
           </li>
           <li>
             대기실에서 방장이 <strong>맵</strong>을 고르고, <strong>맵 에디터</strong>로 지형을 통째로

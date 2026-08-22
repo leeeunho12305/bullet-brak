@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "coolify": {
+      "type": "http",
+      "url": "https://coolify.soaedu.kr/mcp",
+      "headers": {
+        "Authorization": "Bearer ${COOLIFY_TOKEN}"
+      }
+    }
+  }
+}

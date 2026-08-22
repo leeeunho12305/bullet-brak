@@ -45,6 +45,13 @@ export interface RoomPlayer {
   nickname: string;
   customization: Customization;
   coins: number;
+  /**
+   * 입장 시점의 경쟁전 티어(1~25). 0 이면 미배치이거나 비로그인이다.
+   * 매치 중에 바뀌지 않는 값이라 60Hz 스냅샷이 아니라 room_state 로만 온다 —
+   * 인게임에서 티어를 쓰려면 store 의 `room.players` 에서 id 로 찾아 쓴다.
+   */
+  tier: number;
+  rr: number;
 }
 
 /** 맵 배경/발판 색. renderer 가 그대로 받아 쓴다. */
